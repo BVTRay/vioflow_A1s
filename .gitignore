@@ -1,0 +1,77 @@
+# Dependencies
+node_modules/
+# package-lock.json should be committed for version consistency
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.backup.*
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.cache
+
+# Coverage
+coverage/
+*.lcov
+.nyc_output/
+
+# Testing
+.jest/
+
+# Backend specific
+backend/dist/
+backend/node_modules/
+backend/.env
+backend/.env.*
+backend/*.log
+
+# Frontend specific
+.vite/
+*.local
+
+# Database
+*.sqlite
+*.db
+
+# Misc
+*.pid
+*.seed
+*.pid.lock
+
