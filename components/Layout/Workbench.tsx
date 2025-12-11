@@ -6,6 +6,7 @@ import { Video, DeliveryData } from '../../types';
 import { useAuth } from '../../src/hooks/useAuth';
 import { projectsApi } from '../../src/api/projects';
 import { tagsApi } from '../../src/api/tags';
+import { usersApi } from '../../src/api/users';
 
 interface WorkbenchProps {
   visible: boolean;
@@ -24,11 +25,13 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
   const [isDragging, setIsDragging] = useState(false);
 
   // Settings state
-  const [settingsActiveTab, setSettingsActiveTab] = useState<'groups' | 'projects' | 'tags'>('groups');
+  const [settingsActiveTab, setSettingsActiveTab] = useState<'groups' | 'projects' | 'tags' | 'team'>('groups');
   const [editingGroup, setEditingGroup] = useState<string | null>(null);
   const [newGroupName, setNewGroupName] = useState('');
   const [newTagName, setNewTagName] = useState('');
   const [projectGroupMap, setProjectGroupMap] = useState<Record<string, string>>({});
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
 
   // Upload Configuration Modal State
   const [uploadConfig, setUploadConfig] = useState<{
@@ -1175,6 +1178,23 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
     }
   }, [settingsActiveTab, projects]);
 
+  // 加载团队成员数据
+  useEffect(() => {
+    if (settingsActiveTab === 'team' && isAdmin) {
+      setLoadingTeamMembers(true);
+      usersApi.getAll()
+        .then(data => {
+          setTeamMembers(data);
+        })
+        .catch(error => {
+          console.error('Failed to load team members:', error);
+        })
+        .finally(() => {
+          setLoadingTeamMembers(false);
+        });
+    }
+  }, [settingsActiveTab, isAdmin]);
+
   // --- SETTINGS MODULE LOGIC ---
   const renderSettingsWorkbench = () => {
     // 获取所有组别
@@ -1299,6 +1319,17 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
           >
             <Tag className="w-4 h-4 inline mr-1.5" />
             标签
+          </button>
+          <button
+            onClick={() => setSettingsActiveTab('team')}
+            className={`flex-1 px-4 py-2.5 text-xs font-medium transition-colors ${
+              settingsActiveTab === 'team' 
+                ? 'text-indigo-400 border-b-2 border-indigo-400' 
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            <Users className="w-4 h-4 inline mr-1.5" />
+            团队成员
           </button>
         </div>
 
@@ -1455,7 +1486,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                 </div>
 
                 {/* Tags List */}
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-[500px] overflow-y-auto">
                   {tags.length === 0 ? (
                     <p className="text-xs text-zinc-500 text-center py-4">暂无标签</p>
                   ) : (
@@ -1481,6 +1512,54 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                     ))
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Team Members Tab */}
+          {settingsActiveTab === 'team' && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-xs font-bold text-zinc-500 uppercase mb-3">团队成员管理</h3>
+                
+                {loadingTeamMembers ? (
+                  <div className="text-center py-8 text-zinc-500 text-xs">加载中...</div>
+                ) : (
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                    {teamMembers.length === 0 ? (
+                      <p className="text-xs text-zinc-500 text-center py-4">暂无团队成员</p>
+                    ) : (
+                      teamMembers.map(member => (
+                        <div key={member.id} className="flex items-center gap-3 p-3 bg-zinc-950 border border-zinc-800 rounded-lg">
+                          {member.avatar_url ? (
+                            <img 
+                              src={member.avatar_url} 
+                              alt={member.name}
+                              className="w-10 h-10 rounded-full"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-medium text-sm">
+                              {member.name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-zinc-200 truncate">{member.name}</div>
+                            <div className="text-xs text-zinc-500 truncate">{member.email}</div>
+                          </div>
+                          <span className={`text-[10px] px-2 py-1 rounded ${
+                            member.role === 'admin' ? 'bg-purple-500/20 text-purple-400' :
+                            member.role === 'sales' ? 'bg-blue-500/20 text-blue-400' :
+                            'bg-zinc-800 text-zinc-500'
+                          }`}>
+                            {member.role === 'admin' ? '管理员' :
+                             member.role === 'sales' ? '销售' :
+                             member.role === 'member' ? '成员' : member.role}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}

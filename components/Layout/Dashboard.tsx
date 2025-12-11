@@ -7,84 +7,68 @@ export const Dashboard: React.FC = () => {
   const { state, dispatch } = useStore();
   const { projects, videos, deliveries } = state;
 
-  // 计算活跃项目：产生批注的、最近上传、最近定版待交付、最近交付的
+  // 计算项目分类：直接按状态分类，并考虑时间排序
   const getActiveProjects = () => {
     const now = Date.now();
-    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+    
+    // 解析时间字符串为时间戳（用于排序）
+    const parseTime = (timeStr: string): number => {
+      if (timeStr.includes('小时前')) {
+        const hours = parseInt(timeStr.match(/(\d+)小时前/)?.[1] || '0');
+        return now - hours * 60 * 60 * 1000;
+      }
+      if (timeStr.includes('分钟前')) {
+        const minutes = parseInt(timeStr.match(/(\d+)分钟前/)?.[1] || '0');
+        return now - minutes * 60 * 1000;
+      }
+      if (timeStr === '刚刚') {
+        return now;
+      }
+      if (timeStr === '昨天') {
+        return now - 24 * 60 * 60 * 1000;
+      }
+      const daysMatch = timeStr.match(/(\d+)天前/);
+      if (daysMatch) {
+        const days = parseInt(daysMatch[1]);
+        return now - days * 24 * 60 * 60 * 1000;
+      }
+      // 尝试解析日期字符串
+      const date = new Date(timeStr);
+      if (!isNaN(date.getTime())) {
+        return date.getTime();
+      }
+      return 0;
+    };
 
-    // 获取有批注的项目
-    const projectsWithAnnotations = projects.filter(project => {
-      return videos.some(v => 
-        v.projectId === project.id && v.status === 'annotated'
-      );
-    });
+    // 正在进行的项目：status='active'，按最后活动时间排序
+    const inProgressProjects = projects
+      .filter(p => p.status === 'active')
+      .sort((a, b) => {
+        const aTime = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
+        const bTime = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
+        return bTime - aTime;
+      })
+      .slice(0, 10);
 
-    // 获取最近上传的项目（最近7天）
-    const recentUploadProjects = projects.filter(project => {
-      return videos.some(v => {
-        if (v.projectId !== project.id) return false;
-        const uploadTime = v.uploadTime;
-        if (uploadTime.includes('小时前') || uploadTime.includes('分钟前') || uploadTime === '刚刚') {
-          return true;
-        }
-        if (uploadTime === '昨天') {
-          return true;
-        }
-        const daysMatch = uploadTime.match(/(\d+)天前/);
-        if (daysMatch && parseInt(daysMatch[1]) <= 7) {
-          return true;
-        }
-        return false;
-      });
-    });
+    // 近期定版待交付：status='finalized'，按定版时间排序
+    const finalizedProjects = projects
+      .filter(p => p.status === 'finalized')
+      .sort((a, b) => {
+        const aTime = a.finalizedAt ? new Date(a.finalizedAt).getTime() : 0;
+        const bTime = b.finalizedAt ? new Date(b.finalizedAt).getTime() : 0;
+        return bTime - aTime;
+      })
+      .slice(0, 10);
 
-    // 获取最近定版的项目（status='finalized'，且最近7天内定版）
-    const recentFinalizedProjects = projects.filter(project => {
-      if (project.status !== 'finalized') return false;
-      // 简单判断：如果有 finalizedAt 字段，检查是否在7天内
-      // 否则检查是否有最近的活动
-      const projectVideos = videos.filter(v => v.projectId === project.id);
-      if (projectVideos.length === 0) return false;
-      // 如果项目中有最近的活动，认为是近期定版
-      return projectVideos.some(v => {
-        const uploadTime = v.uploadTime;
-        if (uploadTime.includes('小时前') || uploadTime.includes('分钟前') || uploadTime === '刚刚') {
-          return true;
-        }
-        if (uploadTime === '昨天') {
-          return true;
-        }
-        const daysMatch = uploadTime.match(/(\d+)天前/);
-        if (daysMatch && parseInt(daysMatch[1]) <= 7) {
-          return true;
-        }
-        return false;
-      });
-    });
-
-    // 获取最近交付的项目（status='delivered'，且最近7天内交付）
-    const recentDeliveredProjects = projects.filter(project => {
-      if (project.status !== 'delivered') return false;
-      const delivery = deliveries.find(d => d.projectId === project.id);
-      if (!delivery || !delivery.sentDate) return false;
-      // 简单判断：如果有 sentDate，认为是近期交付
-      // 实际应该解析日期，这里简化处理
-      return true;
-    });
-
-    // 合并所有活跃项目ID
-    const activeProjectIds = new Set([
-      ...projectsWithAnnotations.map(p => p.id),
-      ...recentUploadProjects.map(p => p.id),
-      ...recentFinalizedProjects.map(p => p.id),
-      ...recentDeliveredProjects.map(p => p.id)
-    ]);
-
-    // 分类项目
-    const activeProjects = projects.filter(p => activeProjectIds.has(p.id));
-    const inProgressProjects = activeProjects.filter(p => p.status === 'active').slice(0, 10);
-    const finalizedProjects = activeProjects.filter(p => p.status === 'finalized').slice(0, 10);
-    const deliveredProjects = activeProjects.filter(p => p.status === 'delivered').slice(0, 10);
+    // 近期完成交付：status='delivered'，按交付时间排序
+    const deliveredProjects = projects
+      .filter(p => p.status === 'delivered')
+      .sort((a, b) => {
+        const aTime = a.deliveredAt ? new Date(a.deliveredAt).getTime() : 0;
+        const bTime = b.deliveredAt ? new Date(b.deliveredAt).getTime() : 0;
+        return bTime - aTime;
+      })
+      .slice(0, 10);
 
     return { inProgressProjects, finalizedProjects, deliveredProjects };
   };

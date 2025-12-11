@@ -341,7 +341,17 @@ function appReducer(state: AppState, action: Action): AppState {
         ...state,
         uploadQueue: state.uploadQueue.filter(item => item.id !== action.payload)
       };
+    case 'ADD_TAG':
+      // 如果标签已存在，不重复添加
+      if (state.tags.find(t => t.id === action.payload.id)) {
+        return state;
+      }
+      return { ...state, tags: [...state.tags, action.payload] };
     case 'ADD_NOTIFICATION':
+      // 如果通知已存在，不重复添加
+      if (state.notifications.find(n => n.id === action.payload.id)) {
+        return state;
+      }
       return { ...state, notifications: [action.payload, ...state.notifications] };
     case 'CLEAR_NOTIFICATIONS':
       return { ...state, notifications: [] };
@@ -357,6 +367,24 @@ export const useStore = () => {
   const context = useContext(StoreContext);
   if (!context) throw new Error("useStore must be used within a StoreProvider");
   return context;
+};
+
+// 格式化通知时间
+const formatNotificationTime = (dateStr: string | Date): string => {
+  if (!dateStr) return '';
+  const date = typeof dateStr === 'string' ? new Date(dateStr) : dateStr;
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes}分钟前`;
+  if (hours < 24) return `${hours}小时前`;
+  if (days === 1) return '昨天';
+  if (days < 7) return `${days}天前`;
+  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
 };
 
 // --- APP COMPONENT ---
@@ -398,10 +426,20 @@ const App: React.FC = () => {
         }
       });
       
-      // 更新通知
-      apiNotifications.forEach((notification: AppNotification) => {
+      // 更新通知（转换时间格式）
+      apiNotifications.forEach((notification: any) => {
         if (!state.notifications.find((n: AppNotification) => n.id === notification.id)) {
-          dispatch({ type: 'ADD_NOTIFICATION', payload: notification });
+          // 转换后端返回的通知格式
+          const formattedNotification: AppNotification = {
+            id: notification.id,
+            type: notification.type,
+            title: notification.title,
+            message: notification.message,
+            time: notification.time || formatNotificationTime(notification.created_at),
+            relatedType: notification.related_type,
+            relatedId: notification.related_id,
+          };
+          dispatch({ type: 'ADD_NOTIFICATION', payload: formattedNotification });
         }
       });
       
