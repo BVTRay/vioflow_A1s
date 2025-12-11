@@ -26,23 +26,40 @@ import { DeliveryPackageFile } from '../modules/deliveries/entities/delivery-pac
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
-        // 支持 Railway 的 DATABASE_URL 环境变量
+        // 支持 Railway 和 Supabase 的 DATABASE_URL 环境变量
         const databaseUrl = configService.get<string>('DATABASE_URL');
+        const nodeEnv = configService.get<string>('NODE_ENV', 'development');
         
         let dbConfig: any;
         
         if (databaseUrl) {
-          // 解析 DATABASE_URL (格式: postgresql://user:password@host:port/database)
-          const url = new URL(databaseUrl);
-          dbConfig = {
-            type: 'postgres',
-            host: url.hostname,
-            port: parseInt(url.port, 10) || 5432,
-            username: url.username,
-            password: url.password,
-            database: url.pathname.slice(1), // 移除前导斜杠
-            ssl: url.searchParams.get('sslmode') !== 'disable' ? { rejectUnauthorized: false } : false,
-          };
+          // 检测是否为 Supabase 连接
+          const isSupabase = databaseUrl.includes('supabase') || databaseUrl.includes('pooler.supabase.com');
+          
+          try {
+            // 解析 DATABASE_URL
+            const urlObj = new URL(databaseUrl);
+            
+            dbConfig = {
+              type: 'postgres',
+              host: urlObj.hostname,
+              port: parseInt(urlObj.port, 10) || 5432,
+              username: decodeURIComponent(urlObj.username),
+              password: decodeURIComponent(urlObj.password),
+              database: urlObj.pathname.slice(1), // 移除前导斜杠
+            };
+            
+            // SSL 配置：Supabase 必须启用，生产环境也建议启用
+            if (isSupabase || nodeEnv === 'production') {
+              dbConfig.ssl = {
+                rejectUnauthorized: false, // 允许自签名证书
+              };
+            }
+          } catch (error) {
+            // 如果 URL 解析失败，记录错误并使用默认配置
+            console.error('Failed to parse DATABASE_URL:', error);
+            throw new Error('Invalid DATABASE_URL format');
+          }
         } else {
           // 使用单独的环境变量（开发环境）
           dbConfig = {
