@@ -23,6 +23,8 @@ ON CONFLICT (name) DO NOTHING;
 -- 2. 添加更多用户（如果不存在）
 INSERT INTO "users" (id, email, name, password_hash, role, created_at, updated_at)
 VALUES
+  (gen_random_uuid(), 'alex@vioflow.com', 'Alex', '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'member', NOW(), NOW()),
+  (gen_random_uuid(), 'mike@vioflow.com', 'Mike', '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'member', NOW(), NOW()),
   (gen_random_uuid(), 'jen@vioflow.com', 'Jen', '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'member', NOW(), NOW()),
   (gen_random_uuid(), 'jessica@vioflow.com', 'Jessica', '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'member', NOW(), NOW()),
   (gen_random_uuid(), 'tom@vioflow.com', 'Tom', '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'member', NOW(), NOW()),
@@ -105,23 +107,31 @@ BEGIN
     (gen_random_uuid(), '2407_Disney_Plus_Original', 'Disney', 'Alex', 'Jen', '长视频', 'active', '2024-07-20', NOW() - INTERVAL '5 days', NOW() - INTERVAL '3 days', NOW(), NOW())
   RETURNING id INTO disney_project_id;
 
-  -- 创建项目成员
-  INSERT INTO "project_members" (id, project_id, user_id, role, created_at)
-  VALUES
-    (gen_random_uuid(), adidas_project_id, alex_user_id, 'owner', NOW()),
-    (gen_random_uuid(), adidas_project_id, jen_user_id, 'member', NOW()),
-    (gen_random_uuid(), samsung_project_id, mike_user_id, 'owner', NOW()),
-    (gen_random_uuid(), samsung_project_id, sarah_user_id, 'member', NOW()),
-    (gen_random_uuid(), tesla_project_id, sarah_user_id, 'owner', NOW()),
-    (gen_random_uuid(), tesla_project_id, mike_user_id, 'member', NOW())
-  ON CONFLICT DO NOTHING;
+  -- 创建项目成员（只有当用户存在时才插入）
+  IF alex_user_id IS NOT NULL AND jen_user_id IS NOT NULL THEN
+    INSERT INTO "project_members" (id, project_id, user_id, role, created_at)
+    VALUES
+      (gen_random_uuid(), adidas_project_id, alex_user_id, 'owner', NOW()),
+      (gen_random_uuid(), adidas_project_id, jen_user_id, 'member', NOW())
+    ON CONFLICT DO NOTHING;
+  END IF;
+
+  IF mike_user_id IS NOT NULL AND sarah_user_id IS NOT NULL THEN
+    INSERT INTO "project_members" (id, project_id, user_id, role, created_at)
+    VALUES
+      (gen_random_uuid(), samsung_project_id, mike_user_id, 'owner', NOW()),
+      (gen_random_uuid(), samsung_project_id, sarah_user_id, 'member', NOW()),
+      (gen_random_uuid(), tesla_project_id, sarah_user_id, 'owner', NOW()),
+      (gen_random_uuid(), tesla_project_id, mike_user_id, 'member', NOW())
+    ON CONFLICT DO NOTHING;
+  END IF;
 
   -- 获取标签 ID
   SELECT id INTO tag_sport_id FROM "tags" WHERE name = '运动' LIMIT 1;
   SELECT id INTO tag_tech_id FROM "tags" WHERE name = '科技' LIMIT 1;
   SELECT id INTO tag_car_id FROM "tags" WHERE name = '汽车' LIMIT 1;
 
-  -- 创建视频
+  -- 创建视频（使用 COALESCE 确保 uploader_id 不为 NULL）
   INSERT INTO "videos" (
     id, project_id, name, original_filename, base_name, version, type, storage_url, storage_key,
     thumbnail_url, size, duration, resolution, aspect_ratio, status, change_log,
@@ -132,7 +142,7 @@ BEGIN
       gen_random_uuid(), adidas_project_id, 'v2_Adidas_Spring.mp4', 'Adidas_Spring.mp4', 'Adidas_Spring.mp4', 2, 'video',
       'https://example.com/videos/v2_Adidas_Spring.mp4', 'videos/v2_Adidas_Spring.mp4',
       'https://picsum.photos/seed/adidas/400/225', 1800000000, 60, '3840x2160', 'landscape', 'initial',
-      '版本 2 更新', false, false, false, alex_user_id, NOW() - INTERVAL '1 hour', NOW(), NOW()
+      '版本 2 更新', false, false, false, COALESCE(alex_user_id, admin_user_id), NOW() - INTERVAL '1 hour', NOW(), NOW()
     )
   RETURNING id INTO adidas_video_id;
 
@@ -146,7 +156,7 @@ BEGIN
       gen_random_uuid(), samsung_project_id, 'v5_Samsung_Galaxy.mp4', 'Samsung_Galaxy.mp4', 'Samsung_Galaxy.mp4', 5, 'video',
       'https://example.com/videos/v5_Samsung_Galaxy.mp4', 'videos/v5_Samsung_Galaxy.mp4',
       'https://picsum.photos/seed/samsung/400/225', 2700000000, 90, '3840x2160', 'landscape', 'annotated',
-      '版本 5 更新', false, false, false, mike_user_id, NOW() - INTERVAL '3 hours', NOW(), NOW()
+      '版本 5 更新', false, false, false, COALESCE(mike_user_id, admin_user_id), NOW() - INTERVAL '3 hours', NOW(), NOW()
     )
   RETURNING id INTO samsung_video_id;
 
@@ -160,7 +170,7 @@ BEGIN
       gen_random_uuid(), tesla_project_id, 'v3_Tesla_Cybertruck.mp4', 'Tesla_Cybertruck.mp4', 'Tesla_Cybertruck.mp4', 3, 'video',
       'https://example.com/videos/v3_Tesla_Cybertruck.mp4', 'videos/v3_Tesla_Cybertruck.mp4',
       'https://picsum.photos/seed/tesla/400/225', 3600000000, 120, '4096x2160', 'landscape', 'initial',
-      '版本 3 更新', false, false, false, sarah_user_id, NOW() - INTERVAL '6 hours', NOW(), NOW()
+      '版本 3 更新', false, false, false, COALESCE(sarah_user_id, admin_user_id), NOW() - INTERVAL '6 hours', NOW(), NOW()
     )
   RETURNING id INTO tesla_video_id;
 
@@ -174,7 +184,7 @@ BEGIN
       gen_random_uuid(), microsoft_project_id, 'v4_Microsoft_Surface.mp4', 'Microsoft_Surface.mp4', 'Microsoft_Surface.mp4', 4, 'video',
       'https://example.com/videos/v4_Microsoft_Surface.mp4', 'videos/v4_Microsoft_Surface.mp4',
       'https://picsum.photos/seed/microsoft/400/225', 2250000000, 75, '3840x2160', 'landscape', 'approved',
-      '版本 4 更新', false, false, false, alex_user_id, NOW() - INTERVAL '12 hours', NOW(), NOW()
+      '版本 4 更新', false, false, false, COALESCE(alex_user_id, admin_user_id), NOW() - INTERVAL '12 hours', NOW(), NOW()
     )
   RETURNING id INTO microsoft_video_id;
 
@@ -188,7 +198,7 @@ BEGIN
       gen_random_uuid(), google_project_id, 'v8_Google_Pixel_Master.mov', 'Google_Pixel_Master.mov', 'Google_Pixel_Master.mov', 8, 'video',
       'https://example.com/videos/v8_Google_Pixel_Master.mov', 'videos/v8_Google_Pixel_Master.mov',
       'https://picsum.photos/seed/google/400/225', 4200000000, 60, '4096x2160', 'landscape', 'approved',
-      '最终定版', true, true, false, mike_user_id, '2024-10-30'::timestamp, NOW(), NOW()
+      '最终定版', true, true, false, COALESCE(mike_user_id, admin_user_id), '2024-10-30'::timestamp, NOW(), NOW()
     )
   RETURNING id INTO google_video_id;
 
@@ -202,7 +212,7 @@ BEGIN
       gen_random_uuid(), meta_project_id, 'v10_Meta_Quest_Master.mov', 'Meta_Quest_Master.mov', 'Meta_Quest_Master.mov', 10, 'video',
       'https://example.com/videos/v10_Meta_Quest_Master.mov', 'videos/v10_Meta_Quest_Master.mov',
       'https://picsum.photos/seed/meta/400/225', 5400000000, 90, '4096x2160', 'landscape', 'approved',
-      '最终定版', true, true, false, sarah_user_id, '2024-09-28'::timestamp, NOW(), NOW()
+      '最终定版', true, true, false, COALESCE(sarah_user_id, admin_user_id), '2024-09-28'::timestamp, NOW(), NOW()
     )
   RETURNING id INTO meta_video_id;
 
@@ -216,7 +226,7 @@ BEGIN
       gen_random_uuid(), amazon_project_id, 'v6_Amazon_Prime.mp4', 'Amazon_Prime.mp4', 'Amazon_Prime.mp4', 6, 'video',
       'https://example.com/videos/v6_Amazon_Prime.mp4', 'videos/v6_Amazon_Prime.mp4',
       'https://picsum.photos/seed/amazon/400/225', 1350000000, 45, '1920x1080', 'landscape', 'annotated',
-      '版本 6 更新', false, false, false, alex_user_id, NOW() - INTERVAL '2 days', NOW(), NOW()
+      '版本 6 更新', false, false, false, COALESCE(alex_user_id, admin_user_id), NOW() - INTERVAL '2 days', NOW(), NOW()
     )
   RETURNING id INTO amazon_video_id;
 
@@ -230,7 +240,7 @@ BEGIN
       gen_random_uuid(), disney_project_id, 'v12_Disney_Original.mp4', 'Disney_Original.mp4', 'Disney_Original.mp4', 12, 'video',
       'https://example.com/videos/v12_Disney_Original.mp4', 'videos/v12_Disney_Original.mp4',
       'https://picsum.photos/seed/disney/400/225', 5400000000, 1800, '1920x1080', 'landscape', 'initial',
-      '版本 12 更新', false, false, false, sarah_user_id, NOW() - INTERVAL '5 days', NOW(), NOW()
+      '版本 12 更新', false, false, false, COALESCE(sarah_user_id, admin_user_id), NOW() - INTERVAL '5 days', NOW(), NOW()
     )
   RETURNING id INTO disney_video_id;
 
