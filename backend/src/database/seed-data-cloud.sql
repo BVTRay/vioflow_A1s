@@ -285,6 +285,50 @@ BEGIN
     )
   ON CONFLICT DO NOTHING;
 
+  -- 创建批注（用于审阅功能演示）
+  INSERT INTO "annotations" (id, video_id, user_id, timecode, content, screenshot_url, is_completed, created_at, updated_at)
+  VALUES
+    -- Adidas视频的批注
+    (gen_random_uuid(), adidas_video_id, NULL, '00:00:10', '开场画面很震撼，但可以稍微延长1-2秒，让观众有更多时间感受。', NULL, false, NOW() - INTERVAL '3 hours', NOW() - INTERVAL '3 hours'),
+    (gen_random_uuid(), adidas_video_id, NULL, '00:00:25', '这里的文字动画效果很好，但字体可以再大一点，确保移动端也能看清楚。', NULL, false, NOW() - INTERVAL '2 hours', NOW() - INTERVAL '2 hours'),
+    (gen_random_uuid(), adidas_video_id, NULL, '00:00:45', '产品特写镜头很棒，建议在这个位置停留更久一些。', NULL, true, NOW() - INTERVAL '1 hour', NOW() - INTERVAL '30 minutes'),
+    -- Samsung视频的批注
+    (gen_random_uuid(), samsung_video_id, NULL, '00:00:18', '背景音乐和产品展示的节奏很匹配，这个版本不错。', NULL, true, NOW() - INTERVAL '4 hours', NOW() - INTERVAL '3 hours'),
+    (gen_random_uuid(), samsung_video_id, NULL, '00:00:35', 'Logo出现的方式很有创意，确认保留。', NULL, true, NOW() - INTERVAL '2 hours', NOW() - INTERVAL '1 hour'),
+    -- Tesla视频的批注
+    (gen_random_uuid(), tesla_video_id, NULL, '00:00:12', '车辆行驶的画面很流畅，但可以增加一些慢动作效果，让细节更突出。', NULL, false, NOW() - INTERVAL '6 hours', NOW() - INTERVAL '6 hours'),
+    (gen_random_uuid(), tesla_video_id, NULL, '00:00:28', '这里的转场效果可以更自然一些，现在的切换有点突兀。', NULL, false, NOW() - INTERVAL '5 hours', NOW() - INTERVAL '5 hours'),
+    (gen_random_uuid(), tesla_video_id, NULL, '00:00:52', '整体色调偏冷，建议调整为更温暖的色调，更符合品牌调性。', NULL, false, NOW() - INTERVAL '3 hours', NOW() - INTERVAL '3 hours'),
+    -- Amazon视频的批注
+    (gen_random_uuid(), amazon_video_id, NULL, '00:00:08', '开场很吸引人，但背景音乐的音量可以稍微调低，避免盖过旁白。', NULL, false, NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days'),
+    (gen_random_uuid(), amazon_video_id, NULL, '00:00:22', '这个产品的展示角度很好，可以多停留几秒。', NULL, true, NOW() - INTERVAL '1 day', NOW() - INTERVAL '12 hours'),
+    (gen_random_uuid(), amazon_video_id, NULL, '00:00:38', '结尾的Call-to-Action文字可以更醒目一些，建议使用对比度更高的颜色。', NULL, false, NOW() - INTERVAL '12 hours', NOW() - INTERVAL '12 hours');
+
+  -- 创建分享链接（用于审阅功能演示）
+  INSERT INTO "share_links" (
+    id, video_id, project_id, type, token, password_hash, allow_download, expires_at, is_active, justification, created_by, created_at, updated_at
+  )
+  VALUES
+    -- Adidas视频的审阅分享链接（无密码）
+    (
+      gen_random_uuid(), adidas_video_id, adidas_project_id, 'video_review',
+      replace(gen_random_uuid()::text, '-', '') || 'adidas',
+      NULL, false, NOW() + INTERVAL '7 days', true, NULL, COALESCE(alex_user_id, admin_user_id), NOW(), NOW()
+    ),
+    -- Samsung视频的审阅分享链接（有密码，密码：review123）
+    (
+      gen_random_uuid(), samsung_video_id, samsung_project_id, 'video_review',
+      replace(gen_random_uuid()::text, '-', '') || 'samsung',
+      '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', -- 密码: review123
+      true, NOW() + INTERVAL '14 days', true, '客户审阅用', COALESCE(mike_user_id, admin_user_id), NOW(), NOW()
+    ),
+    -- Tesla视频的审阅分享链接（无密码，允许下载）
+    (
+      gen_random_uuid(), tesla_video_id, tesla_project_id, 'video_review',
+      replace(gen_random_uuid()::text, '-', '') || 'tesla',
+      NULL, true, NOW() + INTERVAL '10 days', true, NULL, COALESCE(sarah_user_id, admin_user_id), NOW(), NOW()
+    );
+
 END $$;
 
 -- 提交事务
@@ -303,5 +347,9 @@ SELECT 'Project Members', COUNT(*) FROM "project_members"
 UNION ALL
 SELECT 'Video Tags', COUNT(*) FROM "video_tags"
 UNION ALL
-SELECT 'Deliveries', COUNT(*) FROM "deliveries";
+SELECT 'Deliveries', COUNT(*) FROM "deliveries"
+UNION ALL
+SELECT 'Annotations', COUNT(*) FROM "annotations"
+UNION ALL
+SELECT 'Share Links', COUNT(*) FROM "share_links";
 

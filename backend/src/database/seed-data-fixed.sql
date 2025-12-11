@@ -188,7 +188,42 @@ BEGIN
     (gen_random_uuid(), delivery_porsche_id, 'clean_feed', 'deliveries/' || porsche_project_id || '/clean_feed', NOW()),
     (gen_random_uuid(), delivery_porsche_id, 'docs', 'deliveries/' || porsche_project_id || '/docs', NOW());
 
-  -- 10. 创建通知
+  -- 10. 创建批注（用于审阅功能演示）
+  INSERT INTO "annotations" (id, video_id, user_id, timecode, content, screenshot_url, is_completed, created_at, updated_at)
+  VALUES
+    -- Nike视频的批注
+    (gen_random_uuid(), nike_video1_id, NULL, '00:00:15', '这里的红色饱和度能降低一点吗？整体感觉有点过于鲜艳了。', NULL, false, NOW() - INTERVAL '1 hour', NOW() - INTERVAL '1 hour'),
+    (gen_random_uuid(), nike_video1_id, NULL, '00:00:32', 'Logo出现的时间可以提前2秒，现在感觉有点晚了。', NULL, false, NOW() - INTERVAL '50 minutes', NOW() - INTERVAL '50 minutes'),
+    (gen_random_uuid(), nike_video1_id, NULL, '00:01:05', '背景音乐的音量可以稍微调大一些，现在有点听不清楚。', NULL, true, NOW() - INTERVAL '30 minutes', NOW() - INTERVAL '20 minutes'),
+    (gen_random_uuid(), nike_video1_id, NULL, '00:01:28', '确认锁定。这个版本可以了。', NULL, true, NOW() - INTERVAL '10 minutes', NOW() - INTERVAL '10 minutes'),
+    -- Nike v3视频的批注（历史版本）
+    (gen_random_uuid(), nike_video2_id, NULL, '00:00:20', '调色需要更暖一些，现在的色调偏冷。', NULL, true, NOW() - INTERVAL '2 days', NOW() - INTERVAL '1 day'),
+    (gen_random_uuid(), nike_video2_id, NULL, '00:00:45', '这个转场效果不错，可以保留。', NULL, true, NOW() - INTERVAL '2 days', NOW() - INTERVAL '1 day'),
+    -- Netflix视频的批注
+    (gen_random_uuid(), netflix_video_id, NULL, '00:05:30', '这里的字幕需要调整，字体太小了，看不清楚。', NULL, false, NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days'),
+    (gen_random_uuid(), netflix_video_id, NULL, '00:12:15', '背景音乐和旁白的声音平衡需要调整，旁白有点被音乐盖住了。', NULL, false, NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day'),
+    (gen_random_uuid(), netflix_video_id, NULL, '00:18:45', '这个镜头的时长可以缩短3秒，节奏会更好。', NULL, false, NOW() - INTERVAL '12 hours', NOW() - INTERVAL '12 hours');
+
+  -- 11. 创建分享链接（用于审阅功能演示）
+  INSERT INTO "share_links" (
+    id, video_id, project_id, type, token, password_hash, allow_download, expires_at, is_active, justification, created_by, created_at, updated_at
+  )
+  VALUES
+    -- Nike视频的审阅分享链接（无密码，固定token用于演示）
+    (
+      gen_random_uuid(), nike_video1_id, nike_project_id, 'video_review',
+      replace(gen_random_uuid()::text, '-', '') || 'nike',
+      NULL, false, NOW() + INTERVAL '7 days', true, NULL, admin_user_id, NOW(), NOW()
+    ),
+    -- Netflix视频的审阅分享链接（有密码，密码：review123）
+    (
+      gen_random_uuid(), netflix_video_id, netflix_project_id, 'video_review',
+      replace(gen_random_uuid()::text, '-', '') || 'netflix',
+      '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', -- 密码: review123
+      true, NOW() + INTERVAL '14 days', true, '客户审阅用', admin_user_id, NOW(), NOW()
+    );
+
+  -- 12. 创建通知
   INSERT INTO "notifications" (
     id, user_id, type, title, message, related_type, related_id, is_read, created_at
   )
@@ -217,6 +252,10 @@ UNION ALL
 SELECT 'Deliveries', COUNT(*) FROM "deliveries"
 UNION ALL
 SELECT 'Delivery Folders', COUNT(*) FROM "delivery_folders"
+UNION ALL
+SELECT 'Annotations', COUNT(*) FROM "annotations"
+UNION ALL
+SELECT 'Share Links', COUNT(*) FROM "share_links"
 UNION ALL
 SELECT 'Notifications', COUNT(*) FROM "notifications";
 
