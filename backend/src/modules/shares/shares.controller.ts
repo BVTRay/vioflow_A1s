@@ -64,5 +64,24 @@ export class SharesController {
   toggle(@Param('id') id: string) {
     return this.sharesService.toggle(id);
   }
+
+  // 公开接口：通过分享token获取批注
+  @Get(':token/annotations')
+  async getAnnotations(@Param('token') token: string) {
+    return this.sharesService.getAnnotationsByShareToken(token);
+  }
+
+  // 公开接口：通过分享token创建批注
+  @Post(':token/annotations')
+  async createAnnotation(
+    @Param('token') token: string,
+    @Body() body: { timecode: string; content: string; clientName?: string },
+  ) {
+    try {
+      return await this.sharesService.createAnnotationByShareToken(token, body);
+    } catch (error: any) {
+      return { error: error.message || '创建批注失败' };
+    }
+  }
 }
 

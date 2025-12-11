@@ -4,12 +4,15 @@ import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import * as bcrypt from 'bcrypt';
 import { ShareLink, ShareLinkType } from './entities/share-link.entity';
+import { Annotation } from '../annotations/entities/annotation.entity';
 
 @Injectable()
 export class SharesService {
   constructor(
     @InjectRepository(ShareLink)
     private shareLinkRepository: Repository<ShareLink>,
+    @InjectRepository(Annotation)
+    private annotationRepository: Repository<Annotation>,
   ) {}
 
   async findAll(userId: string): Promise<ShareLink[]> {
@@ -66,6 +69,16 @@ export class SharesService {
       return null;
     }
 
+    // 如果是审阅类型，加载批注
+    if (shareLink.type === ShareLinkType.VIDEO_REVIEW && shareLink.video_id) {
+      const annotations = await this.annotationRepository.find({
+        where: { video_id: shareLink.video_id },
+        relations: ['user'],
+        order: { created_at: 'ASC' },
+      });
+      (shareLink as any).annotations = annotations;
+    }
+
     return shareLink;
   }
 
@@ -97,6 +110,66 @@ export class SharesService {
       return this.shareLinkRepository.save(shareLink);
     }
     return shareLink;
+  }
+
+  // 通过分享token获取批注（公开接口）
+  async getAnnotationsByShareToken(token: string): Promise<Annotation[]> {
+    const shareLink = await this.shareLinkRepository.findOne({
+      where: { token, is_active: true },
+    });
+
+    if (!shareLink || !shareLink.video_id) {
+      return [];
+    }
+
+    // 检查是否过期
+    if (shareLink.expires_at && new Date(shareLink.expires_at) < new Date()) {
+      return [];
+    }
+
+    // 只允许审阅类型的分享链接访问批注
+    if (shareLink.type !== ShareLinkType.VIDEO_REVIEW) {
+      return [];
+    }
+
+    return this.annotationRepository.find({
+      where: { video_id: shareLink.video_id },
+      relations: ['user'],
+      order: { created_at: 'ASC' },
+    });
+  }
+
+  // 通过分享token创建批注（公开接口）
+  async createAnnotationByShareToken(
+    token: string,
+    data: { timecode: string; content: string; clientName?: string },
+  ): Promise<Annotation> {
+    const shareLink = await this.shareLinkRepository.findOne({
+      where: { token, is_active: true },
+    });
+
+    if (!shareLink || !shareLink.video_id) {
+      throw new Error('分享链接不存在或已失效');
+    }
+
+    // 检查是否过期
+    if (shareLink.expires_at && new Date(shareLink.expires_at) < new Date()) {
+      throw new Error('分享链接已过期');
+    }
+
+    // 只允许审阅类型的分享链接创建批注
+    if (shareLink.type !== ShareLinkType.VIDEO_REVIEW) {
+      throw new Error('此分享链接不支持批注功能');
+    }
+
+    const annotation = this.annotationRepository.create({
+      video_id: shareLink.video_id,
+      user_id: null, // 分享链接创建的批注没有用户ID
+      timecode: data.timecode,
+      content: data.content,
+    });
+
+    return this.annotationRepository.save(annotation);
   }
 }
 

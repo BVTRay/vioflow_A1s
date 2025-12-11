@@ -381,8 +381,10 @@ export const Dashboard: React.FC = () => {
                     <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap">进行中</span>
                     <FolderOpen className="w-3.5 h-3.5 text-indigo-400" />
                   </div>
-                  <div className="text-xl font-bold text-indigo-300 whitespace-nowrap">{stats.activeProjects}</div>
-                  <div className="text-[9px] text-zinc-500 mt-0.5 whitespace-nowrap">个项目</div>
+                  <div className="flex items-baseline gap-1">
+                    <div className="text-3xl font-bold text-indigo-300 whitespace-nowrap">{stats.activeProjects}</div>
+                    <div className="text-[9px] text-zinc-500 whitespace-nowrap">个项目</div>
+                  </div>
                 </div>
                 
                 <div className="bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/20 rounded-xl p-2.5 flex flex-col h-[80px] w-[120px]">
@@ -390,8 +392,10 @@ export const Dashboard: React.FC = () => {
                     <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap">待交付</span>
                     <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
                   </div>
-                  <div className="text-xl font-bold text-amber-300 whitespace-nowrap">{stats.finalizedProjects}</div>
-                  <div className="text-[9px] text-zinc-500 mt-0.5 whitespace-nowrap">个项目</div>
+                  <div className="flex items-baseline gap-1">
+                    <div className="text-3xl font-bold text-amber-300 whitespace-nowrap">{stats.finalizedProjects}</div>
+                    <div className="text-[9px] text-zinc-500 whitespace-nowrap">个项目</div>
+                  </div>
                 </div>
                 
                 <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-xl p-2.5 flex flex-col h-[80px] w-[120px]">
@@ -399,8 +403,10 @@ export const Dashboard: React.FC = () => {
                     <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap">已交付</span>
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                   </div>
-                  <div className="text-xl font-bold text-emerald-300 whitespace-nowrap">{stats.deliveredProjects}</div>
-                  <div className="text-[9px] text-zinc-500 mt-0.5 whitespace-nowrap">个项目</div>
+                  <div className="flex items-baseline gap-1">
+                    <div className="text-3xl font-bold text-emerald-300 whitespace-nowrap">{stats.deliveredProjects}</div>
+                    <div className="text-[9px] text-zinc-500 whitespace-nowrap">个项目</div>
+                  </div>
                 </div>
                 
                 <div className="bg-gradient-to-br from-zinc-800/50 to-zinc-900/30 border border-zinc-700/50 rounded-xl p-2.5 flex flex-col h-[80px] w-[120px]">
@@ -408,8 +414,10 @@ export const Dashboard: React.FC = () => {
                     <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap">总视频</span>
                     <FileVideo className="w-3.5 h-3.5 text-zinc-400" />
                   </div>
-                  <div className="text-xl font-bold text-zinc-300 whitespace-nowrap">{stats.totalVideos}</div>
-                  <div className="text-[9px] text-zinc-500 mt-0.5 whitespace-nowrap">个文件</div>
+                  <div className="flex items-baseline gap-1">
+                    <div className="text-3xl font-bold text-zinc-300 whitespace-nowrap">{stats.totalVideos}</div>
+                    <div className="text-[9px] text-zinc-500 whitespace-nowrap">个文件</div>
+                  </div>
                 </div>
               </div>
             </div>

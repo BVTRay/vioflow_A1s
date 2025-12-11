@@ -181,10 +181,21 @@ export const MainBrowser: React.FC = () => {
               isLoading: false 
           }));
       } catch (error: any) {
+          console.error('Create share link error:', error);
+          let errorMessage = '创建分享链接失败，请重试';
+          
+          if (error.response?.status === 401) {
+              errorMessage = '未登录或登录已过期，请重新登录';
+          } else if (error.response?.data?.message) {
+              errorMessage = error.response.data.message;
+          } else if (error.message) {
+              errorMessage = error.message;
+          }
+          
           setShareState(prev => ({ 
               ...prev, 
               isLoading: false,
-              error: error.response?.data?.message || error.message || '创建分享链接失败，请重试'
+              error: errorMessage
           }));
       }
   };
