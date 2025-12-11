@@ -4,7 +4,13 @@
 -- 用户角色枚举
 CREATE TYPE "user_role_enum" AS ENUM('admin', 'member', 'viewer', 'sales');
 
--- 用户表
+-- 团队角色枚举
+CREATE TYPE IF NOT EXISTS "team_role_enum" AS ENUM('super_admin', 'admin', 'member');
+
+-- 成员状态枚举
+CREATE TYPE IF NOT EXISTS "member_status_enum" AS ENUM('pending', 'active', 'removed');
+
+-- 用户表（先创建，不包含team_id外键）
 CREATE TABLE IF NOT EXISTS "users" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   "email" varchar(255) UNIQUE NOT NULL,
@@ -12,12 +18,61 @@ CREATE TABLE IF NOT EXISTS "users" (
   "avatar_url" varchar(500),
   "role" "user_role_enum" DEFAULT 'member',
   "password_hash" varchar(255) NOT NULL,
+  "phone" varchar(20),
+  "is_active" boolean DEFAULT true,
   "created_at" timestamp DEFAULT now(),
   "updated_at" timestamp DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS "idx_users_active" ON "users"("is_active");
 
 -- 项目状态枚举
 CREATE TYPE "project_status_enum" AS ENUM('active', 'finalized', 'delivered', 'archived');
+
+-- 团队表
+CREATE TABLE IF NOT EXISTS "teams" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "name" varchar(100) NOT NULL,
+  "code" varchar(12) UNIQUE NOT NULL,
+  "description" text,
+  "created_by" uuid NOT NULL REFERENCES "users"("id"),
+  "created_at" timestamp DEFAULT now(),
+  "updated_at" timestamp DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "idx_teams_code" ON "teams"("code");
+
+-- 现在添加users表的team_id字段（因为teams表已创建）
+ALTER TABLE "users" 
+  ADD COLUMN IF NOT EXISTS "team_id" uuid REFERENCES "teams"("id");
+CREATE INDEX IF NOT EXISTS "idx_users_team" ON "users"("team_id");
+
+-- 团队成员表
+CREATE TABLE IF NOT EXISTS "team_members" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "team_id" uuid NOT NULL REFERENCES "teams"("id") ON DELETE CASCADE,
+  "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "role" "team_role_enum" NOT NULL DEFAULT 'member',
+  "status" "member_status_enum" DEFAULT 'active',
+  "invited_by" uuid REFERENCES "users"("id"),
+  "joined_at" timestamp DEFAULT now(),
+  "created_at" timestamp DEFAULT now(),
+  "updated_at" timestamp DEFAULT now(),
+  UNIQUE("team_id", "user_id")
+);
+CREATE INDEX IF NOT EXISTS "idx_team_members_team" ON "team_members"("team_id");
+CREATE INDEX IF NOT EXISTS "idx_team_members_user" ON "team_members"("user_id");
+
+-- 项目组表
+CREATE TABLE IF NOT EXISTS "project_groups" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "team_id" uuid NOT NULL REFERENCES "teams"("id") ON DELETE CASCADE,
+  "name" varchar(100) NOT NULL,
+  "description" text,
+  "icon" varchar(50),
+  "created_at" timestamp DEFAULT now(),
+  "updated_at" timestamp DEFAULT now(),
+  UNIQUE("team_id", "name")
+);
+CREATE INDEX IF NOT EXISTS "idx_project_groups_team" ON "project_groups"("team_id");
 
 -- 项目表
 CREATE TABLE IF NOT EXISTS "projects" (
@@ -26,7 +81,10 @@ CREATE TABLE IF NOT EXISTS "projects" (
   "client" varchar(100) NOT NULL,
   "lead" varchar(100) NOT NULL,
   "post_lead" varchar(100) NOT NULL,
-  "group" varchar(100) NOT NULL,
+  "group" varchar(100),
+  "team_id" uuid REFERENCES "teams"("id") ON DELETE CASCADE,
+  "group_id" uuid REFERENCES "project_groups"("id"),
+  "month_prefix" varchar(4),
   "status" "project_status_enum" DEFAULT 'active',
   "created_date" date NOT NULL,
   "last_activity_at" timestamp,
@@ -39,6 +97,8 @@ CREATE TABLE IF NOT EXISTS "projects" (
 );
 CREATE INDEX IF NOT EXISTS "idx_projects_status" ON "projects"("status");
 CREATE INDEX IF NOT EXISTS "idx_projects_group" ON "projects"("group");
+CREATE INDEX IF NOT EXISTS "idx_projects_team" ON "projects"("team_id");
+CREATE INDEX IF NOT EXISTS "idx_projects_group_id" ON "projects"("group_id");
 CREATE INDEX IF NOT EXISTS "idx_projects_last_activity" ON "projects"("last_activity_at");
 CREATE INDEX IF NOT EXISTS "idx_projects_last_opened" ON "projects"("last_opened_at");
 
@@ -150,6 +210,7 @@ CREATE TABLE IF NOT EXISTS "share_links" (
   "download_count" integer DEFAULT 0,
   "is_active" boolean DEFAULT true,
   "justification" text,
+  "client_name" varchar(100),
   "created_by" uuid NOT NULL REFERENCES "users"("id"),
   "created_at" timestamp DEFAULT now(),
   "updated_at" timestamp DEFAULT now()
@@ -321,4 +382,36 @@ CREATE TABLE IF NOT EXISTS "archiving_tasks" (
 );
 CREATE INDEX IF NOT EXISTS "idx_archiving_project" ON "archiving_tasks"("project_id");
 CREATE INDEX IF NOT EXISTS "idx_archiving_status" ON "archiving_tasks"("status");
+
+-- 操作日志表
+CREATE TABLE IF NOT EXISTS "audit_logs" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "team_id" uuid REFERENCES "teams"("id"),
+  "user_id" uuid NOT NULL REFERENCES "users"("id"),
+  "action" varchar(50) NOT NULL,
+  "resource_type" varchar(50) NOT NULL,
+  "resource_id" uuid,
+  "old_value" jsonb,
+  "new_value" jsonb,
+  "ip_address" varchar(45),
+  "user_agent" varchar(500),
+  "created_at" timestamp DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "idx_audit_logs_team" ON "audit_logs"("team_id");
+CREATE INDEX IF NOT EXISTS "idx_audit_logs_user" ON "audit_logs"("user_id");
+CREATE INDEX IF NOT EXISTS "idx_audit_logs_resource" ON "audit_logs"("resource_type", "resource_id");
+CREATE INDEX IF NOT EXISTS "idx_audit_logs_created" ON "audit_logs"("created_at");
+
+-- 存储空间统计表
+CREATE TABLE IF NOT EXISTS "storage_usage" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "team_id" uuid NOT NULL REFERENCES "teams"("id") ON DELETE CASCADE,
+  "total_size" bigint DEFAULT 0,
+  "standard_size" bigint DEFAULT 0,
+  "cold_size" bigint DEFAULT 0,
+  "file_count" integer DEFAULT 0,
+  "updated_at" timestamp DEFAULT now(),
+  UNIQUE("team_id")
+);
+CREATE INDEX IF NOT EXISTS "idx_storage_usage_team" ON "storage_usage"("team_id");
 

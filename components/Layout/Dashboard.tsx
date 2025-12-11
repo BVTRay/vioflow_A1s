@@ -366,17 +366,17 @@ export const Dashboard: React.FC = () => {
             </div>
 
             {/* 统计卡片 */}
-            <div className="flex items-stretch gap-2 mb-8">
+            <div className="flex items-start gap-2 mb-8">
               <button
                 onClick={handleNewProject}
-                className="bg-gradient-to-br from-zinc-800/50 to-zinc-900/30 border border-zinc-700/50 rounded-xl p-3 hover:border-zinc-600 hover:bg-zinc-800/60 transition-all flex flex-col items-center justify-center gap-1.5 w-[100px]"
+                className="bg-gradient-to-br from-zinc-800/50 to-zinc-900/30 border border-zinc-700/50 rounded-xl p-2.5 hover:border-zinc-600 hover:bg-zinc-800/60 transition-all flex flex-col items-center justify-center gap-1.5 h-[80px] w-[120px]"
               >
                 <Upload className="w-4 h-4 text-zinc-400" />
                 <span className="text-[10px] font-medium text-zinc-300 whitespace-nowrap">新建项目</span>
               </button>
               
-              <div className="flex gap-2 flex-1">
-                <div className="bg-gradient-to-br from-indigo-500/10 to-indigo-600/5 border border-indigo-500/20 rounded-xl p-2.5 flex-1 flex flex-col">
+              <div className="flex gap-2">
+                <div className="bg-gradient-to-br from-indigo-500/10 to-indigo-600/5 border border-indigo-500/20 rounded-xl p-2.5 flex flex-col h-[80px] w-[120px]">
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap">进行中</span>
                     <FolderOpen className="w-3.5 h-3.5 text-indigo-400" />
@@ -385,7 +385,7 @@ export const Dashboard: React.FC = () => {
                   <div className="text-[9px] text-zinc-500 mt-0.5 whitespace-nowrap">个项目</div>
                 </div>
                 
-                <div className="bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/20 rounded-xl p-2.5 flex-1 flex flex-col">
+                <div className="bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/20 rounded-xl p-2.5 flex flex-col h-[80px] w-[120px]">
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap">待交付</span>
                     <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
@@ -394,7 +394,7 @@ export const Dashboard: React.FC = () => {
                   <div className="text-[9px] text-zinc-500 mt-0.5 whitespace-nowrap">个项目</div>
                 </div>
                 
-                <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-xl p-2.5 flex-1 flex flex-col">
+                <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-xl p-2.5 flex flex-col h-[80px] w-[120px]">
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap">已交付</span>
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
@@ -403,7 +403,7 @@ export const Dashboard: React.FC = () => {
                   <div className="text-[9px] text-zinc-500 mt-0.5 whitespace-nowrap">个项目</div>
                 </div>
                 
-                <div className="bg-gradient-to-br from-zinc-800/50 to-zinc-900/30 border border-zinc-700/50 rounded-xl p-2.5 flex-1 flex flex-col">
+                <div className="bg-gradient-to-br from-zinc-800/50 to-zinc-900/30 border border-zinc-700/50 rounded-xl p-2.5 flex flex-col h-[80px] w-[120px]">
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap">总视频</span>
                     <FileVideo className="w-3.5 h-3.5 text-zinc-400" />
@@ -417,7 +417,7 @@ export const Dashboard: React.FC = () => {
 
           {/* 第一部分：正在进行的项目 */}
           <div className="mb-6">
-            <div className="bg-gradient-to-br from-indigo-500/10 to-indigo-600/5 rounded-xl p-5">
+            <div className="bg-gradient-to-br from-indigo-500/5 to-indigo-600/3 rounded-xl p-5">
               <div className="flex items-center gap-3 mb-4">
                 <h2 className="text-lg font-semibold text-indigo-300 flex items-center gap-2">
                   <div className="w-1 h-5 bg-indigo-500 rounded-full"></div>
@@ -447,7 +447,7 @@ export const Dashboard: React.FC = () => {
 
           {/* 第二部分：近期定版但未交付的项目 */}
           <div className="mb-6">
-            <div className="bg-gradient-to-br from-amber-500/10 to-amber-600/5 rounded-xl p-5">
+            <div className="bg-gradient-to-br from-amber-500/5 to-amber-600/3 rounded-xl p-5">
               <div className="flex items-center gap-3 mb-4">
                 <h2 className="text-lg font-semibold text-amber-300 flex items-center gap-2">
                   <div className="w-1 h-5 bg-amber-500 rounded-full"></div>
@@ -476,7 +476,7 @@ export const Dashboard: React.FC = () => {
 
           {/* 第三部分：近期完成交付的项目 */}
           <div className="mb-6">
-            <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 rounded-xl p-5">
+            <div className="bg-gradient-to-br from-emerald-500/5 to-emerald-600/3 rounded-xl p-5">
               <div className="flex items-center gap-3 mb-4">
                 <h2 className="text-lg font-semibold text-emerald-300 flex items-center gap-2">
                   <div className="w-1 h-5 bg-emerald-500 rounded-full"></div>
