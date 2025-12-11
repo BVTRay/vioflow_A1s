@@ -68,12 +68,28 @@
    - **Build Command**: `npm install && npm run build`
    - **Start Command**: `npm run start:prod`
 
-### 2.3 添加 PostgreSQL 数据库
+### 2.3 配置 Supabase 数据库连接
 
-1. 在 Railway 项目页面，点击 "+ New"
-2. 选择 "Database" → "Add PostgreSQL"
-3. Railway 会自动创建数据库并配置连接
-4. 数据库创建后，Railway 会自动添加 `DATABASE_URL` 环境变量
+**重要**：如果你使用 Supabase 作为数据库（而不是 Railway PostgreSQL），需要配置 Supabase 的连接字符串。
+
+#### 获取 Supabase 数据库连接字符串
+
+1. 在 Supabase 项目页面，点击左侧菜单的 **Settings** → **Database**
+2. 在 **Connection string** 部分，选择 **URI** 标签页
+3. 选择 **Connection pooling** 模式（推荐用于生产环境）
+4. 复制连接字符串，格式类似：
+   ```
+   postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
+   ```
+5. **或者** 使用 **Direct connection**（端口 5432）：
+   ```
+   postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres
+   ```
+
+**注意**：
+- 连接池模式（端口 6543）适合生产环境，有连接数限制但更稳定
+- 直接连接（端口 5432）适合开发环境，但连接数有限制
+- 密码中的特殊字符会自动编码，不需要手动处理
 
 ### 2.4 配置环境变量
 
@@ -82,8 +98,8 @@
 #### 必需的环境变量
 
 ```env
-# 数据库（Railway 会自动提供 DATABASE_URL，但也可以手动配置）
-DATABASE_URL=postgresql://user:password@host:port/database
+# Supabase 数据库连接（从 Supabase Settings → Database → Connection string 获取）
+DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
 
 # 应用配置
 PORT=3000
@@ -100,10 +116,19 @@ SUPABASE_STORAGE_BUCKET=videos
 
 #### 如何获取这些值
 
-- `DATABASE_URL`: Railway 会自动提供，在数据库服务的 **Variables** 标签页查看
+- `DATABASE_URL`: 从 Supabase 项目设置 → Database → Connection string → URI（推荐使用 Connection pooling 模式）
 - `SUPABASE_URL`: 从 Supabase 项目设置 → API → Project URL
-- `SUPABASE_SERVICE_KEY`: 从 Supabase 项目设置 → API → service_role key
+- `SUPABASE_SERVICE_KEY`: 从 Supabase 项目设置 → API → service_role key（⚠️ 保密）
 - `SUPABASE_STORAGE_BUCKET`: 你创建的存储桶名称（例如：`videos`）
+
+#### 数据库连接问题排查
+
+如果遇到 `SASL: SCRAM-SERVER-FINAL-MESSAGE: server signature is missing` 错误：
+
+1. **检查连接字符串格式**：确保使用 Supabase 提供的完整连接字符串
+2. **使用连接池模式**：推荐使用端口 6543 的连接池模式
+3. **检查密码**：确保密码正确，Supabase 会自动处理特殊字符编码
+4. **SSL 配置**：代码已自动为 Supabase 启用 SSL，无需手动配置
 
 ### 2.5 运行数据库迁移
 
