@@ -72,7 +72,7 @@ async function bootstrap() {
   // 全局数据转换拦截器
   app.useGlobalInterceptors(new TransformInterceptor());
 
-  const port = configService.get('PORT', 3000);
+  const port = configService.get('PORT', 3002);
   await app.listen(port);
   
   console.log(`✓ 后端服务已启动`);
