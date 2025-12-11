@@ -31,8 +31,26 @@ export class SharesController {
   }
 
   @Get(':token')
-  findByToken(@Param('token') token: string) {
-    return this.sharesService.findByToken(token);
+  async findByToken(@Param('token') token: string) {
+    const shareLink = await this.sharesService.findByToken(token);
+    if (!shareLink) {
+      return { error: '分享链接不存在或已失效' };
+    }
+    // 不返回密码哈希
+    const { password_hash, ...result } = shareLink;
+    return result;
+  }
+
+  @Post(':token/verify-password')
+  async verifyPassword(
+    @Param('token') token: string,
+    @Body() body: { password: string },
+  ) {
+    const isValid = await this.sharesService.verifyPassword(token, body.password);
+    if (!isValid) {
+      return { error: '密码错误' };
+    }
+    return { success: true };
   }
 
   @UseGuards(JwtAuthGuard)

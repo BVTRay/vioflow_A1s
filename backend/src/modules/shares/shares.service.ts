@@ -51,11 +51,34 @@ export class SharesService {
     return this.shareLinkRepository.save(shareLink);
   }
 
-  async findByToken(token: string): Promise<ShareLink> {
-    return this.shareLinkRepository.findOne({
+  async findByToken(token: string): Promise<ShareLink | null> {
+    const shareLink = await this.shareLinkRepository.findOne({
       where: { token, is_active: true },
       relations: ['video', 'project'],
     });
+
+    if (!shareLink) {
+      return null;
+    }
+
+    // 检查是否过期
+    if (shareLink.expires_at && new Date(shareLink.expires_at) < new Date()) {
+      return null;
+    }
+
+    return shareLink;
+  }
+
+  async verifyPassword(token: string, password: string): Promise<boolean> {
+    const shareLink = await this.shareLinkRepository.findOne({
+      where: { token, is_active: true },
+    });
+
+    if (!shareLink || !shareLink.password_hash) {
+      return false;
+    }
+
+    return bcrypt.compare(password, shareLink.password_hash);
   }
 
   async update(id: string, data: any): Promise<ShareLink> {

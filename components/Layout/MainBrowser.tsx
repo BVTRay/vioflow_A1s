@@ -4,6 +4,7 @@ import { Play, MoreVertical, Plus, Check, Clock, LayoutGrid, List, SlidersHorizo
 import { useStore } from '../../App';
 import { Video, DeliveryPackage } from '../../types';
 import { PreviewPlayer } from './PreviewPlayer';
+import { sharesApi } from '../../src/api/shares';
 
 export const MainBrowser: React.FC = () => {
   const { state, dispatch } = useStore();
@@ -37,7 +38,10 @@ export const MainBrowser: React.FC = () => {
       justification: string;
       allowDownload: boolean;
       hasPassword: boolean;
+      password: string;
       generatedLink: string;
+      isLoading: boolean;
+      error: string;
   }>({
       isOpen: false,
       video: null,
@@ -46,7 +50,10 @@ export const MainBrowser: React.FC = () => {
       justification: '',
       allowDownload: false,
       hasPassword: false,
-      generatedLink: ''
+      password: '',
+      generatedLink: '',
+      isLoading: false,
+      error: ''
   });
   
   // Content Logic
@@ -142,10 +149,44 @@ export const MainBrowser: React.FC = () => {
       });
   };
 
-  const handleGenerateLink = () => {
-      // Mock Link Generation
-      const link = `https://vioflow.io/share/${shareState.video?.id}/${Math.random().toString(36).substring(7)}`;
-      setShareState(prev => ({ ...prev, step: 'success', generatedLink: link }));
+  const handleGenerateLink = async () => {
+      if (!shareState.video || !project) return;
+
+      setShareState(prev => ({ ...prev, isLoading: true, error: '' }));
+
+      try {
+          // 计算7天后的过期时间
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + 7);
+          
+          const shareLink = await sharesApi.create({
+              type: 'video_review',
+              videoId: shareState.video.id,
+              projectId: project.id,
+              allowDownload: shareState.allowDownload,
+              hasPassword: shareState.hasPassword,
+              password: shareState.hasPassword ? shareState.password : undefined,
+              expiresAt: expiresAt.toISOString(),
+              justification: shareState.isHistorical ? shareState.justification : undefined,
+          });
+
+          // 生成分享链接 - 使用环境变量或默认域名
+          const shareDomain = import.meta.env.VITE_SHARE_DOMAIN || window.location.origin;
+          const link = `${shareDomain}/share/${shareLink.token}`;
+          
+          setShareState(prev => ({ 
+              ...prev, 
+              step: 'success', 
+              generatedLink: link,
+              isLoading: false 
+          }));
+      } catch (error: any) {
+          setShareState(prev => ({ 
+              ...prev, 
+              isLoading: false,
+              error: error.response?.data?.message || error.message || '创建分享链接失败，请重试'
+          }));
+      }
   };
 
   const renderShareModal = () => {
@@ -228,20 +269,40 @@ export const MainBrowser: React.FC = () => {
                                           <span className="text-sm">密码保护</span>
                                       </div>
                                       <button 
-                                        onClick={() => setShareState(prev => ({ ...prev, hasPassword: !prev.hasPassword }))}
+                                        onClick={() => setShareState(prev => ({ ...prev, hasPassword: !prev.hasPassword, password: '' }))}
                                         className={`w-10 h-5 rounded-full transition-colors relative ${shareState.hasPassword ? 'bg-indigo-600' : 'bg-zinc-700'}`}
                                       >
                                           <span className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-transform ${shareState.hasPassword ? 'left-6' : 'left-1'}`} />
                                       </button>
                                   </div>
+
+                                  {shareState.hasPassword && (
+                                      <div>
+                                          <label className="block text-xs font-bold text-zinc-500 uppercase mb-1.5">密码</label>
+                                          <input 
+                                              type="password"
+                                              className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-3 text-sm text-zinc-200 focus:border-indigo-500 outline-none"
+                                              placeholder="请输入密码"
+                                              value={shareState.password}
+                                              onChange={(e) => setShareState(prev => ({ ...prev, password: e.target.value }))}
+                                          />
+                                      </div>
+                                  )}
                               </div>
+
+                              {shareState.error && (
+                                  <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg text-sm text-red-400">
+                                      {shareState.error}
+                                  </div>
+                              )}
 
                               <div className="pt-2">
                                   <button 
                                     onClick={handleGenerateLink}
-                                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-lg text-sm font-medium shadow-lg shadow-indigo-900/20 transition-all"
+                                    disabled={shareState.isLoading || (shareState.hasPassword && !shareState.password.trim())}
+                                    className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white py-2.5 rounded-lg text-sm font-medium shadow-lg shadow-indigo-900/20 transition-all"
                                   >
-                                      创建分享链接
+                                      {shareState.isLoading ? '创建中...' : '创建分享链接'}
                                   </button>
                               </div>
                           </div>

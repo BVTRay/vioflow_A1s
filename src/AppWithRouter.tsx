@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { LoginPage } from './components/Auth/LoginPage';
+import { SharePage } from './components/Share/SharePage';
 import App from '../App';
 import apiClient from './api/client';
 
@@ -65,6 +66,7 @@ export const AppWithRouter: React.FC = () => {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/share/:token" element={<SharePage />} />
         <Route
           path="/*"
           element={
