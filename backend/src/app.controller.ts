@@ -12,7 +12,17 @@ export class AppController {
 
   @Get('health')
   async health() {
-    const health = {
+    const health: {
+      status: string;
+      timestamp: string;
+      environment: string;
+      services: {
+        database: string;
+      };
+      error?: {
+        database: string;
+      };
+    } = {
       status: 'ok',
       timestamp: new Date().toISOString(),
       environment: this.configService.get('NODE_ENV', 'development'),
@@ -25,7 +35,7 @@ export class AppController {
     try {
       await this.dataSource.query('SELECT 1');
       health.services.database = 'connected';
-    } catch (error) {
+    } catch (error: any) {
       health.services.database = 'disconnected';
       health.status = 'degraded';
       health.error = {
