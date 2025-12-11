@@ -18,7 +18,10 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
       }
 
       try {
-        const response = await fetch('http://localhost:3002/api/auth/me', {
+        // 使用 apiClient 的 baseURL 而不是硬编码
+        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 
+          (import.meta.env.PROD ? 'https://api.vioflow.cc/api' : 'http://localhost:3002/api');
+        const response = await fetch(`${apiBaseUrl}/auth/me`, {
           headers: {
             'Authorization': `Bearer ${token}`,
           },

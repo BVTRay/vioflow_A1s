@@ -10,9 +10,32 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   
   // CORS配置
+  const corsOrigin = configService.get('CORS_ORIGIN');
+  const allowedOrigins = corsOrigin 
+    ? corsOrigin.split(',').map(o => o.trim()).filter(Boolean) // 支持多个域名，用逗号分隔
+    : ['http://localhost:3009', 'https://a1s.vioflow.cc']; // 默认允许本地和 Vercel 域名
+  
+  console.log('CORS 允许的域名:', allowedOrigins);
+  
   app.enableCors({
-    origin: configService.get('CORS_ORIGIN', 'http://localhost:3009'),
+    origin: (origin, callback) => {
+      // 允许没有 origin 的请求（如移动应用或 Postman）
+      if (!origin) {
+        return callback(null, true);
+      }
+      
+      // 检查是否在允许列表中
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`CORS 阻止的域名: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposedHeaders: ['Content-Length', 'Content-Type'],
   });
 
   // 全局验证管道

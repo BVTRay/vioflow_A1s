@@ -1,6 +1,22 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002/api';
+// 根据环境自动选择 API 地址
+const getApiBaseUrl = () => {
+  // 如果设置了环境变量，优先使用
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  // 生产环境：使用相对路径或配置的 API 地址
+  if (import.meta.env.PROD) {
+    // 生产环境应该使用完整的 API 地址，需要在 Vercel 环境变量中配置
+    // 例如：https://api.vioflow.cc/api
+    return import.meta.env.VITE_API_BASE_URL || 'https://api.vioflow.cc/api';
+  }
+  // 开发环境
+  return 'http://localhost:3002/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 class ApiClient {
   private client: AxiosInstance;
