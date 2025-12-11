@@ -18,11 +18,22 @@ const getApiBaseUrl = () => {
 
 const API_BASE_URL = getApiBaseUrl();
 
+// 开发环境下打印 API 地址，便于调试
+if (import.meta.env.DEV) {
+  console.log('API Base URL:', API_BASE_URL);
+}
+
 class ApiClient {
   private client: AxiosInstance;
   private token: string | null = null;
 
   constructor() {
+    // 确保 API 地址正确
+    if (!API_BASE_URL || API_BASE_URL.includes('supabase.co')) {
+      console.error('⚠️ 错误的 API 地址配置:', API_BASE_URL);
+      console.error('请检查 VITE_API_BASE_URL 环境变量');
+    }
+    
     this.client = axios.create({
       baseURL: API_BASE_URL,
       headers: {

@@ -16,14 +16,22 @@ export const LoginPage: React.FC = () => {
 
     try {
       const response = await authApi.login({ username, password });
-      if (response.accessToken) {
+      // 检查是否有 token（支持 accessToken 或 access_token）
+      if (response.accessToken || response.access_token) {
         // 登录成功，等待一下让 token 保存，然后刷新页面
         setTimeout(() => {
           window.location.href = '/';
         }, 100);
+      } else {
+        setError('登录失败：未收到认证令牌');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || '登录失败，请检查账号和密码');
+      console.error('Login error:', err);
+      const errorMessage = err.response?.data?.message || 
+                          err.response?.data?.error || 
+                          err.message || 
+                          '登录失败，请检查账号和密码';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
