@@ -18,7 +18,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
       }
 
       try {
-        const response = await fetch('http://localhost:3101/api/auth/me', {
+        const response = await fetch('http://localhost:3002/api/auth/me', {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
