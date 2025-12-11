@@ -72,7 +72,7 @@ function appReducer(state: AppState, action: Action): AppState {
         selectedProjectId: null, 
         selectedVideoId: null,
         searchTerm: '',
-        showWorkbench: false, // Auto close when switching modules
+        showWorkbench: action.payload === 'settings', // Auto open for settings module
         workbenchActionType: null // Clear workbench action type when switching modules
       };
     case 'SELECT_PROJECT':
@@ -518,11 +518,15 @@ const App: React.FC = () => {
           onChangeModule={(mod) => dispatch({ type: 'SET_MODULE', payload: mod })} 
         />
 
-        {state.activeModule !== 'dashboard' && <RetrievalPanel />}
+        {state.activeModule !== 'dashboard' && state.activeModule !== 'settings' && <RetrievalPanel />}
 
         {state.activeModule === 'dashboard' ? (
           <>
             <Dashboard />
+            <Workbench visible={state.showWorkbench} />
+          </>
+        ) : state.activeModule === 'settings' ? (
+          <>
             <Workbench visible={state.showWorkbench} />
           </>
         ) : (

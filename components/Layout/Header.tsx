@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Bell, ArrowRightLeft, Search, Command, LogOut, User, ChevronDown } from 'lucide-react';
+import { Bell, ArrowRightLeft, Search, Command, LogOut, User, ChevronDown, Settings, X, Save, Camera, Mail, Phone, Lock } from 'lucide-react';
 import { AppState } from '../../types';
 import { useAuth } from '../../src/hooks/useAuth';
 import apiClient from '../../src/api/client';
@@ -13,6 +13,34 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ onToggleDrawer, activeDrawer }) => {
   const { user, logout, isAuthenticated } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showUserSettings, setShowUserSettings] = useState(false);
+  const [userFormData, setUserFormData] = useState({
+    name: '',
+    email: '',
+    username: '',
+    phone: '',
+    avatar_url: '',
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [isSaving, setIsSaving] = useState(false);
+
+  // 初始化表单数据
+  useEffect(() => {
+    if (user && showUserSettings) {
+      setUserFormData({
+        name: user.name || '',
+        email: user.email || '',
+        username: user.email?.split('@')[0] || '', // 从邮箱提取用户名
+        phone: '', // 用户实体中没有手机号字段
+        avatar_url: user.avatar_url || '',
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
+    }
+  }, [user, showUserSettings]);
 
   const handleLogout = async () => {
     try {
@@ -121,6 +149,16 @@ export const Header: React.FC<HeaderProps> = ({ onToggleDrawer, activeDrawer }) 
                     <div className="text-[10px] text-indigo-400 mt-1">{getUserRole()}</div>
                   </div>
                   <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      setShowUserSettings(true);
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-sm text-zinc-300 hover:bg-zinc-800 flex items-center gap-2 transition-colors"
+                  >
+                    <Settings className="w-4 h-4" />
+                    个人信息设置
+                  </button>
+                  <button
                     onClick={handleLogout}
                     className="w-full px-4 py-2.5 text-left text-sm text-zinc-300 hover:bg-zinc-800 flex items-center gap-2 transition-colors"
                   >
@@ -135,6 +173,184 @@ export const Header: React.FC<HeaderProps> = ({ onToggleDrawer, activeDrawer }) 
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 border border-zinc-700 shadow-sm cursor-pointer hover:ring-2 ring-indigo-500/50 transition-all"></div>
         )}
       </div>
+
+      {/* 用户信息设置模态框 */}
+      {showUserSettings && user && (
+        <>
+          <div 
+            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm" 
+            onClick={() => setShowUserSettings(false)}
+          ></div>
+          <div className="fixed right-4 top-16 bottom-4 w-[480px] bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-[101] flex flex-col overflow-hidden">
+            <div className="px-5 py-4 border-b border-zinc-800 bg-zinc-950 flex justify-between items-center">
+              <h2 className="text-sm font-semibold text-zinc-100">个人信息设置</h2>
+              <button 
+                onClick={() => setShowUserSettings(false)}
+                className="p-1.5 hover:bg-zinc-800 rounded transition-colors"
+              >
+                <X className="w-4 h-4 text-zinc-500 hover:text-zinc-200" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-5">
+              {/* 头像 */}
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase">头像</label>
+                <div className="flex items-center gap-4">
+                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 border border-zinc-700 shadow-sm flex items-center justify-center overflow-hidden">
+                    {userFormData.avatar_url ? (
+                      <img src={userFormData.avatar_url} alt="头像" className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-10 h-10 text-white" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      value={userFormData.avatar_url}
+                      onChange={(e) => setUserFormData({...userFormData, avatar_url: e.target.value})}
+                      placeholder="输入头像URL..."
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-indigo-500 outline-none"
+                    />
+                    <p className="text-[10px] text-zinc-500 mt-1">支持图片URL链接</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 用户名 */}
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase">用户名</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-2.5 w-4 h-4 text-zinc-600" />
+                  <input
+                    type="text"
+                    value={userFormData.name}
+                    onChange={(e) => setUserFormData({...userFormData, name: e.target.value})}
+                    placeholder="输入用户名"
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-10 pr-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-indigo-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* 登录账号（邮箱） */}
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase">登录账号（邮箱）</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-2.5 w-4 h-4 text-zinc-600" />
+                  <input
+                    type="email"
+                    value={userFormData.email}
+                    onChange={(e) => setUserFormData({...userFormData, email: e.target.value})}
+                    placeholder="输入邮箱地址"
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-10 pr-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-indigo-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* 手机号 */}
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase">手机号（可选）</label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-2.5 w-4 h-4 text-zinc-600" />
+                  <input
+                    type="tel"
+                    value={userFormData.phone}
+                    onChange={(e) => setUserFormData({...userFormData, phone: e.target.value})}
+                    placeholder="输入手机号"
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-10 pr-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-indigo-500 outline-none"
+                  />
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-1">手机号功能暂未实现</p>
+              </div>
+
+              {/* 密码修改 */}
+              <div className="pt-4 border-t border-zinc-800">
+                <h3 className="text-xs font-bold text-zinc-500 uppercase mb-3">修改密码</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">当前密码</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-2.5 w-4 h-4 text-zinc-600" />
+                      <input
+                        type="password"
+                        value={userFormData.currentPassword}
+                        onChange={(e) => setUserFormData({...userFormData, currentPassword: e.target.value})}
+                        placeholder="输入当前密码"
+                        className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-10 pr-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-indigo-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">新密码</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-2.5 w-4 h-4 text-zinc-600" />
+                      <input
+                        type="password"
+                        value={userFormData.newPassword}
+                        onChange={(e) => setUserFormData({...userFormData, newPassword: e.target.value})}
+                        placeholder="输入新密码"
+                        className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-10 pr-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-indigo-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">确认新密码</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-2.5 w-4 h-4 text-zinc-600" />
+                      <input
+                        type="password"
+                        value={userFormData.confirmPassword}
+                        onChange={(e) => setUserFormData({...userFormData, confirmPassword: e.target.value})}
+                        placeholder="再次输入新密码"
+                        className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-10 pr-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-indigo-500 outline-none"
+                      />
+                    </div>
+                    {userFormData.newPassword && userFormData.confirmPassword && userFormData.newPassword !== userFormData.confirmPassword && (
+                      <p className="text-[10px] text-red-400 mt-1">两次输入的密码不一致</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-zinc-800 bg-zinc-950 flex justify-end gap-2">
+              <button
+                onClick={() => setShowUserSettings(false)}
+                className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={async () => {
+                  if (userFormData.newPassword && userFormData.newPassword !== userFormData.confirmPassword) {
+                    alert('两次输入的密码不一致');
+                    return;
+                  }
+                  setIsSaving(true);
+                  try {
+                    // TODO: 调用更新用户信息的API
+                    // await authApi.updateProfile({ ...userFormData });
+                    alert('用户信息已更新（功能开发中）');
+                    setShowUserSettings(false);
+                    // 刷新用户信息
+                    window.location.reload();
+                  } catch (error) {
+                    console.error('更新用户信息失败:', error);
+                    alert('更新失败，请稍后重试');
+                  } finally {
+                    setIsSaving(false);
+                  }
+                }}
+                disabled={isSaving}
+                className="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                {isSaving ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </header>
   );
 };

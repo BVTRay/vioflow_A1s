@@ -1,8 +1,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, CheckCircle2, X, Share, PlaySquare, FileCheck, ShieldAlert, MonitorPlay, GripVertical, FileVideo, AlertCircle, GitBranch, PlusSquare, History, ArrowRight, Upload, FileText, Copyright, Film, Tag, CheckCircle, Link2, Package, Download, Power, User, Users, ChevronDown } from 'lucide-react';
+import { UploadCloud, CheckCircle2, X, Share, PlaySquare, FileCheck, ShieldAlert, MonitorPlay, GripVertical, FileVideo, AlertCircle, GitBranch, PlusSquare, History, ArrowRight, Upload, FileText, Copyright, Film, Tag, CheckCircle, Link2, Package, Download, Power, User, Users, ChevronDown, Settings, FolderOpen, Trash2, Edit2, Save } from 'lucide-react';
 import { useStore } from '../../App';
 import { Video, DeliveryData } from '../../types';
+import { useAuth } from '../../src/hooks/useAuth';
+import { projectsApi } from '../../src/api/projects';
+import { tagsApi } from '../../src/api/tags';
 
 interface WorkbenchProps {
   visible: boolean;
@@ -10,13 +13,22 @@ interface WorkbenchProps {
 
 export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
   const { state, dispatch } = useStore();
-  const { activeModule, selectedProjectId, selectedVideoId, projects, deliveries, cart, videos, workbenchActionType } = state;
+  const { activeModule, selectedProjectId, selectedVideoId, projects, deliveries, cart, videos, workbenchActionType, tags } = state;
   const project = projects.find(p => p.id === selectedProjectId);
   const delivery = deliveries.find(d => d.projectId === selectedProjectId);
   const selectedVideo = videos.find(v => v.id === selectedVideoId);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Settings state
+  const [settingsActiveTab, setSettingsActiveTab] = useState<'groups' | 'projects' | 'tags'>('groups');
+  const [editingGroup, setEditingGroup] = useState<string | null>(null);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newTagName, setNewTagName] = useState('');
+  const [projectGroupMap, setProjectGroupMap] = useState<Record<string, string>>({});
 
   // Upload Configuration Modal State
   const [uploadConfig, setUploadConfig] = useState<{
@@ -1152,6 +1164,331 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
     );
   };
 
+  // 初始化项目组别映射
+  useEffect(() => {
+    if (settingsActiveTab === 'projects') {
+      const map: Record<string, string> = {};
+      projects.forEach(p => {
+        map[p.id] = p.group;
+      });
+      setProjectGroupMap(map);
+    }
+  }, [settingsActiveTab, projects]);
+
+  // --- SETTINGS MODULE LOGIC ---
+  const renderSettingsWorkbench = () => {
+    // 获取所有组别
+    const allGroups = Array.from(new Set(projects.map(p => p.group).filter(g => g && g !== '未分类')));
+
+    const handleDeleteGroup = (groupName: string) => {
+      if (window.confirm(`确认删除组别"${groupName}"？该组下的项目将被移动到"未分类"组。`)) {
+        // 更新所有属于该组别的项目
+        projects.filter(p => p.group === groupName).forEach(p => {
+          dispatch({
+            type: 'UPDATE_PROJECT',
+            payload: { ...p, group: '未分类' }
+          });
+        });
+      }
+    };
+
+    const handleRenameGroup = (oldName: string, newName: string) => {
+      if (!newName.trim() || newName === oldName) {
+        setEditingGroup(null);
+        return;
+      }
+      // 更新所有属于该组别的项目
+      projects.filter(p => p.group === oldName).forEach(p => {
+        dispatch({
+          type: 'UPDATE_PROJECT',
+          payload: { ...p, group: newName }
+        });
+      });
+      setEditingGroup(null);
+    };
+
+    const handleDeleteTag = async (tagId: string) => {
+      if (window.confirm('确认删除此标签？')) {
+        // 从状态中移除标签
+        const updatedTags = tags.filter(t => t.id !== tagId);
+        updatedTags.forEach(t => {
+          dispatch({ type: 'ADD_TAG', payload: t });
+        });
+        // 这里应该调用API删除标签，但暂时只更新本地状态
+      }
+    };
+
+    const handleCreateTag = async () => {
+      if (!newTagName.trim()) return;
+      try {
+        const newTag = await tagsApi.create(newTagName.trim());
+        dispatch({ type: 'ADD_TAG', payload: newTag });
+        setNewTagName('');
+      } catch (error) {
+        console.error('创建标签失败:', error);
+        alert('创建标签失败');
+      }
+    };
+
+    const handleUpdateProjectGroup = (projectId: string, newGroup: string) => {
+      const project = projects.find(p => p.id === projectId);
+      if (project) {
+        dispatch({
+          type: 'UPDATE_PROJECT',
+          payload: { ...project, group: newGroup }
+        });
+        setProjectGroupMap({ ...projectGroupMap, [projectId]: newGroup });
+      }
+    };
+
+    if (!isAdmin) {
+      return (
+        <div className="flex-1 flex flex-col h-full">
+          <div className="px-5 py-4 border-b border-zinc-800 bg-zinc-900 flex justify-end">
+            <button onClick={handleClose}><X className="w-4 h-4 text-zinc-500 hover:text-zinc-200" /></button>
+          </div>
+          <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 p-8 text-center">
+            <ShieldAlert className="w-10 h-10 mb-3 opacity-20" />
+            <p className="text-sm">需要管理员权限</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <>
+        <div className="px-5 py-4 border-b border-zinc-800 bg-zinc-900 flex justify-between items-center">
+          <div>
+            <h2 className="text-sm font-semibold text-zinc-100">系统设置</h2>
+            <p className="text-xs text-zinc-500 mt-0.5">管理员功能</p>
+          </div>
+          <button onClick={handleClose}><X className="w-4 h-4 text-zinc-500 hover:text-zinc-200" /></button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-zinc-800 bg-zinc-950">
+          <button
+            onClick={() => setSettingsActiveTab('groups')}
+            className={`flex-1 px-4 py-2.5 text-xs font-medium transition-colors ${
+              settingsActiveTab === 'groups' 
+                ? 'text-indigo-400 border-b-2 border-indigo-400' 
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            <FolderOpen className="w-4 h-4 inline mr-1.5" />
+            组别
+          </button>
+          <button
+            onClick={() => setSettingsActiveTab('projects')}
+            className={`flex-1 px-4 py-2.5 text-xs font-medium transition-colors ${
+              settingsActiveTab === 'projects' 
+                ? 'text-indigo-400 border-b-2 border-indigo-400' 
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            <FileVideo className="w-4 h-4 inline mr-1.5" />
+            项目
+          </button>
+          <button
+            onClick={() => setSettingsActiveTab('tags')}
+            className={`flex-1 px-4 py-2.5 text-xs font-medium transition-colors ${
+              settingsActiveTab === 'tags' 
+                ? 'text-indigo-400 border-b-2 border-indigo-400' 
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            <Tag className="w-4 h-4 inline mr-1.5" />
+            标签
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
+          {/* Groups Tab */}
+          {settingsActiveTab === 'groups' && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-xs font-bold text-zinc-500 uppercase mb-3">管理组别</h3>
+                <div className="space-y-2">
+                  {allGroups.length === 0 ? (
+                    <p className="text-xs text-zinc-500 text-center py-4">暂无组别</p>
+                  ) : (
+                    allGroups.map(group => (
+                      <div key={group} className="flex items-center gap-2 p-2 bg-zinc-950 border border-zinc-800 rounded-lg">
+                        {editingGroup === group ? (
+                          <>
+                            <input
+                              type="text"
+                              value={newGroupName}
+                              onChange={(e) => setNewGroupName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleRenameGroup(group, newGroupName);
+                                } else if (e.key === 'Escape') {
+                                  setEditingGroup(null);
+                                  setNewGroupName('');
+                                }
+                              }}
+                              autoFocus
+                              className="flex-1 bg-zinc-900 border border-indigo-500 rounded px-2 py-1 text-xs text-zinc-100 outline-none"
+                            />
+                            <button
+                              onClick={() => handleRenameGroup(group, newGroupName)}
+                              className="p-1.5 text-indigo-400 hover:text-indigo-300"
+                            >
+                              <Save className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingGroup(null);
+                                setNewGroupName('');
+                              }}
+                              className="p-1.5 text-zinc-500 hover:text-zinc-400"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <FolderOpen className="w-4 h-4 text-zinc-500" />
+                            <span className="flex-1 text-sm text-zinc-200">{group}</span>
+                            <span className="text-xs text-zinc-500">
+                              {projects.filter(p => p.group === group).length} 个项目
+                            </span>
+                            <button
+                              onClick={() => {
+                                setEditingGroup(group);
+                                setNewGroupName(group);
+                              }}
+                              className="p-1.5 text-zinc-500 hover:text-indigo-400"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteGroup(group)}
+                              className="p-1.5 text-zinc-500 hover:text-red-400"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Projects Tab */}
+          {settingsActiveTab === 'projects' && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-xs font-bold text-zinc-500 uppercase mb-3">管理项目</h3>
+                <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                  {projects.length === 0 ? (
+                    <p className="text-xs text-zinc-500 text-center py-4">暂无项目</p>
+                  ) : (
+                    projects.map(p => (
+                      <div key={p.id} className="p-3 bg-zinc-950 border border-zinc-800 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-zinc-200">{p.name}</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded ${
+                            p.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' :
+                            p.status === 'finalized' ? 'bg-orange-500/20 text-orange-400' :
+                            p.status === 'delivered' ? 'bg-indigo-500/20 text-indigo-400' :
+                            'bg-zinc-800 text-zinc-500'
+                          }`}>
+                            {p.status === 'active' ? '进行中' :
+                             p.status === 'finalized' ? '已定版' :
+                             p.status === 'delivered' ? '已交付' : '已归档'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs text-zinc-500">组别:</label>
+                          <select
+                            value={projectGroupMap[p.id] || p.group}
+                            onChange={(e) => handleUpdateProjectGroup(p.id, e.target.value)}
+                            className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-100 outline-none focus:border-indigo-500"
+                          >
+                            <option value="未分类">未分类</option>
+                            {allGroups.map(g => (
+                              <option key={g} value={g}>{g}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tags Tab */}
+          {settingsActiveTab === 'tags' && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-xs font-bold text-zinc-500 uppercase mb-3">管理标签</h3>
+                
+                {/* Create New Tag */}
+                <div className="mb-4 p-3 bg-zinc-950 border border-zinc-800 rounded-lg">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newTagName}
+                      onChange={(e) => setNewTagName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleCreateTag();
+                        }
+                      }}
+                      placeholder="输入新标签名称..."
+                      className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-xs text-zinc-100 placeholder-zinc-600 outline-none focus:border-indigo-500"
+                    />
+                    <button
+                      onClick={handleCreateTag}
+                      className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs transition-colors"
+                    >
+                      <PlusSquare className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tags List */}
+                <div className="space-y-2">
+                  {tags.length === 0 ? (
+                    <p className="text-xs text-zinc-500 text-center py-4">暂无标签</p>
+                  ) : (
+                    tags.map(tag => (
+                      <div key={tag.id} className="flex items-center gap-2 p-2 bg-zinc-950 border border-zinc-800 rounded-lg">
+                        <Tag className="w-4 h-4 text-zinc-500" />
+                        <span className="flex-1 text-sm text-zinc-200">{tag.name}</span>
+                        {tag.category && (
+                          <span className="text-[10px] text-zinc-500 px-2 py-0.5 bg-zinc-900 rounded">
+                            {tag.category}
+                          </span>
+                        )}
+                        <span className="text-xs text-zinc-500">
+                          使用 {tag.usageCount || 0} 次
+                        </span>
+                        <button
+                          onClick={() => handleDeleteTag(tag.id)}
+                          className="p-1.5 text-zinc-500 hover:text-red-400"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </>
+    );
+  };
+
   // 在dashboard模块时，根据workbenchActionType决定显示什么内容
   const effectiveModule = activeModule === 'dashboard' ? (workbenchActionType || 'review') : activeModule;
 
@@ -1160,7 +1497,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
         {effectiveModule === 'review' && renderReviewWorkbench()}
         {effectiveModule === 'delivery' && renderDeliveryWorkbench()}
         {effectiveModule === 'showcase' && renderShowcaseWorkbench()}
-        {effectiveModule === 'settings' && <EmptyWorkbench message="设置" onClose={handleClose} />}
+        {effectiveModule === 'settings' && renderSettingsWorkbench()}
     </aside>
   );
 };

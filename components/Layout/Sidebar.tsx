@@ -36,7 +36,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeModule, onChangeModule }
         <SidebarItem 
           active={activeModule === 'settings'} 
           icon={Settings} 
-          label="设置" 
+          label="" 
           onClick={() => onChangeModule('settings')} 
         />
       </div>
@@ -57,7 +57,7 @@ const SidebarItem: React.FC<{
       ${active ? 'bg-zinc-800 text-indigo-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'}
     `}
   >
-    <Icon className={`w-6 h-6 mb-1 ${active ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-    <span className="text-[10px] font-medium leading-none tracking-wide opacity-80 scale-90">{label}</span>
+    <Icon className={`w-6 h-6 ${label ? 'mb-1' : ''} ${active ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+    {label && <span className="text-[10px] font-medium leading-none tracking-wide opacity-80 scale-90">{label}</span>}
   </button>
 );
