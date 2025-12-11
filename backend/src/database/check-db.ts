@@ -85,12 +85,17 @@ async function checkDatabase() {
     // 检查用户数据
     console.log('\n检查用户数据...');
     try {
-      const users = await dataSource.query('SELECT email, name, role FROM "users" LIMIT 5');
+      const userCount = await dataSource.query('SELECT COUNT(*) as count FROM "users"');
+      const totalUsers = parseInt(userCount[0]?.count || '0');
+      const users = await dataSource.query('SELECT email, name, role FROM "users" ORDER BY created_at LIMIT 10');
       if (users.length > 0) {
-        console.log(`✓ 找到 ${users.length} 个用户:`);
+        console.log(`✓ 找到 ${totalUsers} 个用户（显示前 ${users.length} 个）:`);
         users.forEach((user: any) => {
           console.log(`  - ${user.email} (${user.name}) - ${user.role}`);
         });
+        if (totalUsers > users.length) {
+          console.log(`  ... 还有 ${totalUsers - users.length} 个用户未显示`);
+        }
       } else {
         console.log('⚠️  用户表为空');
       }
@@ -101,17 +106,43 @@ async function checkDatabase() {
     // 检查项目数据
     console.log('\n检查项目数据...');
     try {
-      const projects = await dataSource.query('SELECT name, client, status FROM "projects" LIMIT 5');
+      const projectCount = await dataSource.query('SELECT COUNT(*) as count FROM "projects"');
+      const totalProjects = parseInt(projectCount[0]?.count || '0');
+      const projects = await dataSource.query('SELECT name, client, status FROM "projects" ORDER BY created_at DESC LIMIT 15');
       if (projects.length > 0) {
-        console.log(`✓ 找到 ${projects.length} 个项目:`);
+        console.log(`✓ 找到 ${totalProjects} 个项目（显示前 ${projects.length} 个）:`);
         projects.forEach((project: any) => {
           console.log(`  - ${project.name} (${project.client}) - ${project.status}`);
         });
+        if (totalProjects > projects.length) {
+          console.log(`  ... 还有 ${totalProjects - projects.length} 个项目未显示`);
+        }
       } else {
         console.log('⚠️  项目表为空');
       }
     } catch (error: any) {
       console.log(`✗ 无法查询项目表: ${error.message}`);
+    }
+
+    // 检查标签数据
+    console.log('\n检查标签数据...');
+    try {
+      const tagCount = await dataSource.query('SELECT COUNT(*) as count FROM "tags"');
+      const totalTags = parseInt(tagCount[0]?.count || '0');
+      const tags = await dataSource.query('SELECT name, usage_count FROM "tags" ORDER BY usage_count DESC LIMIT 20');
+      if (tags.length > 0) {
+        console.log(`✓ 找到 ${totalTags} 个标签（显示前 ${tags.length} 个）:`);
+        tags.forEach((tag: any) => {
+          console.log(`  - ${tag.name} (使用次数: ${tag.usage_count})`);
+        });
+        if (totalTags > tags.length) {
+          console.log(`  ... 还有 ${totalTags - tags.length} 个标签未显示`);
+        }
+      } else {
+        console.log('⚠️  标签表为空');
+      }
+    } catch (error: any) {
+      console.log(`✗ 无法查询标签表: ${error.message}`);
     }
 
     await dataSource.destroy();
