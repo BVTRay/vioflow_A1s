@@ -430,15 +430,15 @@ const App: React.FC = () => {
       // 更新通知（转换时间格式）
       apiNotifications.forEach((notification: any) => {
         if (!state.notifications.find((n: AppNotification) => n.id === notification.id)) {
-          // 转换后端返回的通知格式
+          // 转换后端返回的通知格式（后端拦截器已经转换了字段名和时间格式）
           const formattedNotification: AppNotification = {
             id: notification.id,
             type: notification.type,
             title: notification.title,
             message: notification.message,
-            time: notification.time || formatNotificationTime(notification.created_at),
-            relatedType: notification.related_type,
-            relatedId: notification.related_id,
+            time: notification.time || formatNotificationTime(notification.createdAt || notification.created_at),
+            relatedType: notification.relatedType || notification.related_type,
+            relatedId: notification.relatedId || notification.related_id,
           };
           dispatch({ type: 'ADD_NOTIFICATION', payload: formattedNotification });
         }
