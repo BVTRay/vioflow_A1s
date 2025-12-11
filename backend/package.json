@@ -27,6 +27,7 @@
     "seed:reset": "ts-node -r tsconfig-paths/register src/database/seeds/reset-and-seed.ts",
     "seed:extended": "ts-node -r tsconfig-paths/register src/database/seeds/run-seed-extended.ts",
     "check-db": "ts-node -r tsconfig-paths/register src/database/check-db.ts",
+    "diagnose-cloud": "ts-node -r tsconfig-paths/register src/database/diagnose-cloud.ts",
     "update-password": "ts-node -r tsconfig-paths/register src/database/seeds/update-password.ts"
   },
   "dependencies": {
