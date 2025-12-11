@@ -56,11 +56,13 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('me')
   async getProfile(@Request() req) {
+    // 确保 role 返回为字符串格式（统一本地和云端）
+    const role = typeof req.user.role === 'string' ? req.user.role : String(req.user.role);
     return {
       id: req.user.id,
       email: req.user.email,
       name: req.user.name,
-      role: req.user.role,
+      role: role,
       avatar_url: req.user.avatar_url,
     };
   }
