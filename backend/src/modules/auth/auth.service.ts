@@ -18,6 +18,8 @@ export class AuthService {
 
   async validateUser(username: string, password: string): Promise<any> {
     try {
+      this.logger.debug(`Attempting to find user: ${username}`);
+      
       // 支持用户名或邮箱登录
       const user = await this.userRepository.findOne({
         where: [{ email: username }, { name: username }],
@@ -28,7 +30,12 @@ export class AuthService {
         return null;
       }
       
-      if (user && (await bcrypt.compare(password, user.password_hash))) {
+      this.logger.debug(`User found: ${user.email}, checking password...`);
+      
+      const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+      
+      if (isPasswordValid) {
+        this.logger.debug(`Password valid for user: ${user.email}`);
         const { password_hash, ...result } = user;
         return result;
       }
@@ -37,6 +44,8 @@ export class AuthService {
       return null;
     } catch (error) {
       this.logger.error(`Error validating user: ${username}`, error.stack);
+      this.logger.error(`Error details: ${error.message}`);
+      this.logger.error(`Error code: ${error.code || 'N/A'}`);
       throw error;
     }
   }

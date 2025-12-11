@@ -18,6 +18,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { ArchivingModule } from './modules/archiving/archiving.module';
 import { TrackingModule } from './modules/tracking/tracking.module';
 import { SearchModule } from './modules/search/search.module';
+import { AppController } from './app.controller';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { SearchModule } from './modules/search/search.module';
     TrackingModule,
     SearchModule,
   ],
+  controllers: [AppController],
 })
 export class AppModule {}
 
