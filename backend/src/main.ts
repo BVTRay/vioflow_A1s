@@ -11,13 +11,21 @@ async function bootstrap() {
   
   // CORS配置
   const corsOrigin = configService.get('CORS_ORIGIN');
-  const allowedOrigins = corsOrigin 
-    ? corsOrigin.split(',').map(o => o.trim()).filter(Boolean) // 支持多个域名，用逗号分隔
-    : [
-        'http://localhost:3009', 
-        'https://a1s.vioflow.cc',
-        /^https:\/\/.*\.vercel\.app$/, // 允许所有 Vercel 预览域名
-      ]; // 默认允许本地和 Vercel 域名
+  
+  // 默认允许的域名（始终包含）
+  const defaultOrigins: (string | RegExp)[] = [
+    'http://localhost:3009', 
+    'https://a1s.vioflow.cc',
+    /^https:\/\/.*\.vercel\.app$/, // 允许所有 Vercel 预览域名
+  ];
+  
+  // 从环境变量获取额外的允许域名
+  const additionalOrigins = corsOrigin 
+    ? corsOrigin.split(',').map(o => o.trim()).filter(Boolean)
+    : [];
+  
+  // 合并默认域名和环境变量中的域名（去重）
+  const allowedOrigins = [...defaultOrigins, ...additionalOrigins];
   
   console.log('CORS 允许的域名:', allowedOrigins);
   
@@ -42,6 +50,7 @@ async function bootstrap() {
         callback(null, true);
       } else {
         console.warn(`CORS 阻止的域名: ${origin}`);
+        console.warn(`允许的域名列表:`, allowedOrigins);
         callback(new Error('Not allowed by CORS'));
       }
     },
