@@ -21,16 +21,26 @@ export const useAuth = () => {
   const checkAuth = async () => {
     const token = apiClient.getToken();
     if (!token) {
+      setUser(null);
       setLoading(false);
       return;
     }
 
     try {
       const userData = await authApi.getMe();
-      setUser(userData as User);
+      // 确保字段名匹配（后端可能返回 avatar_url 或 avatarUrl）
+      const user: User = {
+        id: userData.id,
+        email: userData.email,
+        name: userData.name,
+        role: userData.role,
+        avatar_url: userData.avatar_url || userData.avatarUrl
+      };
+      setUser(user);
     } catch (error) {
       // Token无效，清除
       apiClient.setToken(null);
+      setUser(null);
     } finally {
       setLoading(false);
     }

@@ -17,11 +17,13 @@ export const LoginPage: React.FC = () => {
     try {
       const response = await authApi.login({ username, password });
       if (response.accessToken) {
-        // 登录成功，刷新页面
-        window.location.href = '/';
+        // 登录成功，等待一下让 token 保存，然后刷新页面
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 100);
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || '登录失败，请检查账号和密码');
+      setError(err.response?.data?.message || err.message || '登录失败，请检查账号和密码');
     } finally {
       setLoading(false);
     }
