@@ -95,6 +95,30 @@ export class TransformInterceptor implements NestInterceptor {
     if (item.members) {
       transformed.team = item.members.map((m: any) => m.user?.name || m.user_id).filter(Boolean);
     }
+    
+    // 转换通知数据
+    if (item.related_type) {
+      transformed.relatedType = item.related_type;
+    }
+    if (item.related_id) {
+      transformed.relatedId = item.related_id;
+    }
+    // 为通知添加时间字段（如果不存在）
+    if (item.created_at && !item.time) {
+      const date = item.created_at instanceof Date ? item.created_at : new Date(item.created_at);
+      const now = new Date();
+      const diff = now.getTime() - date.getTime();
+      const minutes = Math.floor(diff / 60000);
+      const hours = Math.floor(diff / 3600000);
+      const days = Math.floor(diff / 86400000);
+      
+      if (minutes < 1) transformed.time = '刚刚';
+      else if (minutes < 60) transformed.time = `${minutes}分钟前`;
+      else if (hours < 24) transformed.time = `${hours}小时前`;
+      else if (days === 1) transformed.time = '昨天';
+      else if (days < 7) transformed.time = `${days}天前`;
+      else transformed.time = date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+    }
 
     return transformed;
   }

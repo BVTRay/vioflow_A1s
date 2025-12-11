@@ -17,5 +17,9 @@ export const tagsApi = {
   create: async (name: string, category?: string): Promise<Tag> => {
     return apiClient.post('/tags', { name, category });
   },
+
+  delete: async (id: string): Promise<void> => {
+    return apiClient.delete(`/tags/${id}`);
+  },
 };
 

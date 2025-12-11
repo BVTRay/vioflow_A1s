@@ -7,6 +7,7 @@ import { Workbench } from './components/Layout/Workbench';
 import { MainBrowser } from './components/Layout/MainBrowser';
 import { ReviewOverlay } from './components/Layout/ReviewOverlay';
 import { Dashboard } from './components/Layout/Dashboard';
+import { SettingsPanel } from './components/Layout/SettingsPanel';
 import { Drawer } from './components/UI/Drawer';
 import { AppState, Action, Project, Video, DeliveryData, Notification as AppNotification } from './types';
 import { FileUp, CheckCircle, BellRing, Loader2 } from 'lucide-react';
@@ -72,7 +73,7 @@ function appReducer(state: AppState, action: Action): AppState {
         selectedProjectId: null, 
         selectedVideoId: null,
         searchTerm: '',
-        showWorkbench: action.payload === 'settings', // Auto open for settings module
+        showWorkbench: false, // Settings panel is separate, don't open workbench
         workbenchActionType: null // Clear workbench action type when switching modules
       };
     case 'SELECT_PROJECT':
@@ -565,7 +566,7 @@ const App: React.FC = () => {
           </>
         ) : state.activeModule === 'settings' ? (
           <>
-            <Workbench visible={state.showWorkbench} />
+            <SettingsPanel />
           </>
         ) : (
           <>
