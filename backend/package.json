@@ -54,6 +54,7 @@
     "fluent-ffmpeg": "^2.1.2",
     "@aws-sdk/client-s3": "^3.490.0",
     "@aws-sdk/s3-request-presigner": "^3.490.0",
+    "@supabase/supabase-js": "^2.39.0",
     "axios": "^1.6.2"
   },
   "devDependencies": {

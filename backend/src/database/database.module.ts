@@ -25,37 +25,63 @@ import { DeliveryPackageFile } from '../modules/deliveries/entities/delivery-pac
   imports: [
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get('DB_HOST', 'localhost'),
-        port: configService.get('DB_PORT', 5432),
-        username: configService.get('DB_USERNAME', 'postgres'),
-        password: configService.get('DB_PASSWORD', 'postgres'),
-        database: configService.get('DB_DATABASE', 'vioflow_mam'),
-        entities: [
-          User,
-          Project,
-          ProjectMember,
-          Video,
-          VideoTag,
-          Tag,
-          Annotation,
-          ShareLink,
-          Delivery,
-          DeliveryFolder,
-          DeliveryFile,
-          DeliveryPackage,
-          DeliveryPackageFile,
-          ShowcasePackage,
-          ShowcasePackageVideo,
-          Notification,
-          UploadTask,
-          ArchivingTask,
-          ViewTracking,
-        ],
-        synchronize: true, // 开发环境自动同步表结构
-        logging: configService.get('NODE_ENV') === 'development',
-      }),
+      useFactory: (configService: ConfigService) => {
+        // 支持 Railway 的 DATABASE_URL 环境变量
+        const databaseUrl = configService.get<string>('DATABASE_URL');
+        
+        let dbConfig: any;
+        
+        if (databaseUrl) {
+          // 解析 DATABASE_URL (格式: postgresql://user:password@host:port/database)
+          const url = new URL(databaseUrl);
+          dbConfig = {
+            type: 'postgres',
+            host: url.hostname,
+            port: parseInt(url.port, 10) || 5432,
+            username: url.username,
+            password: url.password,
+            database: url.pathname.slice(1), // 移除前导斜杠
+            ssl: url.searchParams.get('sslmode') !== 'disable' ? { rejectUnauthorized: false } : false,
+          };
+        } else {
+          // 使用单独的环境变量（开发环境）
+          dbConfig = {
+            type: 'postgres',
+            host: configService.get('DB_HOST', 'localhost'),
+            port: configService.get('DB_PORT', 5432),
+            username: configService.get('DB_USERNAME', 'postgres'),
+            password: configService.get('DB_PASSWORD', 'postgres'),
+            database: configService.get('DB_DATABASE', 'vioflow_mam'),
+          };
+        }
+
+        return {
+          ...dbConfig,
+          entities: [
+            User,
+            Project,
+            ProjectMember,
+            Video,
+            VideoTag,
+            Tag,
+            Annotation,
+            ShareLink,
+            Delivery,
+            DeliveryFolder,
+            DeliveryFile,
+            DeliveryPackage,
+            DeliveryPackageFile,
+            ShowcasePackage,
+            ShowcasePackageVideo,
+            Notification,
+            UploadTask,
+            ArchivingTask,
+            ViewTracking,
+          ],
+          synchronize: configService.get('NODE_ENV') !== 'production', // 生产环境禁用自动同步
+          logging: configService.get('NODE_ENV') === 'development',
+        };
+      },
       inject: [ConfigService],
     }),
   ],
