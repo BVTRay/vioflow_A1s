@@ -2,12 +2,16 @@ import { Controller, Post, Body, Get, UseGuards, Request, Logger, HttpException,
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { ConfigService } from '@nestjs/config';
 
 @Controller('api/auth')
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
 
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private configService: ConfigService,
+  ) {}
 
   @Post('login')
   async login(@Body() loginDto: LoginDto) {
@@ -24,15 +28,28 @@ export class AuthController {
         throw error;
       }
       
-      // 其他错误返回 500，但不暴露内部错误信息
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: 'Internal server error',
-          error: 'Internal Server Error',
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      // 判断是否为生产环境
+      const isProduction = this.configService.get('NODE_ENV') === 'production';
+      
+      // 其他错误返回 500
+      // 在生产环境不暴露详细错误，在开发环境返回详细错误信息
+      const errorMessage = error?.message || 'Internal server error';
+      const errorResponse: any = {
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: isProduction ? 'Internal server error' : errorMessage,
+        error: 'Internal Server Error',
+      };
+      
+      // 在非生产环境，添加更多调试信息
+      if (!isProduction) {
+        errorResponse.details = {
+          errorType: error?.constructor?.name || 'Unknown',
+          message: errorMessage,
+          // 不包含 stack trace，避免暴露敏感信息
+        };
+      }
+      
+      throw new HttpException(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
