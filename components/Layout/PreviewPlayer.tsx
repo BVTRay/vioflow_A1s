@@ -18,10 +18,10 @@ export const PreviewPlayer: React.FC<PreviewPlayerProps> = ({ video, onClose }) 
   const [selectedTags, setSelectedTags] = useState<string[]>(currentVideo?.tags || []);
   const [newTagInput, setNewTagInput] = useState('');
   
-  // 获取系统内既有的标签（从所有视频中提取）
+  // 获取系统内既有的标签（从 state.tags 获取，这是从 API 获取的真实标签数据）
+  const apiTags = state.tags.map(t => t.name);
   const existingTags = Array.from(new Set(state.videos.flatMap(v => v.tags || []))).filter(Boolean);
-  const defaultTags = ['AI生成', '三维制作', '病毒广告', '剧情', '纪录片', '广告片', '社交媒体', '品牌宣传'];
-  const availableTags = Array.from(new Set([...defaultTags, ...existingTags]));
+  const availableTags = Array.from(new Set([...apiTags, ...existingTags]));
 
   // 同步标签状态
   useEffect(() => {

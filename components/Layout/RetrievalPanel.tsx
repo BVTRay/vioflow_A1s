@@ -354,8 +354,10 @@ export const RetrievalPanel: React.FC = () => {
   const renderShowcaseGroupTree = () => {
       const caseVideos = state.videos.filter(v => v.isCaseFile);
       // 标签区域 128px
+      // 从 API 获取的真实标签数据
+      const apiTags = state.tags.map(t => t.name);
       const tagsFromVideos = Array.from(new Set(caseVideos.flatMap(v => v.tags || [])));
-      const availableTags = ['全部', ...tagsFromVideos, '广告片', '纪录片', '社交媒体', '4K', '竖屏', '航拍']
+      const availableTags = ['全部', ...apiTags, ...tagsFromVideos]
         .filter((tag, idx, arr) => arr.indexOf(tag) === idx);
 
       const filteredByTag = activeTag === '全部'
