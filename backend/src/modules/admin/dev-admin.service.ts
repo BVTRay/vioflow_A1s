@@ -2,9 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { User } from '../users/entities/user.entity';
+import { User, UserRole } from '../users/entities/user.entity';
 import { TeamMember, MemberStatus } from '../teams/entities/team-member.entity';
 import { JwtService } from '@nestjs/jwt';
+import { CreateUserDto } from '../users/dto/create-user.dto';
 
 @Injectable()
 export class DevAdminService {
@@ -15,6 +16,34 @@ export class DevAdminService {
     private teamMemberRepository: Repository<TeamMember>,
     private jwtService: JwtService,
   ) {}
+
+  /**
+   * 创建新用户
+   */
+  async createUser(createUserDto: CreateUserDto): Promise<User> {
+    // 检查邮箱是否已存在
+    const existingUser = await this.userRepository.findOne({
+      where: { email: createUserDto.email },
+    });
+    if (existingUser) {
+      throw new Error('邮箱已存在');
+    }
+
+    // 加密密码
+    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+
+    // 创建用户
+    const user = this.userRepository.create({
+      email: createUserDto.email,
+      name: createUserDto.name,
+      password_hash: hashedPassword,
+      role: createUserDto.role || UserRole.MEMBER,
+      avatar_url: createUserDto.avatar_url,
+      is_active: true,
+    });
+
+    return await this.userRepository.save(user);
+  }
 
   /**
    * 获取所有用户（包含团队信息）

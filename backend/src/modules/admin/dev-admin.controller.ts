@@ -2,6 +2,7 @@ import { Controller, Get, Patch, Post, Delete, Param, Body, UseGuards, HttpExcep
 import { DevAdminService } from './dev-admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DevSuperAdminGuard } from '../auth/guards/dev-super-admin.guard';
+import { CreateUserDto } from '../users/dto/create-user.dto';
 
 @Controller('api/admin/users')
 @UseGuards(JwtAuthGuard, DevSuperAdminGuard)
@@ -14,6 +15,15 @@ export class DevAdminController {
       return await this.devAdminService.getAllUsers();
     } catch (error) {
       throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Post()
+  async createUser(@Body() createUserDto: CreateUserDto) {
+    try {
+      return await this.devAdminService.createUser(createUserDto);
+    } catch (error) {
+      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
     }
   }
 

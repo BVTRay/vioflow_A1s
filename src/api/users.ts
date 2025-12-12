@@ -31,6 +31,11 @@ export const usersApi = {
     return apiClient.get(`/users/${id}`);
   },
 
+  // 通过邮箱查找用户
+  findByEmail: async (email: string): Promise<{ found: boolean; user: User | null }> => {
+    return apiClient.get(`/users/email/${encodeURIComponent(email)}`);
+  },
+
   // 更新用户
   update: async (id: string, data: UpdateUserDto): Promise<User> => {
     return apiClient.patch(`/users/${id}`, data);

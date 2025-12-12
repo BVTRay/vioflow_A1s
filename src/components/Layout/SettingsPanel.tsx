@@ -6,6 +6,7 @@ import { projectsApi } from '../../api/projects';
 import { tagsApi } from '../../api/tags';
 import { teamsApi, Team, TeamMember } from '../../api/teams';
 import { projectGroupsApi, ProjectGroup } from '../../api/project-groups';
+import { usersApi } from '../../api/users';
 import { 
   FolderOpen, FileVideo, Tag, Users, X, Trash2, Edit2, Save, PlusSquare, 
   Shield, UserPlus, Search, Copy, CheckCircle, XCircle, Settings as SettingsIcon, Check
@@ -52,6 +53,13 @@ export const SettingsPanel: React.FC = () => {
   const [projectGroupMap, setProjectGroupMap] = useState<Record<string, string>>({});
   const [codeCopied, setCodeCopied] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
+  
+  // 添加成员相关状态
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [addMemberInput, setAddMemberInput] = useState('');
+  const [addMemberRole, setAddMemberRole] = useState<'super_admin' | 'admin' | 'member'>('member');
+  const [searchingUser, setSearchingUser] = useState(false);
+  const [foundUser, setFoundUser] = useState<any>(null);
 
   // 获取所有组别（旧方式，用于兼容）
   const allGroups = Array.from(new Set(projects.map(p => p.group).filter(g => g && g !== '未分类')));
@@ -199,9 +207,10 @@ export const SettingsPanel: React.FC = () => {
       await teamsApi.updateMember(currentTeam.id, memberId, { role: newRole });
       await loadTeamMembers(currentTeam.id);
       alert('成员角色已更新');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update member role:', error);
-      alert('更新成员角色失败');
+      const errorMsg = error?.response?.data?.message || error.message || '更新成员角色失败';
+      alert(errorMsg);
     }
   };
 
@@ -213,9 +222,68 @@ export const SettingsPanel: React.FC = () => {
       await loadTeamMembers(currentTeam.id);
       await refreshTeams(); // 刷新团队列表
       alert('成员已移除');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to remove member:', error);
-      alert('移除成员失败');
+      const errorMsg = error?.response?.data?.message || error.message || '移除成员失败';
+      alert(errorMsg);
+    }
+  };
+
+  // 搜索用户（通过邮箱或用户ID）
+  const handleSearchUser = async () => {
+    if (!addMemberInput.trim()) {
+      alert('请输入邮箱或用户ID');
+      return;
+    }
+    setSearchingUser(true);
+    setFoundUser(null);
+    try {
+      // 判断是邮箱还是UUID
+      const isEmail = addMemberInput.includes('@');
+      if (isEmail) {
+        const result = await usersApi.findByEmail(addMemberInput.trim());
+        if (result.found && result.user) {
+          setFoundUser(result.user);
+        } else {
+          alert('未找到该用户，请确认邮箱是否正确');
+        }
+      } else {
+        // 假设是用户ID
+        try {
+          const user = await usersApi.getOne(addMemberInput.trim());
+          setFoundUser(user);
+        } catch (error) {
+          alert('未找到该用户，请确认用户ID是否正确');
+        }
+      }
+    } catch (error: any) {
+      console.error('Failed to search user:', error);
+      const errorMsg = error?.response?.data?.message || error.message || '查找用户失败';
+      alert(errorMsg);
+    } finally {
+      setSearchingUser(false);
+    }
+  };
+
+  // 添加成员
+  const handleAddMember = async () => {
+    if (!currentTeam || !foundUser) return;
+    try {
+      await teamsApi.addMember(currentTeam.id, {
+        user_id: foundUser.id,
+        role: addMemberRole,
+      });
+      await loadTeamMembers(currentTeam.id);
+      await refreshTeams();
+      setShowAddMember(false);
+      setAddMemberInput('');
+      setFoundUser(null);
+      setAddMemberRole('member');
+      alert('成员添加成功');
+    } catch (error: any) {
+      console.error('Failed to add member:', error);
+      const errorMsg = error?.response?.data?.message || error.message || '添加成员失败';
+      alert(errorMsg);
     }
   };
 
@@ -499,7 +567,18 @@ export const SettingsPanel: React.FC = () => {
                   <div>
                     <div className="flex items-center justify-between mb-4">
                       <h4 className={`text-sm font-semibold ${theme.text.secondary}`}>团队成员</h4>
-                      <span className={`text-xs ${theme.text.muted}`}>{teamMembers.length} 位成员</span>
+                      <div className="flex items-center gap-3">
+                        <span className={`text-xs ${theme.text.muted}`}>{teamMembers.length} 位成员</span>
+                        {canManageTeam && (
+                          <button
+                            onClick={() => setShowAddMember(true)}
+                            className={`px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded flex items-center gap-1.5 transition-colors`}
+                          >
+                            <UserPlus className="w-3.5 h-3.5" />
+                            添加成员
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {loadingTeams ? (
@@ -573,14 +652,38 @@ export const SettingsPanel: React.FC = () => {
 
                                 {/* 状态 */}
                                 <div className="col-span-2">
-                                  <span className={`inline-block text-xs px-2 py-1 rounded ${
-                                    member.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' :
-                                    member.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
-                                    'bg-red-500/20 text-red-400'
-                                  }`}>
-                                    {member.status === 'active' ? '活跃' : 
-                                     member.status === 'pending' ? '待审核' : '已移除'}
-                                  </span>
+                                  {userTeamRole === 'member' ? (
+                                    <span className={`inline-block text-xs px-2 py-1 rounded ${
+                                      member.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' :
+                                      member.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                                      'bg-red-500/20 text-red-400'
+                                    }`}>
+                                      {member.status === 'active' ? '活跃' : 
+                                       member.status === 'pending' ? '待审核' : '已移除'}
+                                    </span>
+                                  ) : (
+                                    <select
+                                      value={member.status}
+                                      onChange={async (e) => {
+                                        if (!currentTeam) return;
+                                        try {
+                                          await teamsApi.updateMember(currentTeam.id, member.id, { 
+                                            status: e.target.value as any 
+                                          });
+                                          await loadTeamMembers(currentTeam.id);
+                                          alert('成员状态已更新');
+                                        } catch (error: any) {
+                                          const errorMsg = error?.response?.data?.message || error.message || '更新成员状态失败';
+                                          alert(errorMsg);
+                                        }
+                                      }}
+                                      className={`w-full ${theme.bg.tertiary} border ${theme.border.secondary} rounded px-2 py-1.5 text-xs ${theme.text.primary} outline-none focus:border-indigo-500`}
+                                    >
+                                      <option value="active">活跃</option>
+                                      <option value="pending">待审核</option>
+                                      <option value="removed">已移除</option>
+                                    </select>
+                                  )}
                                 </div>
 
                                 {/* 加入时间 */}
@@ -611,6 +714,131 @@ export const SettingsPanel: React.FC = () => {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* 添加成员模态框 */}
+                {showAddMember && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className={`bg-white dark:bg-zinc-900 rounded-lg p-6 w-full max-w-md ${theme.bg.secondary} border ${theme.border.primary}`}>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className={`text-lg font-semibold ${theme.text.primary}`}>添加团队成员</h3>
+                        <button
+                          onClick={() => {
+                            setShowAddMember(false);
+                            setAddMemberInput('');
+                            setFoundUser(null);
+                            setAddMemberRole('member');
+                          }}
+                          className={`${theme.text.muted} hover:${theme.text.primary}`}
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div>
+                          <label className={`block text-sm font-medium ${theme.text.secondary} mb-1`}>
+                            邮箱或用户ID
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={addMemberInput}
+                              onChange={(e) => setAddMemberInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !searchingUser) {
+                                  handleSearchUser();
+                                }
+                              }}
+                              placeholder="输入用户邮箱或用户ID"
+                              className={`flex-1 ${theme.bg.tertiary} border ${theme.border.secondary} rounded px-3 py-2 text-sm ${theme.text.primary} outline-none focus:border-indigo-500`}
+                            />
+                            <button
+                              onClick={handleSearchUser}
+                              disabled={searchingUser || !addMemberInput.trim()}
+                              className={`px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded text-sm flex items-center gap-2 transition-colors`}
+                            >
+                              {searchingUser ? (
+                                <>搜索中...</>
+                              ) : (
+                                <>
+                                  <Search className="w-4 h-4" />
+                                  搜索
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        {foundUser && (
+                          <div className={`p-3 ${theme.bg.tertiary} border ${theme.border.secondary} rounded`}>
+                            <div className="flex items-center gap-3">
+                              {foundUser.avatar_url ? (
+                                <img
+                                  src={foundUser.avatar_url}
+                                  alt={foundUser.name}
+                                  className="w-10 h-10 rounded-full"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-medium text-xs">
+                                  {foundUser.name?.charAt(0).toUpperCase() || 'U'}
+                                </div>
+                              )}
+                              <div className="flex-1">
+                                <div className={`text-sm font-medium ${theme.text.secondary}`}>
+                                  {foundUser.name}
+                                </div>
+                                <div className={`text-xs ${theme.text.muted}`}>
+                                  {foundUser.email}
+                                </div>
+                              </div>
+                              <Check className="w-5 h-5 text-green-500" />
+                            </div>
+                          </div>
+                        )}
+
+                        {foundUser && (
+                          <div>
+                            <label className={`block text-sm font-medium ${theme.text.secondary} mb-1`}>
+                              角色
+                            </label>
+                            <select
+                              value={addMemberRole}
+                              onChange={(e) => setAddMemberRole(e.target.value as any)}
+                              className={`w-full ${theme.bg.tertiary} border ${theme.border.secondary} rounded px-3 py-2 text-sm ${theme.text.primary} outline-none focus:border-indigo-500`}
+                            >
+                              <option value="member">普通成员</option>
+                              <option value="admin">管理员</option>
+                              {userTeamRole === 'super_admin' && (
+                                <option value="super_admin">超级管理员</option>
+                              )}
+                            </select>
+                          </div>
+                        )}
+
+                        <div className="flex gap-2 pt-4">
+                          <button
+                            onClick={handleAddMember}
+                            disabled={!foundUser}
+                            className={`flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded text-sm transition-colors`}
+                          >
+                            添加成员
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowAddMember(false);
+                              setAddMemberInput('');
+                              setFoundUser(null);
+                              setAddMemberRole('member');
+                            }}
+                            className={`flex-1 px-4 py-2 ${theme.bg.tertiary} ${theme.text.secondary} rounded text-sm transition-colors`}
+                          >
+                            取消
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

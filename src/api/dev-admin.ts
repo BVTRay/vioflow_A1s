@@ -18,9 +18,21 @@ export interface UpdateUserDto {
   is_active?: boolean;
 }
 
+export interface CreateUserDto {
+  email: string;
+  password: string;
+  name: string;
+  role?: 'admin' | 'member' | 'viewer' | 'sales' | 'DEV_SUPER_ADMIN';
+  avatar_url?: string;
+}
+
 export const devAdminApi = {
   getAllUsers: async (): Promise<DevAdminUser[]> => {
     return apiClient.get('/admin/users');
+  },
+
+  createUser: async (data: CreateUserDto): Promise<any> => {
+    return apiClient.post('/admin/users', data);
   },
 
   updateUser: async (id: string, data: UpdateUserDto): Promise<any> => {

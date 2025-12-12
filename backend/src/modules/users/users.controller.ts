@@ -13,6 +13,16 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  @Get('email/:email')
+  async findByEmail(@Param('email') email: string) {
+    const user = await this.usersService.findByEmail(email);
+    if (!user) {
+      return { found: false, user: null };
+    }
+    const { password_hash, ...userWithoutPassword } = user;
+    return { found: true, user: userWithoutPassword };
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);

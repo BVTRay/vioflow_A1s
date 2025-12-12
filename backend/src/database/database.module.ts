@@ -61,6 +61,13 @@ import { StorageUsage } from '../modules/storage/entities/storage-usage.entity';
                 rejectUnauthorized: false, // 允许自签名证书
               };
             }
+            
+            // 记录连接信息（隐藏密码）
+            const maskedUrl = databaseUrl.replace(/:[^:@]+@/, ':****@');
+            console.log(`📌 数据库连接: ${isSupabase ? 'Supabase' : 'PostgreSQL'}`);
+            console.log(`   Host: ${dbConfig.host}:${dbConfig.port}`);
+            console.log(`   Database: ${dbConfig.database}`);
+            console.log(`   Username: ${dbConfig.username}`);
           } catch (error) {
             // 如果 URL 解析失败，记录错误并使用默认配置
             console.error('Failed to parse DATABASE_URL:', error);
@@ -76,6 +83,13 @@ import { StorageUsage } from '../modules/storage/entities/storage-usage.entity';
             password: configService.get('DB_PASSWORD', 'postgres'),
             database: configService.get('DB_DATABASE', 'vioflow_mam'),
           };
+          
+          // 记录连接信息
+          console.log(`📌 数据库连接: 本地 PostgreSQL`);
+          console.log(`   Host: ${dbConfig.host}:${dbConfig.port}`);
+          console.log(`   Database: ${dbConfig.database}`);
+          console.log(`   Username: ${dbConfig.username}`);
+          console.log(`   ⚠️  提示: 未设置 DATABASE_URL，使用本地数据库配置`);
         }
 
         return {
@@ -107,7 +121,7 @@ import { StorageUsage } from '../modules/storage/entities/storage-usage.entity';
             AuditLog,
             StorageUsage,
           ],
-          synchronize: configService.get('NODE_ENV') !== 'production', // 生产环境禁用自动同步
+          synchronize: false, // 禁用自动同步（Supabase 已有触发器和约束，不能自动修改）
           logging: configService.get('NODE_ENV') === 'development',
         };
       },
