@@ -18,10 +18,10 @@ const getApiBaseUrl = () => {
 
 const API_BASE_URL = getApiBaseUrl();
 
-// 开发环境下打印 API 地址，便于调试
-if (import.meta.env.DEV) {
-  console.log('API Base URL:', API_BASE_URL);
-}
+// 打印 API 地址，便于调试（生产环境也打印，方便排查问题）
+console.log('🌐 API Base URL:', API_BASE_URL);
+console.log('🌐 Environment:', import.meta.env.MODE);
+console.log('🌐 VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL || '未设置');
 
 class ApiClient {
   private client: AxiosInstance;
@@ -30,9 +30,17 @@ class ApiClient {
 
   constructor() {
     // 确保 API 地址正确
-    if (!API_BASE_URL || API_BASE_URL.includes('supabase.co')) {
-      console.error('⚠️ 错误的 API 地址配置:', API_BASE_URL);
-      console.error('请检查 VITE_API_BASE_URL 环境变量');
+    if (!API_BASE_URL) {
+      console.error('❌ API 地址未配置！');
+      console.error('请在 Vercel 环境变量中设置 VITE_API_BASE_URL');
+      console.error('例如: VITE_API_BASE_URL=https://你的railway域名.railway.app/api');
+    } else if (API_BASE_URL.includes('supabase.co')) {
+      console.error('❌ 错误的 API 地址配置:', API_BASE_URL);
+      console.error('API 地址不应指向 Supabase，应该指向 Railway 后端');
+      console.error('请检查 Vercel 环境变量中的 VITE_API_BASE_URL');
+    } else if (import.meta.env.PROD && API_BASE_URL === 'https://api.vioflow.cc/api') {
+      console.warn('⚠️ 使用默认 API 地址，可能不正确');
+      console.warn('建议在 Vercel 环境变量中设置 VITE_API_BASE_URL');
     }
     
     this.client = axios.create({
@@ -84,6 +92,33 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response.data,
       (error) => {
+        // 详细的错误日志
+        if (error.response) {
+          // 服务器返回了错误响应
+          console.error('❌ API 错误响应:', {
+            status: error.response.status,
+            statusText: error.response.statusText,
+            url: error.config?.url,
+            method: error.config?.method,
+            data: error.response.data,
+          });
+        } else if (error.request) {
+          // 请求已发出但没有收到响应
+          console.error('❌ API 请求失败（无响应）:', {
+            url: error.config?.url,
+            method: error.config?.method,
+            message: error.message,
+          });
+          console.error('可能的原因:');
+          console.error('1. 后端服务未运行或无法访问');
+          console.error('2. API 地址配置错误 (当前:', API_BASE_URL, ')');
+          console.error('3. CORS 配置问题');
+          console.error('4. 网络连接问题');
+        } else {
+          // 请求配置出错
+          console.error('❌ API 请求配置错误:', error.message);
+        }
+        
         if (error.response?.status === 401) {
           // Token过期，清除并跳转登录
           this.setToken(null);
