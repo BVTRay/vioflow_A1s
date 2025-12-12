@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
 
 export const LoginPage: React.FC = () => {
-  const [username, setUsername] = useState('admin');
+  const [username, setUsername] = useState('jeff@bugong.com');
   const [password, setPassword] = useState('admin');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);

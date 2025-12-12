@@ -38,7 +38,7 @@ export const useApiData = () => {
           console.error('❌ 加载项目失败:', err);
           return [];
         }),
-        videosApi.getAll().catch((err) => {
+        videosApi.getAll({ teamId: currentTeam.id }).catch((err) => {
           console.error('❌ 加载视频失败:', err);
           return [];
         }),
@@ -104,7 +104,8 @@ export const useApiData = () => {
   };
 
   const refreshVideos = async (projectId?: string) => {
-    const data = await videosApi.getAll(projectId ? { projectId } : undefined);
+    if (!currentTeam) return;
+    const data = await videosApi.getAll(projectId ? { projectId, teamId: currentTeam.id } : { teamId: currentTeam.id });
     setVideos(data);
   };
 

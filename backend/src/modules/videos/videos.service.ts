@@ -17,8 +17,20 @@ export class VideosService {
     projectId?: string;
     isCaseFile?: boolean;
     tags?: string[];
+    teamId?: string;
   }): Promise<Video[]> {
-    const query = this.videoRepository.createQueryBuilder('video');
+    const query = this.videoRepository.createQueryBuilder('video')
+      .leftJoin('video.project', 'project');
+
+    // 强制要求 teamId（多租户模式）
+    if (filters?.teamId) {
+      query.andWhere('project.team_id = :teamId', { teamId: filters.teamId });
+      console.log(`[VideosService] 查询视频，团队 ID: ${filters.teamId}`);
+    } else {
+      // 如果没有提供 teamId，返回空数组（多租户模式下必须提供 teamId）
+      console.log('[VideosService] ⚠️ 没有提供 teamId，返回空数组');
+      return [];
+    }
 
     if (filters?.projectId) {
       query.andWhere('video.project_id = :projectId', { projectId: filters.projectId });
@@ -28,7 +40,9 @@ export class VideosService {
       query.andWhere('video.is_case_file = :isCaseFile', { isCaseFile: filters.isCaseFile });
     }
 
-    return query.getMany();
+    const results = await query.getMany();
+    console.log(`[VideosService] 找到 ${results.length} 个视频`);
+    return results;
   }
 
   async findOne(id: string): Promise<Video> {

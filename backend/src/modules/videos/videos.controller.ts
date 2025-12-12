@@ -8,6 +8,7 @@ import {
   UseGuards,
   Request,
   Query,
+  Headers,
 } from '@nestjs/common';
 import { VideosService } from './videos.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -23,11 +24,16 @@ export class VideosController {
     @Query('projectId') projectId?: string,
     @Query('isCaseFile') isCaseFile?: string,
     @Query('tags') tags?: string,
+    @Query('teamId') teamId?: string,
+    @Headers('x-team-id') headerTeamId?: string,
   ) {
+    // 优先使用查询参数，其次使用请求头
+    const finalTeamId = teamId || headerTeamId;
     return this.videosService.findAll({
       projectId,
       isCaseFile: isCaseFile === 'true' ? true : isCaseFile === 'false' ? false : undefined,
       tags: tags ? tags.split(',') : undefined,
+      teamId: finalTeamId,
     });
   }
 

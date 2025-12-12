@@ -67,6 +67,9 @@ export class TransformInterceptor implements NestInterceptor {
     if (item.original_filename) transformed.originalFilename = item.original_filename;
     if (item.base_name) transformed.baseName = item.base_name;
     if (item.post_lead) transformed.postLead = item.post_lead;
+    if (item.finalized_at) transformed.finalizedAt = item.finalized_at instanceof Date ? item.finalized_at.toISOString() : item.finalized_at;
+    if (item.delivered_at) transformed.deliveredAt = item.delivered_at instanceof Date ? item.delivered_at.toISOString() : item.delivered_at;
+    if (item.archived_at) transformed.archivedAt = item.archived_at instanceof Date ? item.archived_at.toISOString() : item.archived_at;
     if (item.password_hash) delete transformed.passwordHash; // 不返回密码哈希
     if (item.video_tags) {
       transformed.tags = item.video_tags.map((vt: any) => vt.tag?.name).filter(Boolean);

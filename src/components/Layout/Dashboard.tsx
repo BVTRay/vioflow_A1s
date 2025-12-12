@@ -11,6 +11,28 @@ export const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const { projects, videos, deliveries } = state;
 
+  // 调试：检查数据格式
+  React.useEffect(() => {
+    console.log('🔍 Dashboard 数据检查:', {
+      projectsCount: projects.length,
+      videosCount: videos.length,
+      sampleProject: projects[0] ? {
+        id: projects[0].id,
+        name: projects[0].name,
+        status: projects[0].status,
+        statusType: typeof projects[0].status,
+        hasStatus: 'status' in projects[0],
+        allKeys: Object.keys(projects[0]),
+      } : null,
+      statusCounts: {
+        active: projects.filter(p => p.status === 'active').length,
+        finalized: projects.filter(p => p.status === 'finalized').length,
+        delivered: projects.filter(p => p.status === 'delivered').length,
+        other: projects.filter(p => !['active', 'finalized', 'delivered'].includes(p.status)).length,
+      },
+    });
+  }, [projects, videos]);
+
   // 计算项目分类：直接按状态分类，并考虑时间排序
   const getActiveProjects = () => {
     const now = Date.now();
