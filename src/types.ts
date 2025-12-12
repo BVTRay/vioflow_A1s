@@ -213,4 +213,8 @@ export type Action =
   | { type: 'COMPLETE_UPLOAD'; payload: string }
   | { type: 'ADD_NOTIFICATION'; payload: Notification }
   | { type: 'CLEAR_NOTIFICATIONS' }
-  | { type: 'SET_WORKBENCH_ACTION_TYPE'; payload: 'review' | 'delivery' | 'showcase' | null }; // 设置工作台操作类型
+  | { type: 'SET_WORKBENCH_ACTION_TYPE'; payload: 'review' | 'delivery' | 'showcase' | null } // 设置工作台操作类型
+  | { type: 'SET_PROJECTS'; payload: Project[] } // 设置项目列表
+  | { type: 'SET_VIDEOS'; payload: Video[] } // 设置视频列表
+  | { type: 'SET_TAGS'; payload: Tag[] } // 设置标签列表
+  | { type: 'SET_DELIVERIES'; payload: DeliveryData[] }; // 设置交付数据列表

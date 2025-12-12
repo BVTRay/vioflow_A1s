@@ -348,6 +348,14 @@ function appReducer(state: AppState, action: Action): AppState {
         ...state,
         uploadQueue: state.uploadQueue.filter(item => item.id !== action.payload)
       };
+    case 'SET_PROJECTS':
+      return { ...state, projects: action.payload };
+    case 'SET_VIDEOS':
+      return { ...state, videos: action.payload };
+    case 'SET_TAGS':
+      return { ...state, tags: action.payload };
+    case 'SET_DELIVERIES':
+      return { ...state, deliveries: action.payload };
     case 'ADD_TAG':
       // 如果标签已存在，不重复添加
       if (state.tags.find(t => t.id === action.payload.id)) {
