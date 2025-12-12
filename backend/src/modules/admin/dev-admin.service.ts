@@ -31,13 +31,26 @@ export class DevAdminService {
         tm => tm.status === MemberStatus.ACTIVE
       );
 
+      // 优先显示用户的系统角色（user.role），如果没有团队成员关系，则显示系统角色
+      // 如果有团队成员关系，同时显示系统角色和团队角色
+      const systemRole = typeof user.role === 'string' ? user.role : String(user.role);
+      const teamRole = activeTeamMember ? this.mapTeamRole(activeTeamMember.role) : null;
+      
+      // 显示格式：如果有团队角色，显示 "系统角色 (团队角色)"，否则只显示系统角色
+      const displayRole = teamRole 
+        ? `${this.mapSystemRole(systemRole)} (${teamRole})` 
+        : this.mapSystemRole(systemRole);
+
       return {
         id: user.id,
         username: user.name,
         email: user.email,
         phone: user.phone || '',
         teamName: activeTeamMember?.team?.name || (user.team_id ? '未知团队' : ''),
-        role: activeTeamMember ? this.mapTeamRole(activeTeamMember.role) : '个人用户',
+        role: displayRole,
+        // 添加原始角色字段，便于调试
+        systemRole: systemRole,
+        teamRole: teamRole,
         status: user.is_active ? 'Active' : 'Inactive',
         created_at: user.created_at,
         updated_at: user.updated_at,
@@ -53,6 +66,20 @@ export class DevAdminService {
       'super_admin': 'Owner',
       'admin': 'Admin',
       'member': 'Member',
+    };
+    return roleMap[role] || role;
+  }
+
+  /**
+   * 映射系统角色（users.role 字段）
+   */
+  private mapSystemRole(role: string): string {
+    const roleMap = {
+      'admin': 'Admin',
+      'member': 'Member',
+      'viewer': 'Viewer',
+      'sales': 'Sales',
+      'DEV_SUPER_ADMIN': 'Dev Super Admin',
     };
     return roleMap[role] || role;
   }
