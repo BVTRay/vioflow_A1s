@@ -5,11 +5,21 @@
 -- 第一部分：新增枚举类型
 -- ============================================
 
--- 团队角色枚举
-CREATE TYPE IF NOT EXISTS "team_role_enum" AS ENUM('super_admin', 'admin', 'member');
+-- 团队角色枚举（PostgreSQL 不支持 CREATE TYPE IF NOT EXISTS，使用 DO 块）
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'team_role_enum') THEN
+    CREATE TYPE "team_role_enum" AS ENUM('super_admin', 'admin', 'member');
+  END IF;
+END $$;
 
 -- 成员状态枚举
-CREATE TYPE IF NOT EXISTS "member_status_enum" AS ENUM('pending', 'active', 'removed');
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'member_status_enum') THEN
+    CREATE TYPE "member_status_enum" AS ENUM('pending', 'active', 'removed');
+  END IF;
+END $$;
 
 -- ============================================
 -- 第二部分：新增表结构
@@ -427,4 +437,5 @@ END $$;
 -- 5. 项目组数据已迁移
 -- 6. 存储空间统计已初始化
 -- 7. 触发器已创建
+
 

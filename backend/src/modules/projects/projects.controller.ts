@@ -5,9 +5,11 @@ import {
   Body,
   Patch,
   Param,
+  Delete,
   UseGuards,
   Request,
   Query,
+  Headers,
 } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
@@ -20,23 +22,51 @@ export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
   @Post()
-  create(@Body() createProjectDto: CreateProjectDto, @Request() req) {
-    return this.projectsService.create(createProjectDto, req.user.id);
+  create(
+    @Body() createProjectDto: CreateProjectDto, 
+    @Request() req, 
+    @Query('teamId') teamId?: string,
+    @Headers('x-team-id') headerTeamId?: string,
+  ) {
+    // 优先使用查询参数，其次使用请求头，最后使用 DTO 中的 teamId
+    const finalTeamId = teamId || headerTeamId || createProjectDto.teamId;
+    return this.projectsService.create(createProjectDto, req.user.id, finalTeamId);
   }
 
   @Get()
-  findAll(@Query('status') status?: string, @Query('group') group?: string, @Query('month') month?: string) {
-    return this.projectsService.findAll({ status, group, month } as any);
+  findAll(
+    @Query('status') status?: string,
+    @Query('group') group?: string,
+    @Query('month') month?: string,
+    @Query('teamId') teamId?: string,
+    @Query('groupId') groupId?: string,
+    @Headers('x-team-id') headerTeamId?: string,
+  ) {
+    // 优先使用查询参数，其次使用请求头
+    const finalTeamId = teamId || headerTeamId;
+    return this.projectsService.findAll({ status, group, month, teamId: finalTeamId, groupId } as any);
   }
 
   @Get('active')
-  getActiveProjects(@Query('limit') limit?: number) {
-    return this.projectsService.getActiveProjects(limit ? parseInt(limit.toString()) : 10);
+  getActiveProjects(
+    @Query('limit') limit?: number, 
+    @Query('teamId') teamId?: string,
+    @Headers('x-team-id') headerTeamId?: string,
+  ) {
+    // 优先使用查询参数，其次使用请求头
+    const finalTeamId = teamId || headerTeamId;
+    return this.projectsService.getActiveProjects(limit ? parseInt(limit.toString()) : 10, finalTeamId);
   }
 
   @Get('recent-opened')
-  getRecentOpened(@Query('limit') limit?: number) {
-    return this.projectsService.getRecentOpened(limit ? parseInt(limit.toString()) : 10);
+  getRecentOpened(
+    @Query('limit') limit?: number, 
+    @Query('teamId') teamId?: string,
+    @Headers('x-team-id') headerTeamId?: string,
+  ) {
+    // 优先使用查询参数，其次使用请求头
+    const finalTeamId = teamId || headerTeamId;
+    return this.projectsService.getRecentOpened(limit ? parseInt(limit.toString()) : 10, finalTeamId);
   }
 
   @Get(':id')
@@ -45,13 +75,18 @@ export class ProjectsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateProjectDto: UpdateProjectDto) {
-    return this.projectsService.update(id, updateProjectDto);
+  update(@Param('id') id: string, @Body() updateProjectDto: UpdateProjectDto, @Request() req) {
+    return this.projectsService.update(id, updateProjectDto, req.user.id);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string, @Request() req) {
+    return this.projectsService.remove(id, req.user.id);
   }
 
   @Post(':id/finalize')
-  finalize(@Param('id') id: string) {
-    return this.projectsService.finalize(id);
+  finalize(@Param('id') id: string, @Request() req) {
+    return this.projectsService.finalize(id, req.user.id);
   }
 
   @Patch(':id/last-opened')
@@ -65,13 +100,18 @@ export class ProjectsController {
   }
 
   @Get(':id/members')
-  getMembers(@Param('id') id: string) {
-    return this.projectsService.getMembers(id);
+  getMembers(@Param('id') id: string, @Request() req) {
+    return this.projectsService.getMembers(id, req.user.id);
   }
 
   @Post(':id/members')
-  addMember(@Param('id') id: string, @Body() body: { userId: string; role?: string }) {
-    return this.projectsService.addMember(id, body.userId, body.role);
+  addMember(@Param('id') id: string, @Body() body: { userId: string; role?: string }, @Request() req) {
+    return this.projectsService.addMember(id, body.userId, body.role, req.user.id);
+  }
+
+  @Delete(':id/members/:memberId')
+  removeMember(@Param('id') id: string, @Param('memberId') memberId: string, @Request() req) {
+    return this.projectsService.removeMember(id, memberId, req.user.id);
   }
 }
 

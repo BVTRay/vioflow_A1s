@@ -6,8 +6,10 @@ import { deliveriesApi } from '../api/deliveries';
 import { notificationsApi } from '../api/notifications';
 import { dashboardApi } from '../api/dashboard';
 import { Project, Video, Tag, DeliveryData, Notification } from '../types';
+import { useTeam } from '../contexts/TeamContext';
 
 export const useApiData = () => {
+  const { currentTeam } = useTeam();
   const [projects, setProjects] = useState<Project[]>([]);
   const [videos, setVideos] = useState<Video[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -18,17 +20,49 @@ export const useApiData = () => {
   const [error, setError] = useState<string | null>(null);
 
   const loadAllData = async () => {
+    // 如果没有当前团队，不加载数据
+    if (!currentTeam) {
+      console.log('⚠️ 没有当前团队，跳过数据加载');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
 
+      console.log('🔄 开始加载数据，当前团队:', currentTeam.id, currentTeam.name);
+
       const [projectsData, videosData, tagsData, notificationsData, recentData] = await Promise.all([
-        projectsApi.getAll().catch(() => []),
-        videosApi.getAll().catch(() => []),
-        tagsApi.getAll().catch(() => []),
-        notificationsApi.getAll().catch(() => []),
-        dashboardApi.getRecentOpened(10).catch(() => []),
+        projectsApi.getAll({ teamId: currentTeam.id }).catch((err) => {
+          console.error('❌ 加载项目失败:', err);
+          return [];
+        }),
+        videosApi.getAll().catch((err) => {
+          console.error('❌ 加载视频失败:', err);
+          return [];
+        }),
+        tagsApi.getAll().catch((err) => {
+          console.error('❌ 加载标签失败:', err);
+          return [];
+        }),
+        notificationsApi.getAll().catch((err) => {
+          console.error('❌ 加载通知失败:', err);
+          return [];
+        }),
+        dashboardApi.getRecentOpened(10, currentTeam.id).catch((err) => {
+          console.error('❌ 加载近期项目失败:', err);
+          return [];
+        }),
       ]);
+
+      console.log('✅ 数据加载完成:', {
+        projects: projectsData.length,
+        videos: videosData.length,
+        tags: tagsData.length,
+        notifications: notificationsData.length,
+        recent: recentData.length,
+      });
 
       setProjects(projectsData);
       setVideos(videosData);
@@ -55,11 +89,17 @@ export const useApiData = () => {
   };
 
   useEffect(() => {
-    loadAllData();
-  }, []);
+    if (currentTeam?.id) {
+      console.log('🔄 useApiData: 检测到团队变化，开始加载数据');
+      loadAllData();
+    } else {
+      console.log('⚠️ useApiData: 没有当前团队，等待团队加载...');
+    }
+  }, [currentTeam?.id]); // 当团队切换时重新加载数据
 
   const refreshProjects = async () => {
-    const data = await projectsApi.getAll();
+    if (!currentTeam) return;
+    const data = await projectsApi.getAll({ teamId: currentTeam.id });
     setProjects(data);
   };
 

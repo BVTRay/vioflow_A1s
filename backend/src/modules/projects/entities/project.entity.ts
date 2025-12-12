@@ -6,10 +6,14 @@ import {
   UpdateDateColumn,
   OneToMany,
   OneToOne,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { ProjectMember } from './project-member.entity';
 import { Video } from '../../videos/entities/video.entity';
 import { Delivery } from '../../deliveries/entities/delivery.entity';
+import { Team } from '../../teams/entities/team.entity';
+import { ProjectGroup } from '../../project-groups/entities/project-group.entity';
 
 export enum ProjectStatus {
   ACTIVE = 'active',
@@ -35,8 +39,17 @@ export class Project {
   @Column({ length: 100 })
   post_lead: string;
 
-  @Column({ length: 100 })
+  @Column({ length: 100, nullable: true })
   group: string;
+
+  @Column('uuid', { nullable: true })
+  team_id: string;
+
+  @Column('uuid', { nullable: true })
+  group_id: string;
+
+  @Column({ length: 4, nullable: true })
+  month_prefix: string;
 
   @Column({
     type: 'enum',
@@ -68,6 +81,14 @@ export class Project {
 
   @Column({ nullable: true })
   delivered_at: Date;
+
+  @ManyToOne(() => Team, (team) => team.projects, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'team_id' })
+  team: Team;
+
+  @ManyToOne(() => ProjectGroup, (group) => group.projects, { nullable: true })
+  @JoinColumn({ name: 'group_id' })
+  project_group: ProjectGroup;
 
   @OneToMany(() => ProjectMember, (member) => member.project)
   members: ProjectMember[];

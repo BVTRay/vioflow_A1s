@@ -14,7 +14,10 @@ async function bootstrap() {
   
   // 默认允许的域名（始终包含）
   const defaultOrigins: (string | RegExp)[] = [
-    'http://localhost:3009', 
+    'http://localhost:3009',
+    /^http:\/\/192\.168\.\d+\.\d+:3009$/, // 允许所有内网IP的3009端口
+    /^http:\/\/127\.0\.0\.1:3009$/, // 允许127.0.0.1
+    /^http:\/\/172\.\d+\.\d+\.\d+:3009$/, // 允许Docker网络IP
     'https://a1s.vioflow.cc',
     /^https:\/\/.*\.vercel\.app$/, // 允许所有 Vercel 预览域名
   ];
@@ -56,7 +59,7 @@ async function bootstrap() {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Team-Id', 'X-Dev-Mode'],
     exposedHeaders: ['Content-Length', 'Content-Type'],
   });
 

@@ -27,8 +27,13 @@
     "seed:reset": "ts-node -r tsconfig-paths/register src/database/seeds/reset-and-seed.ts",
     "seed:extended": "ts-node -r tsconfig-paths/register src/database/seeds/run-seed-extended.ts",
     "check-db": "ts-node -r tsconfig-paths/register src/database/check-db.ts",
+    "check-all": "ts-node -r tsconfig-paths/register src/database/check-all.ts",
+    "fix-data": "ts-node -r tsconfig-paths/register src/database/fix-missing-data.ts",
+    "migrate-projects": "ts-node -r tsconfig-paths/register src/database/migrate-all-projects-to-team.ts",
+    "migrate-to-bugong": "ts-node -r tsconfig-paths/register src/database/migrate-all-data-to-bugong.ts",
     "diagnose-cloud": "ts-node -r tsconfig-paths/register src/database/diagnose-cloud.ts",
-    "update-password": "ts-node -r tsconfig-paths/register src/database/seeds/update-password.ts"
+    "update-password": "ts-node -r tsconfig-paths/register src/database/seeds/update-password.ts",
+    "db:helper": "ts-node -r tsconfig-paths/register src/database/supabase-helper.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",

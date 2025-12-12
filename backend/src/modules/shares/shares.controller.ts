@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, UseGuards, Request, Query } from '@nestjs/common';
 import { SharesService } from './shares.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -8,8 +8,8 @@ export class SharesController {
 
   @UseGuards(JwtAuthGuard)
   @Get()
-  findAll(@Request() req) {
-    return this.sharesService.findAll(req.user.id);
+  findAll(@Request() req, @Query('teamId') teamId?: string) {
+    return this.sharesService.findAll(req.user.id, teamId);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -82,6 +82,56 @@ export class SharesController {
     } catch (error: any) {
       return { error: error.message || '创建批注失败' };
     }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/access-logs')
+  getAccessLogs(
+    @Param('id') id: string,
+    @Request() req,
+    @Query('teamId') teamId: string,
+    @Query('action') action?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.sharesService.getAccessLogs(id, teamId, req.user.id, {
+      action: action as any,
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+      page: page ? parseInt(page) : undefined,
+      limit: limit ? parseInt(limit) : undefined,
+    });
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/stats')
+  getStats(@Param('id') id: string, @Request() req, @Query('teamId') teamId: string) {
+    return this.sharesService.getStats(id, teamId, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/permissions')
+  updatePermissions(
+    @Param('id') id: string,
+    @Request() req,
+    @Query('teamId') teamId: string,
+    @Body() body: { allowView?: boolean; allowDownload?: boolean; isActive?: boolean },
+  ) {
+    return this.sharesService.updatePermissions(id, teamId, req.user.id, body);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('batch-create')
+  batchCreate(@Body() body: any, @Request() req) {
+    return this.sharesService.batchCreate(body.videoIds, req.user.id, {
+      allowDownload: body.allowDownload,
+      hasPassword: body.hasPassword,
+      password: body.password,
+      expiresAt: body.expiresAt,
+      justification: body.justification,
+    });
   }
 }
 

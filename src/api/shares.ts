@@ -34,8 +34,9 @@ export interface ShareLinkDetail extends ShareLink {
 }
 
 export const sharesApi = {
-  getAll: async (): Promise<ShareLink[]> => {
-    return apiClient.get('/shares');
+  getAll: async (teamId?: string): Promise<ShareLink[]> => {
+    const params = teamId ? { teamId } : {};
+    return apiClient.get('/shares', { params });
   },
 
   create: async (data: {

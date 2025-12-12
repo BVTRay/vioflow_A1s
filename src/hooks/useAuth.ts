@@ -8,6 +8,9 @@ export interface User {
   name: string;
   role: string;
   avatar_url?: string;
+  team_id?: string;
+  phone?: string;
+  is_active?: boolean;
 }
 
 export const useAuth = () => {
@@ -34,7 +37,10 @@ export const useAuth = () => {
         email: userData.email,
         name: userData.name,
         role: userData.role,
-        avatar_url: userData.avatar_url || userData.avatarUrl
+        avatar_url: userData.avatar_url || userData.avatarUrl,
+        team_id: userData.team_id,
+        phone: userData.phone,
+        is_active: userData.is_active
       };
       setUser(user);
     } catch (error) {
@@ -47,7 +53,8 @@ export const useAuth = () => {
   };
 
   const login = async (email: string, password: string) => {
-    const response = await authApi.login({ email, password });
+    // 后端期望 username 字段，但可以是邮箱
+    const response = await authApi.login({ username: email, password });
     if (response.user) {
       setUser(response.user);
       return true;

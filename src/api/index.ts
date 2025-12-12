@@ -8,4 +8,7 @@ export * from './showcase';
 export * from './dashboard';
 export * from './notifications';
 export * from './search';
+export * from './teams';
+export * from './project-groups';
+export * from './users';
 

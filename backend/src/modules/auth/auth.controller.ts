@@ -56,14 +56,20 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('me')
   async getProfile(@Request() req) {
+    // 从数据库重新读取用户信息，确保获取最新的角色（而不是JWT token中的旧角色）
+    const latestUser = await this.authService.validateToken({ sub: req.user.id });
+    
     // 确保 role 返回为字符串格式（统一本地和云端）
-    const role = typeof req.user.role === 'string' ? req.user.role : String(req.user.role);
+    const role = typeof latestUser.role === 'string' ? latestUser.role : String(latestUser.role);
     return {
-      id: req.user.id,
-      email: req.user.email,
-      name: req.user.name,
+      id: latestUser.id,
+      email: latestUser.email,
+      name: latestUser.name,
       role: role,
-      avatar_url: req.user.avatar_url,
+      avatar_url: latestUser.avatar_url,
+      team_id: latestUser.team_id,
+      phone: latestUser.phone,
+      is_active: latestUser.is_active,
     };
   }
 

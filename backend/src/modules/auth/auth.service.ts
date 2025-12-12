@@ -38,10 +38,10 @@ export class AuthService {
         this.logger.debug(`Password valid for user: ${user.email}`);
         const { password_hash, ...result } = user;
         // 确保 role 为字符串格式（统一本地和云端）
-        if (result.role && typeof result.role !== 'string') {
-          result.role = String(result.role);
-        }
-        return result;
+        return {
+          ...result,
+          role: typeof result.role === 'string' ? result.role : String(result.role),
+        };
       }
       
       this.logger.warn(`Invalid password for user: ${username}`);
@@ -93,10 +93,10 @@ export class AuthService {
       throw new UnauthorizedException();
     }
     // 确保 role 为字符串格式（统一本地和云端）
-    if (user.role && typeof user.role !== 'string') {
-      user.role = String(user.role) as any;
-    }
-    return user;
+    return {
+      ...user,
+      role: typeof user.role === 'string' ? user.role : String(user.role),
+    };
   }
 }
 

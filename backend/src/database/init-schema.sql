@@ -211,10 +211,15 @@ CREATE TABLE IF NOT EXISTS "share_links" (
   "is_active" boolean DEFAULT true,
   "justification" text,
   "client_name" varchar(100),
+  "allow_view" boolean DEFAULT true,
+  "last_accessed_at" timestamp,
+  "view_count" integer DEFAULT 0,
   "created_by" uuid NOT NULL REFERENCES "users"("id"),
   "created_at" timestamp DEFAULT now(),
   "updated_at" timestamp DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS "idx_share_links_allow_view" ON "share_links"("allow_view");
+CREATE INDEX IF NOT EXISTS "idx_share_links_last_accessed" ON "share_links"("last_accessed_at");
 CREATE INDEX IF NOT EXISTS "idx_share_links_token" ON "share_links"("token");
 CREATE INDEX IF NOT EXISTS "idx_share_links_active" ON "share_links"("is_active");
 
@@ -382,6 +387,26 @@ CREATE TABLE IF NOT EXISTS "archiving_tasks" (
 );
 CREATE INDEX IF NOT EXISTS "idx_archiving_project" ON "archiving_tasks"("project_id");
 CREATE INDEX IF NOT EXISTS "idx_archiving_status" ON "archiving_tasks"("status");
+
+-- 分享链接访问记录表
+CREATE TABLE IF NOT EXISTS "share_link_access_logs" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "share_link_id" uuid NOT NULL REFERENCES "share_links"("id") ON DELETE CASCADE,
+  "action" varchar(20) NOT NULL,
+  "viewer_ip" varchar(45),
+  "viewer_user_agent" varchar(500),
+  "viewer_email" varchar(255),
+  "viewer_name" varchar(100),
+  "resource_type" varchar(50),
+  "resource_id" uuid,
+  "file_name" varchar(255),
+  "file_size" bigint,
+  "created_at" timestamp DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "idx_access_logs_share_link" ON "share_link_access_logs"("share_link_id");
+CREATE INDEX IF NOT EXISTS "idx_access_logs_action" ON "share_link_access_logs"("action");
+CREATE INDEX IF NOT EXISTS "idx_access_logs_created" ON "share_link_access_logs"("created_at");
+CREATE INDEX IF NOT EXISTS "idx_access_logs_resource" ON "share_link_access_logs"("resource_type", "resource_id");
 
 -- 操作日志表
 CREATE TABLE IF NOT EXISTS "audit_logs" (

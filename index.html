@@ -42,6 +42,43 @@
       ::-webkit-scrollbar-thumb:hover {
         background: #52525b;
       }
+
+      /* Theme styles - 通过CSS变量实现主题切换 */
+      :root {
+        --theme-bg-primary: #09090b;
+        --theme-bg-secondary: #18181b;
+        --theme-bg-tertiary: #27272a;
+        --theme-border: #27272a;
+        --theme-text-primary: #f4f4f5;
+        --theme-text-secondary: #e4e4e7;
+      }
+      
+      .theme-dark {
+        --theme-bg-primary: #09090b; /* zinc-950 */
+        --theme-bg-secondary: #18181b; /* zinc-900 */
+        --theme-bg-tertiary: #27272a; /* zinc-800 */
+        --theme-border: #27272a; /* zinc-800 */
+        --theme-text-primary: #f4f4f5; /* zinc-100 */
+        --theme-text-secondary: #e4e4e7; /* zinc-200 */
+      }
+      
+      .theme-dark-gray {
+        --theme-bg-primary: #171717; /* neutral-900 */
+        --theme-bg-secondary: #262626; /* neutral-800 */
+        --theme-bg-tertiary: #404040; /* neutral-700 */
+        --theme-border: #404040; /* neutral-700 */
+        --theme-text-primary: #fafafa; /* neutral-100 */
+        --theme-text-secondary: #e5e5e5; /* neutral-200 */
+      }
+      
+      .theme-dark-blue {
+        --theme-bg-primary: #020617; /* slate-950 */
+        --theme-bg-secondary: #0f172a; /* slate-900 */
+        --theme-bg-tertiary: #1e293b; /* slate-800 */
+        --theme-border: #1e293b; /* slate-800 */
+        --theme-text-primary: #f1f5f9; /* slate-100 */
+        --theme-text-secondary: #e2e8f0; /* slate-200 */
+      }
     </style>
   <script type="importmap">
 {

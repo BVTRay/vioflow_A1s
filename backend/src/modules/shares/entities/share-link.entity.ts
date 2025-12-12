@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  OneToMany,
   JoinColumn,
 } from 'typeorm';
 import { Video } from '../../videos/entities/video.entity';
@@ -12,6 +13,7 @@ import { Project } from '../../projects/entities/project.entity';
 import { DeliveryPackage } from '../../deliveries/entities/delivery-package.entity';
 import { ShowcasePackage } from '../../showcase/entities/showcase-package.entity';
 import { User } from '../../users/entities/user.entity';
+import { ShareLinkAccessLog } from './share-link-access-log.entity';
 
 export enum ShareLinkType {
   VIDEO_REVIEW = 'video_review',
@@ -64,6 +66,18 @@ export class ShareLink {
   @Column({ type: 'text', nullable: true })
   justification: string;
 
+  @Column({ length: 100, nullable: true })
+  client_name: string;
+
+  @Column({ default: true })
+  allow_view: boolean;
+
+  @Column({ nullable: true })
+  last_accessed_at: Date;
+
+  @Column({ default: 0 })
+  view_count: number;
+
   @Column('uuid')
   created_by: string;
 
@@ -92,5 +106,8 @@ export class ShareLink {
   @ManyToOne(() => User)
   @JoinColumn({ name: 'created_by' })
   creator: User;
+
+  @OneToMany(() => ShareLinkAccessLog, (log) => log.share_link)
+  access_logs: ShareLinkAccessLog[];
 }
 

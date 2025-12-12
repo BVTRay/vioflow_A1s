@@ -7,6 +7,7 @@ import { Video } from '../modules/videos/entities/video.entity';
 import { Tag } from '../modules/tags/entities/tag.entity';
 import { Annotation } from '../modules/annotations/entities/annotation.entity';
 import { ShareLink } from '../modules/shares/entities/share-link.entity';
+import { ShareLinkAccessLog } from '../modules/shares/entities/share-link-access-log.entity';
 import { Delivery } from '../modules/deliveries/entities/delivery.entity';
 import { DeliveryFolder } from '../modules/deliveries/entities/delivery-folder.entity';
 import { DeliveryFile } from '../modules/deliveries/entities/delivery-file.entity';
@@ -20,6 +21,11 @@ import { ProjectMember } from '../modules/projects/entities/project-member.entit
 import { VideoTag } from '../modules/videos/entities/video-tag.entity';
 import { ShowcasePackageVideo } from '../modules/showcase/entities/showcase-package-video.entity';
 import { DeliveryPackageFile } from '../modules/deliveries/entities/delivery-package-file.entity';
+import { Team } from '../modules/teams/entities/team.entity';
+import { TeamMember } from '../modules/teams/entities/team-member.entity';
+import { ProjectGroup } from '../modules/project-groups/entities/project-group.entity';
+import { AuditLog } from '../modules/audit/entities/audit-log.entity';
+import { StorageUsage } from '../modules/storage/entities/storage-usage.entity';
 
 @Module({
   imports: [
@@ -76,13 +82,17 @@ import { DeliveryPackageFile } from '../modules/deliveries/entities/delivery-pac
           ...dbConfig,
           entities: [
             User,
+            Team,
+            TeamMember,
             Project,
             ProjectMember,
+            ProjectGroup,
             Video,
             VideoTag,
             Tag,
             Annotation,
             ShareLink,
+            ShareLinkAccessLog,
             Delivery,
             DeliveryFolder,
             DeliveryFile,
@@ -94,6 +104,8 @@ import { DeliveryPackageFile } from '../modules/deliveries/entities/delivery-pac
             UploadTask,
             ArchivingTask,
             ViewTracking,
+            AuditLog,
+            StorageUsage,
           ],
           synchronize: configService.get('NODE_ENV') !== 'production', // 生产环境禁用自动同步
           logging: configService.get('NODE_ENV') === 'development',

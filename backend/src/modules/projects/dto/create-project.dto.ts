@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsDateString, IsUUID } from 'class-validator';
 
 export class CreateProjectDto {
   @IsString()
@@ -14,7 +14,20 @@ export class CreateProjectDto {
   post_lead: string;
 
   @IsString()
-  group: string;
+  @IsOptional()
+  group?: string;
+
+  @IsUUID()
+  @IsOptional()
+  teamId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  groupId?: string;
+
+  @IsString()
+  @IsOptional()
+  monthPrefix?: string;
 
   @IsOptional()
   @IsDateString()

@@ -94,5 +94,24 @@ export class VideosService {
     }
     return this.videoRepository.save(video);
   }
+
+  /**
+   * 批量打标
+   */
+  async batchTag(videoIds: string[], tagIds: string[]): Promise<{ success: number; failed: number }> {
+    let success = 0;
+    let failed = 0;
+
+    for (const videoId of videoIds) {
+      try {
+        await this.updateTags(videoId, tagIds);
+        success++;
+      } catch (error) {
+        failed++;
+      }
+    }
+
+    return { success, failed };
+  }
 }
 

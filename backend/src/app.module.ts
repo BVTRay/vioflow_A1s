@@ -5,6 +5,10 @@ import { DatabaseModule } from './database/database.module';
 import { StorageModule } from './common/storage/storage.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
+import { TeamsModule } from './modules/teams/teams.module';
+import { ProjectGroupsModule } from './modules/project-groups/project-groups.module';
+import { AuditModule } from './modules/audit/audit.module';
+import { StorageStatsModule } from './modules/storage/storage.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { VideosModule } from './modules/videos/videos.module';
 import { TagsModule } from './modules/tags/tags.module';
@@ -18,6 +22,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { ArchivingModule } from './modules/archiving/archiving.module';
 import { TrackingModule } from './modules/tracking/tracking.module';
 import { SearchModule } from './modules/search/search.module';
+import { DevAdminModule } from './modules/admin/dev-admin.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -31,6 +36,10 @@ import { AppController } from './app.controller';
     StorageModule,
     AuthModule,
     UsersModule,
+    TeamsModule,
+    ProjectGroupsModule,
+    AuditModule,
+    StorageStatsModule,
     ProjectsModule,
     VideosModule,
     TagsModule,
@@ -44,6 +53,7 @@ import { AppController } from './app.controller';
     ArchivingModule,
     TrackingModule,
     SearchModule,
+    DevAdminModule,
   ],
   controllers: [AppController],
 })
