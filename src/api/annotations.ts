@@ -2,15 +2,22 @@ import apiClient from './client';
 
 export interface Annotation {
   id: string;
-  video_id: string;
-  user_id?: string;
+  videoId?: string;
+  video_id?: string; // 兼容旧格式
+  userId?: string;
+  user_id?: string; // 兼容旧格式
   timecode: string;
   content: string;
-  screenshot_url?: string;
-  is_completed: boolean;
-  completed_at?: string;
-  created_at: string;
-  updated_at: string;
+  screenshotUrl?: string;
+  screenshot_url?: string; // 兼容旧格式
+  isCompleted?: boolean;
+  is_completed?: boolean; // 兼容旧格式
+  completedAt?: string;
+  completed_at?: string; // 兼容旧格式
+  createdAt?: string;
+  created_at: string; // 保持向后兼容
+  updatedAt?: string;
+  updated_at?: string; // 兼容旧格式
   user?: {
     id: string;
     name: string;
@@ -19,10 +26,47 @@ export interface Annotation {
 }
 
 export const annotationsApi = {
+  // 获取批注列表（需要认证）
+  getAll: async (videoId?: string): Promise<Annotation[]> => {
+    const params = videoId ? { videoId } : {};
+    return apiClient.get('/annotations', { params });
+  },
+
+  // 创建批注（需要认证）
+  create: async (data: { videoId: string; timecode: string; content: string; screenshotUrl?: string }): Promise<Annotation> => {
+    return apiClient.post('/annotations', data);
+  },
+
+  // 完成批注（需要认证）
+  complete: async (id: string): Promise<Annotation> => {
+    return apiClient.post(`/annotations/${id}/complete`);
+  },
+
+  // 导出PDF（需要认证）
+  exportPdf: async (videoId: string): Promise<{ url: string }> => {
+    return apiClient.get(`/annotations/export/${videoId}`);
+  },
+
   // 通过分享token获取批注（公开接口）
   getByShareToken: async (token: string): Promise<Annotation[]> => {
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 
-      (import.meta.env.PROD ? 'https://api.vioflow.cc/api' : 'http://localhost:3002/api');
+    // 动态获取 API 地址
+    const env = (import.meta as any).env;
+    let apiBaseUrl: string;
+    if (env.VITE_API_BASE_URL) {
+      apiBaseUrl = env.VITE_API_BASE_URL;
+    } else if (env.PROD) {
+      apiBaseUrl = env.VITE_API_BASE_URL || 'https://api.vioflow.cc/api';
+    } else {
+      const hostname = window.location.hostname;
+      const port = '3002';
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        apiBaseUrl = `http://localhost:${port}/api`;
+      } else if (hostname.match(/^(192\.168\.|172\.|10\.)/)) {
+        apiBaseUrl = `http://${hostname}:${port}/api`;
+      } else {
+        apiBaseUrl = `http://localhost:${port}/api`;
+      }
+    }
     const response = await fetch(`${apiBaseUrl}/shares/${token}/annotations`, {
       method: 'GET',
       headers: {
@@ -37,8 +81,24 @@ export const annotationsApi = {
     token: string,
     data: { timecode: string; content: string; clientName?: string },
   ): Promise<Annotation | { error: string }> => {
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 
-      (import.meta.env.PROD ? 'https://api.vioflow.cc/api' : 'http://localhost:3002/api');
+    // 动态获取 API 地址
+    const env = (import.meta as any).env;
+    let apiBaseUrl: string;
+    if (env.VITE_API_BASE_URL) {
+      apiBaseUrl = env.VITE_API_BASE_URL;
+    } else if (env.PROD) {
+      apiBaseUrl = env.VITE_API_BASE_URL || 'https://api.vioflow.cc/api';
+    } else {
+      const hostname = window.location.hostname;
+      const port = '3002';
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        apiBaseUrl = `http://localhost:${port}/api`;
+      } else if (hostname.match(/^(192\.168\.|172\.|10\.)/)) {
+        apiBaseUrl = `http://${hostname}:${port}/api`;
+      } else {
+        apiBaseUrl = `http://localhost:${port}/api`;
+      }
+    }
     const response = await fetch(`${apiBaseUrl}/shares/${token}/annotations`, {
       method: 'POST',
       headers: {
@@ -49,5 +109,6 @@ export const annotationsApi = {
     return response.json();
   },
 };
+
 
 

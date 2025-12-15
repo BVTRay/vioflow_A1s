@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -75,8 +76,11 @@ async function bootstrap() {
   // 全局数据转换拦截器
   app.useGlobalInterceptors(new TransformInterceptor());
 
+  // 全局异常过滤器
+  app.useGlobalFilters(new HttpExceptionFilter());
+
   const port = configService.get('PORT', 3002);
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0'); // 监听所有网络接口
   
   console.log(`✓ 后端服务已启动`);
   console.log(`✓ API地址: http://localhost:${port}`);

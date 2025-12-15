@@ -228,3 +228,4 @@ ORDER BY column_name;
 - 如果数据库已经有所有必要的表和字段，不需要运行迁移
 - 如果缺少 `password_hash`、`is_active`、`team_id` 等字段，需要运行迁移脚本
 
+

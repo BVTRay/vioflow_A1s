@@ -12,8 +12,22 @@ const getApiBaseUrl = () => {
     // 例如：https://api.vioflow.cc/api
     return import.meta.env.VITE_API_BASE_URL || 'https://api.vioflow.cc/api';
   }
-  // 开发环境
-  return 'http://localhost:3002/api';
+  // 开发环境：根据当前访问的域名动态调整 API 地址
+  const hostname = window.location.hostname;
+  const port = '3002';
+  
+  // 如果是 localhost 或 127.0.0.1，使用 localhost
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return `http://localhost:${port}/api`;
+  }
+  
+  // 如果是内网 IP（192.168.x.x 或 172.x.x.x），使用相同的 IP
+  if (hostname.match(/^(192\.168\.|172\.|10\.)/)) {
+    return `http://${hostname}:${port}/api`;
+  }
+  
+  // 默认使用 localhost
+  return `http://localhost:${port}/api`;
 };
 
 const API_BASE_URL = getApiBaseUrl();

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PlayCircle, Settings, HardDrive, Clapperboard, LayoutDashboard, Terminal } from 'lucide-react';
+import { PlayCircle, Settings, HardDrive, Clapperboard, LayoutDashboard, Terminal, Share2 } from 'lucide-react';
 import { ModuleType } from '../../types';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
 import { isDevMode } from '../../utils/devMode';
@@ -20,6 +20,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeModule, onChangeModule }
     { id: 'review', icon: PlayCircle, label: '审阅', type: 'review' as ModuleType },
     { id: 'delivery', icon: HardDrive, label: '交付', type: 'delivery' as ModuleType },
     { id: 'showcase', icon: Clapperboard, label: '案例', type: 'showcase' as ModuleType },
+    { id: 'share', icon: Share2, label: '分享', type: 'share' as ModuleType },
   ];
 
   return (

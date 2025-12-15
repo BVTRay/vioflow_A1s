@@ -398,7 +398,8 @@ export const SharePage: React.FC = () => {
           <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-6">
             <h2 className="text-lg font-semibold text-zinc-100 mb-4">视频信息</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-              {video?.version && (
+              {/* 主交付文件不显示版本号 */}
+              {video?.version && !video?.isMainDelivery && (
                 <div>
                   <span className="text-zinc-500">版本：</span>
                   <span className="text-zinc-200 ml-2">v{video.version}</span>

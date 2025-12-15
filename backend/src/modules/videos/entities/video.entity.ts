@@ -104,6 +104,9 @@ export class Video {
   })
   status: VideoStatus;
 
+  @Column({ default: 0 })
+  annotation_count: number;
+
   @Column({ type: 'text', nullable: true })
   change_log: string;
 

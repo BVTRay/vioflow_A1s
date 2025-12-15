@@ -4,12 +4,14 @@ import { Project, Video } from '../../types';
 import { MessageSquare, Upload, CheckCircle, FileVideo, Tag, Copyright, Eye, Package, Clock, Users, TrendingUp, FolderOpen, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
 import { useAuth } from '../../hooks/useAuth';
+import { useTeam } from '../../contexts/TeamContext';
 
 export const Dashboard: React.FC = () => {
   const { state, dispatch } = useStore();
   const theme = useThemeClasses();
   const { user } = useAuth();
   const { projects, videos, deliveries } = state;
+  const { currentTeam } = useTeam();
 
   // 调试：检查数据格式
   React.useEffect(() => {
@@ -131,6 +133,14 @@ export const Dashboard: React.FC = () => {
   const handleQuickUpload = (projectId: string) => {
     dispatch({ type: 'SELECT_PROJECT', payload: projectId });
     dispatch({ type: 'SET_WORKBENCH_ACTION_TYPE', payload: 'review' });
+    dispatch({ type: 'TOGGLE_WORKBENCH', payload: true });
+  };
+
+  // 打开快速上传 - 直接打开操作台
+  const handleOpenQuickUpload = () => {
+    dispatch({ type: 'SELECT_PROJECT', payload: '' }); // 清空选中的项目
+    dispatch({ type: 'SET_WORKBENCH_ACTION_TYPE', payload: 'review' });
+    dispatch({ type: 'SET_QUICK_UPLOAD_MODE', payload: true }); // 设置快速上传模式
     dispatch({ type: 'TOGGLE_WORKBENCH', payload: true });
   };
 
@@ -425,6 +435,14 @@ export const Dashboard: React.FC = () => {
               >
                 <Upload className="w-4 h-4 text-zinc-400" />
                 <span className="text-[10px] font-medium text-zinc-300 whitespace-nowrap">新建项目</span>
+              </button>
+              
+              <button
+                onClick={handleOpenQuickUpload}
+                className={`${theme.bg.secondary}/30 border ${theme.border.secondary}/50 rounded-xl p-2.5 ${theme.border.hover} ${theme.bg.hover} transition-all flex flex-col items-center justify-center gap-1.5 h-[80px] w-[120px]`}
+              >
+                <Upload className="w-4 h-4 text-indigo-400" />
+                <span className="text-[10px] font-medium text-zinc-300 whitespace-nowrap">快速上传</span>
               </button>
               
               <div className="flex gap-2">

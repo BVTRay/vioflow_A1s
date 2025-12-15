@@ -218,8 +218,7 @@ export const LoginPage: React.FC = () => {
               </svg>
             </div>
             <div className="text-center">
-              <h2 className="text-3xl font-bold tracking-tight text-white">欢迎回到 VioFlow</h2>
-              <p className="mt-2 text-sm text-neutral-400">登录以访问 <span className="text-neutral-300">纷呈工作区</span></p>
+              <h2 className="text-2xl font-light tracking-wide text-white">欢迎回到纷呈</h2>
             </div>
           </div>
 
@@ -327,28 +326,6 @@ export const LoginPage: React.FC = () => {
 
           <div className="mt-8 text-center animate-fade-in-up" style={{ animationDelay: '0.7s', animationFillMode: 'forwards' }}>
             <p className="text-sm text-neutral-500">还没有账号？ <a href="#" className="font-semibold text-white hover:text-cyan-400 transition-colors">免费试用</a></p>
-          </div>
-          
-          <div className="mt-12 pt-6 border-t border-white/5 animate-fade-in-up flex flex-col items-center gap-4" style={{ animationDelay: '0.8s', animationFillMode: 'forwards' }}>
-            <p className="text-[10px] uppercase tracking-wider text-neutral-600 font-bold font-sans">信赖 VIOFLOW 的团队</p>
-            <div className="flex items-center justify-center gap-8 opacity-40">
-              <svg className="h-6 w-auto hover:text-white hover:opacity-100 transition-all duration-300 cursor-pointer text-white" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2L2 19H22L12 2ZM12 6L18 17H6L12 6Z" fillRule="evenodd" clipRule="evenodd"/>
-              </svg>
-              <svg className="h-5 w-auto hover:text-white hover:opacity-100 transition-all duration-300 cursor-pointer text-white" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                <path d="M2 12C2 12 5 8 8 8C11 8 11 16 14 16C17 16 22 9 22 9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <svg className="h-6 w-auto hover:text-white hover:opacity-100 transition-all duration-300 cursor-pointer text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                <line x1="3" y1="9" x2="21" y2="9"/>
-                <line x1="9" y1="21" x2="9" y2="9"/>
-              </svg>
-              <svg className="h-6 w-auto hover:text-white hover:opacity-100 transition-all duration-300 cursor-pointer text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                <polyline points="7.5 4.21 12 12 16.5 4.21"/>
-                <polyline points="7.5 19.79 12 12 16.5 19.79"/>
-              </svg>
-            </div>
           </div>
         </div>
       </div>

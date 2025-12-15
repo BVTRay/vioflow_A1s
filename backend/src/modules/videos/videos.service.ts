@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Video } from './entities/video.entity';
+import { Video, VideoStatus, VideoType, StorageTier, AspectRatio } from './entities/video.entity';
 import { VideoTag } from './entities/video-tag.entity';
+import { SupabaseStorageService } from '../../common/storage/supabase-storage.service';
 
 @Injectable()
 export class VideosService {
@@ -11,6 +12,7 @@ export class VideosService {
     private videoRepository: Repository<Video>,
     @InjectRepository(VideoTag)
     private videoTagRepository: Repository<VideoTag>,
+    private storageService: SupabaseStorageService,
   ) {}
 
   async findAll(filters?: {
@@ -126,6 +128,162 @@ export class VideosService {
     }
 
     return { success, failed };
+  }
+
+  /**
+   * 更新视频状态
+   */
+  async updateStatus(videoId: string, status: 'initial' | 'annotated' | 'approved'): Promise<Video> {
+    const video = await this.findOne(videoId);
+    video.status = status as VideoStatus;
+    return this.videoRepository.save(video);
+  }
+
+  /**
+   * 获取视频播放URL
+   * 如果存储桶是私有的，返回签名URL；否则返回公共URL
+   */
+  async getPlaybackUrl(videoId: string, useSignedUrl: boolean = true): Promise<string> {
+    const video = await this.findOne(videoId);
+    
+    if (!video.storage_key) {
+      // 如果没有 storage_key，直接返回 storage_url
+      return video.storage_url;
+    }
+
+    try {
+      if (useSignedUrl) {
+        // 尝试获取签名URL（适用于私有存储桶）
+        // 签名URL有效期1小时
+        return await this.storageService.getSignedUrl(video.storage_key, 3600);
+      } else {
+        // 获取公共URL（适用于公开存储桶）
+        return await this.storageService.getPublicUrl(video.storage_key);
+      }
+    } catch (error) {
+      // 如果获取签名URL失败，回退到存储的URL
+      console.warn(`Failed to get signed URL for video ${videoId}, using stored URL:`, error);
+      return video.storage_url;
+    }
+  }
+
+  /**
+   * 创建视频记录
+   */
+  async create(data: {
+    projectId: string;
+    name: string;
+    originalFilename: string;
+    baseName: string;
+    version: number;
+    type: VideoType;
+    storageUrl: string;
+    storageKey: string;
+    storageTier: StorageTier;
+    size: number;
+    uploaderId: string;
+    changeLog?: string;
+    duration?: number;
+    resolution?: string;
+    aspectRatio?: AspectRatio;
+    thumbnailUrl?: string;
+  }): Promise<Video> {
+    const video = this.videoRepository.create({
+      project_id: data.projectId,
+      name: data.name,
+      original_filename: data.originalFilename,
+      base_name: data.baseName,
+      version: data.version,
+      type: data.type,
+      storage_url: data.storageUrl,
+      storage_key: data.storageKey,
+      storage_tier: data.storageTier,
+      size: data.size,
+      uploader_id: data.uploaderId,
+      upload_time: new Date(),
+      status: VideoStatus.INITIAL,
+      change_log: data.changeLog,
+      duration: data.duration,
+      resolution: data.resolution,
+      aspect_ratio: data.aspectRatio,
+      thumbnail_url: data.thumbnailUrl,
+    });
+
+    return this.videoRepository.save(video);
+  }
+
+  /**
+   * 删除单个视频版本
+   */
+  async deleteVersion(videoId: string): Promise<void> {
+    const video = await this.findOne(videoId);
+    
+    // 删除存储中的文件
+    if (video.storage_key) {
+      try {
+        await this.storageService.deleteFile(video.storage_key);
+      } catch (error) {
+        console.warn(`Failed to delete storage file for video ${videoId}:`, error);
+        // 继续删除数据库记录，即使存储删除失败
+      }
+    }
+
+    // 删除缩略图（如果存在）
+    if (video.thumbnail_url) {
+      // 从thumbnail_url中提取key（如果可能）
+      // 这里假设缩略图的key可以从URL中提取，或者存储在某个字段中
+      // 如果无法提取，可以跳过缩略图删除
+      try {
+        // 尝试从URL中提取路径
+        const urlParts = video.thumbnail_url.split('/');
+        const thumbnailKey = urlParts[urlParts.length - 1];
+        if (thumbnailKey && thumbnailKey !== video.thumbnail_url) {
+          await this.storageService.deleteFile(thumbnailKey);
+        }
+      } catch (error) {
+        console.warn(`Failed to delete thumbnail for video ${videoId}:`, error);
+      }
+    }
+
+    // 删除数据库记录（级联删除会处理关联的批注和标签）
+    await this.videoRepository.remove(video);
+  }
+
+  /**
+   * 删除视频的所有版本（根据base_name）
+   */
+  async deleteAllVersions(projectId: string, baseName: string): Promise<void> {
+    const videos = await this.videoRepository.find({
+      where: { project_id: projectId, base_name: baseName },
+    });
+
+    // 删除所有版本的文件和记录
+    for (const video of videos) {
+      // 删除存储中的文件
+      if (video.storage_key) {
+        try {
+          await this.storageService.deleteFile(video.storage_key);
+        } catch (error) {
+          console.warn(`Failed to delete storage file for video ${video.id}:`, error);
+        }
+      }
+
+      // 删除缩略图
+      if (video.thumbnail_url) {
+        try {
+          const urlParts = video.thumbnail_url.split('/');
+          const thumbnailKey = urlParts[urlParts.length - 1];
+          if (thumbnailKey && thumbnailKey !== video.thumbnail_url) {
+            await this.storageService.deleteFile(thumbnailKey);
+          }
+        } catch (error) {
+          console.warn(`Failed to delete thumbnail for video ${video.id}:`, error);
+        }
+      }
+    }
+
+    // 删除所有数据库记录
+    await this.videoRepository.remove(videos);
   }
 }
 

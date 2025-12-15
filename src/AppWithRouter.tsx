@@ -4,9 +4,11 @@ import { LoginPage } from './components/Auth/LoginPage';
 import { SharePage } from './components/Share/SharePage';
 import { TeamOnboarding } from './components/Onboarding/TeamOnboarding';
 import { DevAdminPanel } from './components/Admin/DevAdminPanel';
+import { TestSupabase } from './pages/TestSupabase';
 import App from './App';
 import apiClient from './api/client';
 import { teamsApi } from './api/teams';
+import { authApi } from './api/auth';
 import { isDevMode } from './utils/devMode';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -36,9 +38,25 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
       }
 
       try {
-        // 使用 apiClient 的配置获取 API 地址
-        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 
-          (import.meta.env.PROD ? 'https://api.vioflow.cc/api' : 'http://localhost:3002/api');
+        // 动态获取 API 地址（与 client.ts 保持一致）
+        const getApiBaseUrl = () => {
+          if (import.meta.env.VITE_API_BASE_URL) {
+            return import.meta.env.VITE_API_BASE_URL;
+          }
+          if (import.meta.env.PROD) {
+            return import.meta.env.VITE_API_BASE_URL || 'https://api.vioflow.cc/api';
+          }
+          const hostname = window.location.hostname;
+          const port = '3002';
+          if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            return `http://localhost:${port}/api`;
+          }
+          if (hostname.match(/^(192\.168\.|172\.|10\.)/)) {
+            return `http://${hostname}:${port}/api`;
+          }
+          return `http://localhost:${port}/api`;
+        };
+        const apiBaseUrl = getApiBaseUrl();
         const response = await fetch(`${apiBaseUrl}/auth/me`, {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -121,39 +139,25 @@ const DevAdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       }
 
       try {
-        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 
-          (import.meta.env.PROD ? 'https://api.vioflow.cc/api' : 'http://localhost:3002/api');
-        const response = await fetch(`${apiBaseUrl}/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
+        // 使用 apiClient 获取用户信息（它会自动使用正确的 API 地址）
+        const userData = await authApi.getMe();
+        console.log('🔒 DevAdminRoute: 用户信息', {
+          email: userData.email,
+          role: userData.role,
+          roleType: typeof userData.role
         });
+        setIsAuthenticated(true);
+        // 确保role是字符串格式
+        const role = typeof userData.role === 'string' ? userData.role : String(userData.role);
+        setUserRole(role);
         
-        if (response.ok) {
-          const userData = await response.json();
-          console.log('🔒 DevAdminRoute: 用户信息', {
-            email: userData.email,
-            role: userData.role,
-            roleType: typeof userData.role
+        // 检查角色是否匹配
+        if (role !== 'DEV_SUPER_ADMIN') {
+          console.warn('⚠️ DevAdminRoute: 角色不匹配', {
+            expected: 'DEV_SUPER_ADMIN',
+            actual: role,
+            userEmail: userData.email
           });
-          setIsAuthenticated(true);
-          // 确保role是字符串格式
-          const role = typeof userData.role === 'string' ? userData.role : String(userData.role);
-          setUserRole(role);
-          
-          // 检查角色是否匹配
-          if (role !== 'DEV_SUPER_ADMIN') {
-            console.warn('⚠️ DevAdminRoute: 角色不匹配', {
-              expected: 'DEV_SUPER_ADMIN',
-              actual: role,
-              userEmail: userData.email
-            });
-          }
-        } else {
-          console.error('🔒 DevAdminRoute: 认证失败', response.status);
-          apiClient.setToken(null);
-          setIsAuthenticated(false);
         }
       } catch (error) {
         console.error('🔒 DevAdminRoute: 检查认证时出错', error);
@@ -204,6 +208,14 @@ export const AppWithRouter: React.FC = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/share/:token" element={<SharePage />} />
         <Route path="/onboarding" element={<TeamOnboarding />} />
+        <Route
+          path="/test-supabase"
+          element={
+            <ProtectedRoute>
+              <TestSupabase />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/admin/users"
           element={

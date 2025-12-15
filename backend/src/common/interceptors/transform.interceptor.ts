@@ -57,6 +57,11 @@ export class TransformInterceptor implements NestInterceptor {
     if (item.is_case_file !== undefined) transformed.isCaseFile = item.is_case_file;
     if (item.is_main_delivery !== undefined) transformed.isMainDelivery = item.is_main_delivery;
     if (item.is_reference !== undefined) transformed.isReference = item.is_reference;
+    if (item.is_completed !== undefined) transformed.isCompleted = item.is_completed;
+    if (item.annotation_count !== undefined) transformed.annotationCount = item.annotation_count;
+    if (item.completed_at) transformed.completedAt = item.completed_at instanceof Date ? item.completed_at.toISOString() : item.completed_at;
+    if (item.timecode) transformed.timecode = item.timecode;
+    if (item.screenshot_url) transformed.screenshotUrl = item.screenshot_url;
     if (item.storage_url) transformed.url = item.storage_url;
     if (item.storage_url) transformed.storageUrl = item.storage_url;
     if (item.thumbnail_url) transformed.thumbnailUrl = item.thumbnail_url;

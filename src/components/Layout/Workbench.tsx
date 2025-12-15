@@ -1,13 +1,18 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, CheckCircle2, X, Share, PlaySquare, FileCheck, ShieldAlert, MonitorPlay, GripVertical, FileVideo, AlertCircle, GitBranch, PlusSquare, History, ArrowRight, Upload, FileText, Copyright, Film, Tag, CheckCircle, Link2, Package, Download, Power, User, Users, ChevronDown, Settings, FolderOpen, Trash2, Edit2, Save } from 'lucide-react';
+import { UploadCloud, CheckCircle2, X, Share, PlaySquare, FileCheck, ShieldAlert, MonitorPlay, GripVertical, FileVideo, AlertCircle, GitBranch, PlusSquare, History, ArrowRight, Upload, FileText, Copyright, Film, Tag, CheckCircle, Link2, Package, Download, Power, User, Users, ChevronDown, Settings, FolderOpen, Trash2, Edit2, Save, Loader2 } from 'lucide-react';
 import { useStore } from '../../App';
 import { Video, DeliveryData } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 import { projectsApi } from '../../api/projects';
+import { projectGroupsApi } from '../../api/project-groups';
 import { tagsApi } from '../../api/tags';
 import { usersApi } from '../../api/users';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
+import { useTeam } from '../../contexts/TeamContext';
+import { useApiData } from '../../hooks/useApiData';
+import { uploadAbortControllers } from '../../utils/uploadManager';
+import { useToast } from '../../hooks/useToast';
 
 interface WorkbenchProps {
   visible: boolean;
@@ -16,7 +21,8 @@ interface WorkbenchProps {
 export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
   const { state, dispatch } = useStore();
   const theme = useThemeClasses();
-  const { activeModule, selectedProjectId, selectedVideoId, projects, deliveries, cart, videos, workbenchActionType, tags } = state;
+  const toast = useToast();
+  const { activeModule, selectedProjectId, selectedVideoId, projects, deliveries, cart, videos, workbenchActionType, workbenchCreateMode, workbenchEditProjectId, pendingProjectGroup, tags, shouldTriggerFileSelect, quickUploadMode } = state;
   const project = projects.find(p => p.id === selectedProjectId);
   const delivery = deliveries.find(d => d.projectId === selectedProjectId);
   const selectedVideo = videos.find(v => v.id === selectedVideoId);
@@ -34,6 +40,23 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
   const [projectGroupMap, setProjectGroupMap] = useState<Record<string, string>>({});
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
+  
+  // New Group Form State
+  const [groupFormData, setGroupFormData] = useState({
+    name: '',
+    description: ''
+  });
+  
+  // Loading states
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  
+  const { currentTeam } = useTeam();
+  const { loadAllData } = useApiData();
+  
+  // 快速上传项目列表
+  const [recentProjects, setRecentProjects] = useState<any[]>([]);
+  const [loadingRecentProjects, setLoadingRecentProjects] = useState(false);
 
   // Upload Configuration Modal State
   const [uploadConfig, setUploadConfig] = useState<{
@@ -65,6 +88,19 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
     team: [] as string[],
     newMemberInput: ''
   });
+  
+  // Edit Project Form State
+  const [editProjectFormData, setEditProjectFormData] = useState({ 
+    name: '', 
+    client: '', 
+    lead: '',
+    postLead: '',
+    group: '',
+    isNewGroup: false,
+    team: [] as string[],
+    newMemberInput: ''
+  });
+  const [isUpdatingProject, setIsUpdatingProject] = useState(false);
 
   // --- DRAG & DROP HANDLERS ---
   const handleDragOver = (e: React.DragEvent) => {
@@ -126,7 +162,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
       });
   };
 
-  const startUpload = () => {
+  const startUpload = async () => {
       if (!uploadConfig.file || !project) return;
 
       setUploadConfig(prev => ({ ...prev, isOpen: false }));
@@ -145,6 +181,10 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
 
       const uploadId = `u_${Date.now()}`;
 
+      // 创建 AbortController 用于取消上传
+      const abortController = new AbortController();
+      uploadAbortControllers.set(uploadId, abortController);
+
       // 1. Add to Global Queue
       dispatch({
           type: 'ADD_UPLOAD',
@@ -160,58 +200,135 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
       // 2. Open Transfer Drawer to show progress
       dispatch({ type: 'TOGGLE_DRAWER', payload: 'transfer' });
 
-      // 3. Simulate Progress
-      let progress = 0;
-      const interval = setInterval(() => {
-          progress += Math.random() * 15;
-          if (progress > 100) progress = 100;
+      try {
+          // 3. 真正上传文件到 Supabase
+          const { uploadApi } = await import('../../api/upload');
+          
+          const video = await uploadApi.uploadVideo(
+              uploadConfig.file,
+              project.id,
+              finalName,
+              finalVersion,
+              baseName,
+              uploadConfig.changeLog || '上传新文件',
+              (progress) => {
+                  dispatch({
+                      type: 'UPDATE_UPLOAD_PROGRESS',
+                      payload: { id: uploadId, progress }
+                  });
+              },
+              abortController.signal
+          );
 
+          // 清理 AbortController
+          uploadAbortControllers.delete(uploadId);
+
+          // 4. 上传成功，添加视频到列表
+          dispatch({ type: 'COMPLETE_UPLOAD', payload: uploadId });
           dispatch({
-              type: 'UPDATE_UPLOAD_PROGRESS',
-              payload: { id: uploadId, progress: Math.floor(progress) }
+              type: 'ADD_VIDEO',
+              payload: {
+                  id: video.id,
+                  projectId: video.projectId,
+                  name: video.name,
+                  originalFilename: video.originalFilename,
+                  baseName: video.baseName,
+                  type: video.type,
+                  url: video.url,
+                  storageUrl: video.storageUrl,
+                  storageKey: video.storageKey,
+                  version: video.version,
+                  uploadTime: '刚刚',
+                  isCaseFile: false,
+                  isMainDelivery: false,
+                  size: video.size,
+                  status: video.status,
+                  changeLog: video.changeLog || '上传新文件'
+              }
           });
 
-          if (progress === 100) {
-              clearInterval(interval);
-              setTimeout(() => {
-                  // Finish
-                  dispatch({ type: 'COMPLETE_UPLOAD', payload: uploadId });
-                  dispatch({
-                      type: 'ADD_VIDEO',
-                      payload: {
-                          id: `v${Date.now()}`,
-                          projectId: project.id,
-                          name: finalName,
-                          type: 'video',
-                          url: '',
-                          version: finalVersion,
-                          uploadTime: '刚刚',
-                          isCaseFile: false,
-                          isMainDelivery: false,
-                          size: (uploadConfig.file!.size / (1024 * 1024)).toFixed(1) + ' MB',
-                          duration: '00:00:00', // Mocked
-                          resolution: '1920x1080', // Mocked
-                          status: 'initial',
-                          changeLog: uploadConfig.changeLog || '上传新文件'
-                      }
-                  });
-              }, 800);
+          // 5. 发送成功通知
+          dispatch({
+              type: 'ADD_NOTIFICATION',
+              payload: {
+                  id: Date.now().toString(),
+                  type: 'success',
+                  title: '上传成功',
+                  message: `视频 "${finalName}" 已成功上传`,
+                  time: '刚刚'
+              }
+          });
+      } catch (error: any) {
+          // 清理 AbortController
+          uploadAbortControllers.delete(uploadId);
+
+          // 如果是用户取消，不显示错误通知
+          if (error.name === 'AbortError' || error.message === 'canceled' || error.code === 'ERR_CANCELED' || error.message?.includes('canceled')) {
+              dispatch({ type: 'CANCEL_UPLOAD', payload: uploadId });
+              return;
           }
-      }, 300);
+
+          console.error('上传失败:', error);
+          
+          // 获取详细的错误信息
+          let errorMessage = '视频上传失败，请重试';
+          if (error.response?.data) {
+              const errorData = error.response.data;
+              if (typeof errorData === 'string') {
+                  errorMessage = errorData;
+              } else if (errorData.message) {
+                  errorMessage = errorData.message;
+              } else if (errorData.error) {
+                  errorMessage = typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData.error);
+              }
+          } else if (error.message) {
+              errorMessage = error.message;
+          }
+          
+          console.error('详细错误信息:', {
+              status: error.response?.status,
+              statusText: error.response?.statusText,
+              data: error.response?.data,
+              message: error.message,
+          });
+          
+          // 更新上传状态为失败
+          dispatch({
+              type: 'UPDATE_UPLOAD_PROGRESS',
+              payload: { id: uploadId, progress: 0, status: 'error' }
+          });
+
+          // 发送错误通知
+          dispatch({
+              type: 'ADD_NOTIFICATION',
+              payload: {
+                  id: Date.now().toString(),
+                  type: 'error',
+                  title: '上传失败',
+                  message: errorMessage,
+                  time: '刚刚'
+              }
+          });
+      }
   };
+
 
 
   const handleClose = () => {
       dispatch({ type: 'TOGGLE_WORKBENCH', payload: false });
+      dispatch({ type: 'SET_WORKBENCH_CREATE_MODE', payload: null });
+      dispatch({ type: 'SET_WORKBENCH_EDIT_MODE', payload: null });
+      dispatch({ type: 'SET_PENDING_PROJECT_GROUP', payload: null });
+      dispatch({ type: 'SET_QUICK_UPLOAD_MODE', payload: false });
       if (activeModule === 'dashboard') {
         dispatch({ type: 'SET_WORKBENCH_ACTION_TYPE', payload: null });
       }
   };
 
-  // 初始化新建项目表单数据（当没有选中项目且操作类型为review时）
+  // 初始化新建项目表单数据（当没有选中项目且操作类型为review时，且不是新建组模式）
   useEffect(() => {
     const effectiveModule = activeModule === 'dashboard' ? (workbenchActionType || 'review') : activeModule;
-    if (effectiveModule === 'review' && !selectedProjectId && visible) {
+    if (effectiveModule === 'review' && !selectedProjectId && visible && workbenchCreateMode !== 'group') {
       const date = new Date();
       const prefix = `${date.getFullYear().toString().slice(-2)}${(date.getMonth() + 1).toString().padStart(2, '0')}_`;
       if (!projectFormData.name) {
@@ -220,16 +337,318 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
           client: '', 
           lead: '',
           postLead: '',
-          group: '广告片',
+          group: pendingProjectGroup || '广告片',
           isNewGroup: false,
           team: [],
           newMemberInput: ''
         });
+      } else if (pendingProjectGroup && !projectFormData.group) {
+        // 如果有待创建项目的组名且表单中还没有组名，则设置它
+        setProjectFormData({ 
+          ...projectFormData,
+          group: pendingProjectGroup
+        });
       }
     }
-  }, [selectedProjectId, visible, activeModule, workbenchActionType, projectFormData.name]);
+  }, [selectedProjectId, visible, activeModule, workbenchActionType, workbenchCreateMode, pendingProjectGroup, projectFormData.name, projectFormData.group]);
+
+  // 自动触发文件选择（用于快速上传）
+  useEffect(() => {
+    if (shouldTriggerFileSelect && visible && project && fileInputRef.current) {
+      // 重置标志
+      dispatch({ type: 'SET_SHOULD_TRIGGER_FILE_SELECT', payload: false });
+      // 延迟一点时间确保Workbench已经完全渲染
+      setTimeout(() => {
+        fileInputRef.current?.click();
+      }, 100);
+    }
+  }, [shouldTriggerFileSelect, visible, project, dispatch]);
+
+  // 加载近期项目（快速上传模式）
+  useEffect(() => {
+    if (quickUploadMode && visible && !selectedProjectId) {
+      setLoadingRecentProjects(true);
+      projectsApi.getRecentOpened(5, currentTeam?.id)
+        .then((recent) => {
+          setRecentProjects(recent);
+        })
+        .catch((error) => {
+          console.error('获取近期项目失败:', error);
+          setRecentProjects([]);
+        })
+        .finally(() => {
+          setLoadingRecentProjects(false);
+        });
+    }
+  }, [quickUploadMode, visible, selectedProjectId, currentTeam?.id]);
+
+  // 选择项目并触发文件上传
+  const handleSelectProjectForQuickUpload = (projectId: string) => {
+    dispatch({ type: 'SELECT_PROJECT', payload: projectId });
+    dispatch({ type: 'SET_QUICK_UPLOAD_MODE', payload: false });
+    // 触发文件选择
+    setTimeout(() => {
+      dispatch({ type: 'SET_SHOULD_TRIGGER_FILE_SELECT', payload: true });
+    }, 100);
+  };
+
+  // 初始化编辑项目表单数据
+  useEffect(() => {
+    if (workbenchEditProjectId && project && project.id === workbenchEditProjectId) {
+      setEditProjectFormData({
+        name: project.name,
+        client: project.client || '',
+        lead: project.lead || '',
+        postLead: project.postLead || '',
+        group: project.group || '广告片',
+        isNewGroup: false,
+        team: project.team || [],
+        newMemberInput: ''
+      });
+    }
+  }, [workbenchEditProjectId, project]);
+
+  const handleAddEditTeamMember = () => {
+    if (editProjectFormData.newMemberInput.trim()) {
+      setEditProjectFormData({
+        ...editProjectFormData,
+        team: [...editProjectFormData.team, editProjectFormData.newMemberInput.trim()],
+        newMemberInput: ''
+      });
+    }
+  };
+
+  const handleRemoveEditTeamMember = (member: string) => {
+    setEditProjectFormData({
+      ...editProjectFormData,
+      team: editProjectFormData.team.filter(m => m !== member)
+    });
+  };
+
+  const handleUpdateProject = async () => {
+    if (!editProjectFormData.name.trim() || !project || !workbenchEditProjectId) return;
+
+    setIsUpdatingProject(true);
+    const loadingToastId = toast.info('正在更新项目设置...', { duration: 0 });
+
+    try {
+      // 更新项目
+      dispatch({
+        type: 'UPDATE_PROJECT',
+        payload: {
+          ...project,
+          name: editProjectFormData.name,
+          client: editProjectFormData.client,
+          lead: editProjectFormData.lead,
+          postLead: editProjectFormData.postLead,
+          group: editProjectFormData.group,
+          team: editProjectFormData.team
+        }
+      });
+      
+      // 关闭加载提示
+      if (loadingToastId) toast.close(loadingToastId);
+      
+      // 显示成功提示
+      toast.success('项目设置已更新');
+      
+      // 关闭编辑模式
+      dispatch({ type: 'SET_WORKBENCH_EDIT_MODE', payload: null });
+    } catch (error: any) {
+      // 关闭加载提示
+      if (loadingToastId) toast.close(loadingToastId);
+      console.error('Failed to update project:', error);
+      toast.error('更新项目设置失败，请重试');
+    } finally {
+      setIsUpdatingProject(false);
+    }
+  };
 
   const renderReviewWorkbench = () => {
+    // 如果正在编辑项目设置，显示项目设置编辑表单
+    if (workbenchEditProjectId && project && project.id === workbenchEditProjectId) {
+      // 获取现有的组别列表
+      const existingGroups = Array.from(new Set(projects.map(p => p.group).filter(g => g && g !== '未分类')));
+
+      return (
+        <>
+          <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900">
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-100">项目设置</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">{project.name}</p>
+            </div>
+            <button onClick={() => {
+              dispatch({ type: 'SET_WORKBENCH_EDIT_MODE', payload: null });
+            }}><X className="w-4 h-4 text-zinc-500 hover:text-zinc-200" /></button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
+            <div className="space-y-4">
+              {/* Name */}
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5 uppercase">项目名称 (YYMM_...)</label>
+                  <input 
+                  autoFocus
+                  type="text" 
+                  value={editProjectFormData.name}
+                  onChange={(e) => setEditProjectFormData({...editProjectFormData, name: e.target.value})}
+                  disabled={isUpdatingProject}
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2.5 text-zinc-100 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              {/* Leads Row */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1.5 uppercase">项目负责人</label>
+                  <div className="relative">
+                    <User className="absolute left-2.5 top-2.5 w-4 h-4 text-zinc-600" />
+                    <input 
+                      type="text" 
+                      placeholder="姓名"
+                      value={editProjectFormData.lead}
+                      onChange={(e) => setEditProjectFormData({...editProjectFormData, lead: e.target.value})}
+                      disabled={isUpdatingProject}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1.5 uppercase">后期负责人</label>
+                  <div className="relative">
+                    <Users className="absolute left-2.5 top-2.5 w-4 h-4 text-zinc-600" />
+                    <input 
+                      type="text" 
+                      placeholder="姓名"
+                      value={editProjectFormData.postLead}
+                      onChange={(e) => setEditProjectFormData({...editProjectFormData, postLead: e.target.value})}
+                      disabled={isUpdatingProject}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Client */}
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5 uppercase">客户名称</label>
+                <input 
+                  type="text" 
+                  placeholder="例如：Nike、Apple..."
+                  value={editProjectFormData.client}
+                  onChange={(e) => setEditProjectFormData({...editProjectFormData, client: e.target.value})}
+                  disabled={isUpdatingProject}
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              {/* Group Selection */}
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5 uppercase">所属组别 / 分类</label>
+                {editProjectFormData.isNewGroup ? (
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="输入新组名..."
+                      value={editProjectFormData.group}
+                      onChange={(e) => setEditProjectFormData({...editProjectFormData, group: e.target.value})}
+                      disabled={isUpdatingProject}
+                      className="flex-1 bg-zinc-950 border border-indigo-500 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    <button 
+                      onClick={() => setEditProjectFormData({...editProjectFormData, isNewGroup: false, group: project.group || '广告片'})}
+                      disabled={isUpdatingProject}
+                      className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      取消
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <select 
+                      value={editProjectFormData.group}
+                      onChange={(e) => {
+                        if (e.target.value === '__NEW__') {
+                          setEditProjectFormData({...editProjectFormData, isNewGroup: true, group: ''});
+                        } else {
+                          setEditProjectFormData({...editProjectFormData, group: e.target.value});
+                        }
+                      }}
+                      disabled={isUpdatingProject}
+                      className="w-full appearance-none bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="广告片">广告片</option>
+                      <option value="社交媒体">社交媒体</option>
+                      <option value="长视频">长视频</option>
+                      <option value="纪录片">纪录片</option>
+                      {existingGroups.filter(g => !['广告片', '社交媒体', '长视频', '纪录片'].includes(g)).map(g => <option key={g} value={g}>{g}</option>)}
+                      <option disabled>──────────</option>
+                      <option value="__NEW__">+ 新建组别</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-2.5 w-4 h-4 text-zinc-500 pointer-events-none" />
+                  </div>
+                )}
+              </div>
+
+              {/* Team Members */}
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5 uppercase">团队成员</label>
+                <div className="flex gap-2 mb-3">
+                  <input 
+                    type="text" 
+                    placeholder="添加成员姓名..."
+                    value={editProjectFormData.newMemberInput}
+                    onChange={(e) => setEditProjectFormData({...editProjectFormData, newMemberInput: e.target.value})}
+                    onKeyDown={(e) => e.key === 'Enter' && !isUpdatingProject && handleAddEditTeamMember()}
+                    disabled={isUpdatingProject}
+                    className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <button 
+                    onClick={handleAddEditTeamMember}
+                    disabled={isUpdatingProject}
+                    className="px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    添加
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {editProjectFormData.team.map((member, idx) => (
+                    <span key={idx} className="bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                      {member}
+                      <button onClick={() => handleRemoveEditTeamMember(member)} className="text-zinc-500 hover:text-red-400">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                  {editProjectFormData.team.length === 0 && <span className="text-xs text-zinc-600 italic">暂无成员</span>}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 backdrop-blur-sm">
+            <button
+              onClick={handleUpdateProject}
+              disabled={!editProjectFormData.name.trim() || isUpdatingProject}
+              className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isUpdatingProject ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>保存中...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>保存更改</span>
+                </>
+              )}
+            </button>
+          </div>
+        </>
+      );
+    }
+
     if (selectedVideo) {
         // Find historical versions of this video (same project, same base name)
         const baseName = selectedVideo.name.replace(/^v\d+_/, '');
@@ -250,7 +669,16 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                 <div className="p-5 flex-1 space-y-5 overflow-y-auto custom-scrollbar">
                     {/* Preview */}
                     <div className="aspect-video bg-zinc-950 rounded border border-zinc-800 flex items-center justify-center relative overflow-hidden group">
-                         <img src={`https://picsum.photos/seed/${selectedVideo.id}/400/225`} className="w-full h-full object-cover opacity-60" />
+                         <img 
+                            src={selectedVideo.thumbnailUrl || `https://picsum.photos/seed/${selectedVideo.id}/400/225`} 
+                            className="w-full h-full object-cover opacity-60" 
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              if (!target.src.includes('picsum.photos')) {
+                                target.src = `https://picsum.photos/seed/${selectedVideo.id}/400/225`;
+                              }
+                            }}
+                         />
                          <PlaySquare className="w-10 h-10 text-white opacity-80" />
                     </div>
 
@@ -259,7 +687,12 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                         <div className="flex justify-between"><span className="text-zinc-500">版本</span><span className="text-zinc-200 font-mono">v{selectedVideo.version}</span></div>
                         <div className="flex justify-between"><span className="text-zinc-500">分辨率</span><span className="text-zinc-200">{selectedVideo.resolution || 'N/A'}</span></div>
                         <div className="flex justify-between"><span className="text-zinc-500">时长</span><span className="text-zinc-200">{selectedVideo.duration}</span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">状态</span><span className="text-indigo-400 capitalize">{selectedVideo.status === 'initial' ? '初次上传' : selectedVideo.status === 'annotated' ? '已批注' : '已定版'}</span></div>
+                        <div className="flex justify-between"><span className="text-zinc-500">状态</span><span className="text-indigo-400 capitalize">
+                          {selectedVideo.status === 'initial' ? '初次上传' : 
+                           selectedVideo.status === 'annotated' ? 
+                             (selectedVideo.annotationCount && selectedVideo.annotationCount > 0 ? `批注*${selectedVideo.annotationCount}` : '已批注') : 
+                           '已定版'}
+                        </span></div>
                         <div className="flex justify-between"><span className="text-zinc-500">大小</span><span className="text-zinc-200">{selectedVideo.size}</span></div>
                         <div className="flex justify-between"><span className="text-zinc-500">上传时间</span><span className="text-zinc-200">{selectedVideo.uploadTime}</span></div>
                     </div>
@@ -310,13 +743,184 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
         )
     }
 
-    // 如果没有选中项目，显示新建项目表单
+    // 如果没有选中项目，根据创建模式显示不同的表单
     if (!project) {
+      // 如果是快速上传模式，显示项目选择界面
+      if (quickUploadMode) {
+        return (
+          <div className="flex flex-col h-full">
+            <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900">
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-100">快速上传</h2>
+                <p className="text-xs text-zinc-500 mt-0.5">选择项目进行上传</p>
+              </div>
+              <button onClick={handleClose}><X className="w-4 h-4 text-zinc-500 hover:text-zinc-200" /></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
+              {loadingRecentProjects ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-5 h-5 text-zinc-400 animate-spin" />
+                  <span className="ml-2 text-sm text-zinc-400">加载中...</span>
+                </div>
+              ) : recentProjects.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <FolderOpen className="w-12 h-12 text-zinc-600 mb-3" />
+                  <p className="text-zinc-400 text-sm">暂无近期项目</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm text-zinc-400 mb-4">选择以下项目之一进行快速上传：</p>
+                  {recentProjects.map((proj) => {
+                    const projectVideos = videos.filter(v => v.projectId === proj.id);
+                    const firstVideo = projectVideos[0];
+                    const thumbnailUrl = firstVideo?.thumbnailUrl || `https://picsum.photos/seed/${proj.id}/400/225`;
+                    
+                    return (
+                      <button
+                        key={proj.id}
+                        onClick={() => handleSelectProjectForQuickUpload(proj.id)}
+                        className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded-lg p-3 hover:bg-zinc-800/50 transition-all text-left flex items-center gap-3 group"
+                      >
+                        <div className="w-16 h-10 rounded overflow-hidden flex-shrink-0">
+                          <img 
+                            src={thumbnailUrl} 
+                            alt={proj.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-zinc-200 truncate">
+                            {proj.name}
+                          </div>
+                          <div className="text-xs text-zinc-500 mt-0.5 flex items-center gap-2">
+                            <span className="flex items-center gap-1">
+                              <Users className="w-3 h-3" />
+                              {proj.client}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <FileVideo className="w-3 h-3" />
+                              {projectVideos.length} 个视频
+                            </span>
+                          </div>
+                        </div>
+                        <Upload className="w-4 h-4 text-zinc-500 group-hover:text-indigo-400 transition-colors flex-shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      // 如果是新建组模式，显示新建组表单
+      if (workbenchCreateMode === 'group') {
+        const handleCreateGroup = async () => {
+          if (!groupFormData.name.trim()) {
+            toast.warning('请输入组名称');
+            return;
+          }
+
+          setIsCreatingGroup(true);
+          const loadingToastId = toast.info('正在创建组...', { duration: 0 }); // 不自动关闭的提示
+
+          try {
+            await projectGroupsApi.create({
+              name: groupFormData.name.trim(),
+              description: groupFormData.description.trim() || undefined
+            }, currentTeam?.id);
+            
+            // 关闭加载提示
+            if (loadingToastId) toast.close(loadingToastId);
+            
+            // 重置表单并关闭创建模式
+            setGroupFormData({ name: '', description: '' });
+            dispatch({ type: 'SET_WORKBENCH_CREATE_MODE', payload: null });
+            dispatch({ type: 'TOGGLE_WORKBENCH', payload: false });
+            
+            // 刷新数据（组创建后需要刷新项目列表以更新组信息）
+            await loadAllData();
+            toast.success('组创建成功');
+          } catch (error: any) {
+            // 关闭加载提示
+            if (loadingToastId) toast.close(loadingToastId);
+            console.error('Failed to create group:', error);
+            toast.error(error?.response?.data?.message || '创建组失败，请重试');
+          } finally {
+            setIsCreatingGroup(false);
+          }
+        };
+
+        return (
+          <>
+            <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900">
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-100">新建组</h2>
+                <p className="text-xs text-zinc-500 mt-0.5">创建新的项目组</p>
+              </div>
+              <button onClick={handleClose}><X className="w-4 h-4 text-zinc-500 hover:text-zinc-200" /></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
+              <div className="space-y-4">
+                {/* Group Name */}
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1.5 uppercase">组名称</label>
+                  <input 
+                    autoFocus
+                    type="text" 
+                    value={groupFormData.name}
+                    onChange={(e) => setGroupFormData({...groupFormData, name: e.target.value})}
+                    disabled={isCreatingGroup}
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2.5 text-zinc-100 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    placeholder="例如：广告片、社交媒体、长视频..."
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1.5 uppercase">描述（可选）</label>
+                  <textarea 
+                    value={groupFormData.description}
+                    onChange={(e) => setGroupFormData({...groupFormData, description: e.target.value})}
+                    disabled={isCreatingGroup}
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2.5 text-zinc-100 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none h-24 disabled:opacity-50 disabled:cursor-not-allowed"
+                    placeholder="组的描述信息..."
+                  />
+                </div>
+
+                {/* Create Button */}
+                <div className="pt-2">
+                  <button 
+                    onClick={handleCreateGroup}
+                    disabled={isCreatingGroup}
+                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-lg text-sm font-medium shadow-lg shadow-indigo-900/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isCreatingGroup ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>创建中...</span>
+                      </>
+                    ) : (
+                      <span>创建组</span>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        );
+      }
+      
+      // 显示新建项目表单（当 workbenchCreateMode 为 'project' 或 null 时）
       // 初始化表单数据（如果是第一次打开）
       const date = new Date();
       const prefix = `${date.getFullYear().toString().slice(-2)}${(date.getMonth() + 1).toString().padStart(2, '0')}_`;
       const initialName = projectFormData.name || prefix;
-      const initialGroup = projectFormData.group || '广告片';
+      // 如果有待创建项目的组名，使用它；否则使用默认值
+      const initialGroup = pendingProjectGroup || projectFormData.group || '广告片';
       
       // 获取现有的组别列表
       const existingGroups = Array.from(new Set(projects.map(p => p.group).filter(g => g && g !== '未分类')));
@@ -341,6 +945,9 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
       const handleCreateProject = async () => {
         if (!projectFormData.name.trim()) return;
 
+        setIsCreatingProject(true);
+        const loadingToastId = toast.info('正在创建项目...', { duration: 0 }); // 不自动关闭的提示
+
         try {
           // 调用 API 创建项目（自动使用当前团队的 teamId）
           const newProject = await projectsApi.create({
@@ -350,6 +957,9 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
             postLead: projectFormData.postLead || '待定',
             group: projectFormData.group || '未分类',
           });
+          
+          // 关闭加载提示
+          if (loadingToastId) toast.close(loadingToastId);
           
           // 添加到本地状态
           dispatch({
@@ -378,9 +988,16 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
             team: [],
             newMemberInput: ''
           });
+          
+          // 显示成功提示
+          toast.success('项目创建成功');
         } catch (error) {
+          // 关闭加载提示
+          if (loadingToastId) toast.close(loadingToastId);
           console.error('Failed to create project:', error);
-          alert('创建项目失败，请重试');
+          toast.error('创建项目失败，请重试');
+        } finally {
+          setIsCreatingProject(false);
         }
       };
 
@@ -404,7 +1021,8 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                   type="text" 
                   value={projectFormData.name || initialName}
                   onChange={(e) => setProjectFormData({...projectFormData, name: e.target.value})}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2.5 text-zinc-100 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                  disabled={isCreatingProject}
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2.5 text-zinc-100 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -419,7 +1037,8 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                       placeholder="姓名"
                       value={projectFormData.lead}
                       onChange={(e) => setProjectFormData({...projectFormData, lead: e.target.value})}
-                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 outline-none"
+                      disabled={isCreatingProject}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -432,7 +1051,8 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                       placeholder="姓名"
                       value={projectFormData.postLead}
                       onChange={(e) => setProjectFormData({...projectFormData, postLead: e.target.value})}
-                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 outline-none"
+                      disabled={isCreatingProject}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -446,7 +1066,8 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                   placeholder="例如：Nike、Apple..."
                   value={projectFormData.client}
                   onChange={(e) => setProjectFormData({...projectFormData, client: e.target.value})}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 outline-none"
+                  disabled={isCreatingProject}
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -460,11 +1081,13 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                       placeholder="输入新组名..."
                       value={projectFormData.group}
                       onChange={(e) => setProjectFormData({...projectFormData, group: e.target.value})}
-                      className="flex-1 bg-zinc-950 border border-indigo-500 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none"
+                      disabled={isCreatingProject}
+                      className="flex-1 bg-zinc-950 border border-indigo-500 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     <button 
                       onClick={() => setProjectFormData({...projectFormData, isNewGroup: false, group: initialGroup})}
-                      className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs"
+                      disabled={isCreatingProject}
+                      className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       取消
                     </button>
@@ -480,7 +1103,8 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                           setProjectFormData({...projectFormData, group: e.target.value});
                         }
                       }}
-                      className="w-full appearance-none bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 outline-none"
+                      disabled={isCreatingProject}
+                      className="w-full appearance-none bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <option value="广告片">广告片</option>
                       <option value="社交媒体">社交媒体</option>
@@ -504,12 +1128,14 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                     placeholder="添加成员姓名..."
                     value={projectFormData.newMemberInput}
                     onChange={(e) => setProjectFormData({...projectFormData, newMemberInput: e.target.value})}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddTeamMember()}
-                    className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 outline-none"
+                    onKeyDown={(e) => e.key === 'Enter' && !isCreatingProject && handleAddTeamMember()}
+                    disabled={isCreatingProject}
+                    className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                   <button 
                     onClick={handleAddTeamMember}
-                    className="px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs"
+                    disabled={isCreatingProject}
+                    className="px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     添加
                   </button>
@@ -530,13 +1156,22 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
           </div>
 
           <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 backdrop-blur-sm">
-            <button 
+            <button
               onClick={handleCreateProject}
-              disabled={!projectFormData.name.trim()}
-              className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-900/20"
+              disabled={!projectFormData.name.trim() || isCreatingProject}
+              className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>创建项目</span>
+              {isCreatingProject ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>创建中...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>创建项目</span>
+                </>
+              )}
             </button>
           </div>
         </>

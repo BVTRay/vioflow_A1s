@@ -25,6 +25,7 @@ export interface ShareLinkDetail extends ShareLink {
     size: string;
     duration?: string;
     resolution?: string;
+    isMainDelivery?: boolean;
   };
   project?: {
     id: string;
@@ -54,8 +55,23 @@ export const sharesApi = {
 
   getByToken: async (token: string): Promise<ShareLinkDetail> => {
     // 分享链接不需要认证，使用公共请求
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 
-      (import.meta.env.PROD ? 'https://api.vioflow.cc/api' : 'http://localhost:3002/api');
+    const env = import.meta.env as any;
+    let apiBaseUrl: string;
+    if (env.VITE_API_BASE_URL) {
+      apiBaseUrl = env.VITE_API_BASE_URL;
+    } else if (env.PROD) {
+      apiBaseUrl = env.VITE_API_BASE_URL || 'https://api.vioflow.cc/api';
+    } else {
+      const hostname = window.location.hostname;
+      const port = '3002';
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        apiBaseUrl = `http://localhost:${port}/api`;
+      } else if (hostname.match(/^(192\.168\.|172\.|10\.)/)) {
+        apiBaseUrl = `http://${hostname}:${port}/api`;
+      } else {
+        apiBaseUrl = `http://localhost:${port}/api`;
+      }
+    }
     const response = await fetch(`${apiBaseUrl}/shares/${token}`, {
       method: 'GET',
       headers: {
@@ -75,8 +91,23 @@ export const sharesApi = {
 
   verifyPassword: async (token: string, password: string): Promise<any> => {
     // 密码验证不需要认证，使用公共请求
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 
-      (import.meta.env.PROD ? 'https://api.vioflow.cc/api' : 'http://localhost:3002/api');
+    const env = import.meta.env as any;
+    let apiBaseUrl: string;
+    if (env.VITE_API_BASE_URL) {
+      apiBaseUrl = env.VITE_API_BASE_URL;
+    } else if (env.PROD) {
+      apiBaseUrl = env.VITE_API_BASE_URL || 'https://api.vioflow.cc/api';
+    } else {
+      const hostname = window.location.hostname;
+      const port = '3002';
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        apiBaseUrl = `http://localhost:${port}/api`;
+      } else if (hostname.match(/^(192\.168\.|172\.|10\.)/)) {
+        apiBaseUrl = `http://${hostname}:${port}/api`;
+      } else {
+        apiBaseUrl = `http://localhost:${port}/api`;
+      }
+    }
     const response = await fetch(`${apiBaseUrl}/shares/${token}/verify-password`, {
       method: 'POST',
       headers: {

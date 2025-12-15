@@ -4,9 +4,10 @@ import { VideosController } from './videos.controller';
 import { VideosService } from './videos.service';
 import { Video } from './entities/video.entity';
 import { VideoTag } from './entities/video-tag.entity';
+import { StorageModule } from '../../common/storage/storage.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Video, VideoTag])],
+  imports: [TypeOrmModule.forFeature([Video, VideoTag]), StorageModule],
   controllers: [VideosController],
   providers: [VideosService],
   exports: [VideosService],

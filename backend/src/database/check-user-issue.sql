@@ -75,3 +75,4 @@ SELECT
     ELSE '❌ team_id 字段不存在' 
     END as team_id_field_check;
 
+

@@ -35,5 +35,22 @@ export const videosApi = {
   createReference: async (id: string, projectId: string): Promise<Video> => {
     return apiClient.post(`/videos/${id}/create-reference`, { projectId });
   },
+
+  updateStatus: async (id: string, status: 'initial' | 'annotated' | 'approved'): Promise<Video> => {
+    return apiClient.patch(`/videos/${id}/status`, { status });
+  },
+
+  getPlaybackUrl: async (id: string, useSignedUrl: boolean = true): Promise<string> => {
+    const result = await apiClient.get<{ url: string }>(`/videos/${id}/playback-url`, {
+      params: { signed: useSignedUrl ? 'true' : 'false' },
+    });
+    return result.url;
+  },
+
+  delete: async (id: string, deleteAllVersions: boolean = false): Promise<void> => {
+    await apiClient.delete(`/videos/${id}`, {
+      params: { deleteAllVersions: deleteAllVersions ? 'true' : 'false' },
+    });
+  },
 };
 

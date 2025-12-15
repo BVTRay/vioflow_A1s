@@ -1,5 +1,5 @@
 
-export type ModuleType = 'library' | 'review' | 'delivery' | 'showcase' | 'settings' | 'dashboard';
+export type ModuleType = 'library' | 'review' | 'delivery' | 'showcase' | 'settings' | 'dashboard' | 'share';
 export type ProjectStatus = 'active' | 'finalized' | 'delivered' | 'archived';
 export type VideoStatus = 'initial' | 'annotated' | 'approved';
 export type AspectRatio = 'landscape' | 'portrait';
@@ -35,6 +35,7 @@ export interface Video {
   resolution?: string; // e.g., '1920x1080'
   aspectRatio?: AspectRatio; // 横屏/竖屏, 用于UI布局
   status: VideoStatus;
+  annotationCount?: number; // 批注次数
   changeLog?: string;
   tags?: string[]; // Tags like 'AI生成', '三维制作', '病毒广告', '剧情' etc. (保留兼容性)
   tagIds?: string[]; // 标签ID数组 (新字段, 关联Tag表)
@@ -156,6 +157,11 @@ export interface AppState {
   // Retrieval Panel State
   searchTerm: string;
   activeTag: string;
+  isRetrievalPanelVisible: boolean; // 检索面板是否可见
+  isTagPanelExpanded: boolean; // 标签面板是否展开
+  selectedGroupTag: string | null; // 选中的分组标签（单选模式）
+  selectedGroupTags: string[]; // 选中的分组标签列表（多选模式）
+  isTagMultiSelectMode: boolean; // 标签多选模式
   
   // 新增状态
   recentOpenedProjects: string[]; // 近期打开的项目ID列表
@@ -163,6 +169,19 @@ export interface AppState {
   
   // Dashboard Workbench Context
   workbenchActionType?: 'review' | 'delivery' | 'showcase' | null; // 工作台操作类型（在dashboard模块时使用）
+  workbenchCreateMode?: 'group' | 'project' | null; // 工作台创建模式：新建组 / 新建项目
+  workbenchEditProjectId?: string | null; // 工作台编辑项目ID（在操作台中编辑项目设置）
+  pendingProjectGroup?: string | null; // 待创建项目的组名（从主浏览区传递）
+  shouldTriggerFileSelect?: boolean; // 是否应该自动触发文件选择（用于快速上传）
+  quickUploadMode?: boolean; // 快速上传模式：在操作台显示项目选择界面
+  
+  // Share Module State
+  selectedShareProjects: string[]; // 分享模块中选中的项目ID列表
+  shareMultiSelectMode: boolean; // 分享模块多选模式
+  selectedShareProjectId: string | null; // 分享模块单选模式下的选中项目ID
+  
+  // Settings Module State
+  settingsActiveTab: 'teams' | 'groups' | 'projects' | 'tags'; // 设置模块当前激活的标签页
 }
 
 export type Action =
@@ -201,20 +220,40 @@ export type Action =
   | { type: 'TOGGLE_CART_ITEM'; payload: string } // Showcase Cart
   | { type: 'SET_SEARCH'; payload: string }
   | { type: 'SET_TAG'; payload: string }
+  | { type: 'TOGGLE_TAG_PANEL' } // 切换标签面板展开/收起
+  | { type: 'SET_GROUP_TAG'; payload: string | null } // 设置选中的分组标签（单选模式）
+  | { type: 'TOGGLE_TAG_MULTI_SELECT_MODE' } // 切换标签多选模式
+  | { type: 'TOGGLE_GROUP_TAG'; payload: string } // 切换分组标签选择（多选模式）
+  | { type: 'CLEAR_GROUP_TAGS' } // 清空选中的分组标签
   | { type: 'TOGGLE_DRAWER'; payload: 'none' | 'transfer' | 'messages' }
   | { type: 'TOGGLE_REVIEW_MODE'; payload: boolean }
   | { type: 'TOGGLE_WORKBENCH'; payload: boolean }
+  | { type: 'TOGGLE_RETRIEVAL_PANEL' } // 切换检索面板显示/隐藏
   | { type: 'UPDATE_VIDEO_STATUS'; payload: { videoId: string; status: VideoStatus } }
+  | { type: 'UPDATE_VIDEO'; payload: Video }
   | { type: 'SET_BROWSER_VIEW_MODE'; payload: 'grid' | 'list' }
   | { type: 'SET_BROWSER_CARD_SIZE'; payload: 'small' | 'medium' | 'large' }
   | { type: 'SET_DELIVERY_VIEW_MODE'; payload: 'files' | 'packages' }
   | { type: 'ADD_UPLOAD'; payload: UploadItem }
   | { type: 'UPDATE_UPLOAD_PROGRESS'; payload: { id: string; progress: number } }
   | { type: 'COMPLETE_UPLOAD'; payload: string }
+  | { type: 'CANCEL_UPLOAD'; payload: string }
   | { type: 'ADD_NOTIFICATION'; payload: Notification }
   | { type: 'CLEAR_NOTIFICATIONS' }
   | { type: 'SET_WORKBENCH_ACTION_TYPE'; payload: 'review' | 'delivery' | 'showcase' | null } // 设置工作台操作类型
+  | { type: 'SET_WORKBENCH_CREATE_MODE'; payload: 'group' | 'project' | null } // 设置工作台创建模式
+  | { type: 'SET_WORKBENCH_EDIT_MODE'; payload: string | null } // 设置工作台编辑项目ID（在操作台中编辑项目设置）
+  | { type: 'SET_PENDING_PROJECT_GROUP'; payload: string | null } // 设置待创建项目的组名
+  | { type: 'SET_SHOULD_TRIGGER_FILE_SELECT'; payload: boolean } // 设置是否应该自动触发文件选择
+  | { type: 'SET_QUICK_UPLOAD_MODE'; payload: boolean } // 设置快速上传模式
   | { type: 'SET_PROJECTS'; payload: Project[] } // 设置项目列表
   | { type: 'SET_VIDEOS'; payload: Video[] } // 设置视频列表
   | { type: 'SET_TAGS'; payload: Tag[] } // 设置标签列表
-  | { type: 'SET_DELIVERIES'; payload: DeliveryData[] }; // 设置交付数据列表
+  | { type: 'SET_DELIVERIES'; payload: DeliveryData[] } // 设置交付数据列表
+  // Share module actions
+  | { type: 'TOGGLE_SHARE_PROJECT'; payload: string } // 切换分享模块中的项目选择（多选模式）
+  | { type: 'CLEAR_SHARE_PROJECTS' } // 清空分享模块中的项目选择
+  | { type: 'SET_SHARE_PROJECTS'; payload: string[] } // 设置分享模块中的项目选择
+  | { type: 'TOGGLE_SHARE_MULTI_SELECT_MODE' } // 切换分享模块多选模式
+  | { type: 'SELECT_SHARE_PROJECT'; payload: string | null } // 选择分享模块中的项目（单选模式）
+  | { type: 'SET_SETTINGS_TAB'; payload: 'teams' | 'groups' | 'projects' | 'tags' }; // 设置设置模块的激活标签页

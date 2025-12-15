@@ -8,11 +8,12 @@ interface ConfirmModalProps {
   onClose: () => void;
   onConfirm: () => void;
   title: string;
-  message: string;
+  message?: string;
   confirmText?: string;
   cancelText?: string;
   variant?: 'danger' | 'warning' | 'info';
   loading?: boolean;
+  children?: React.ReactNode;
 }
 
 export const ConfirmModal: React.FC<ConfirmModalProps> = ({
@@ -24,7 +25,8 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   confirmText = '确认',
   cancelText = '取消',
   variant = 'warning',
-  loading = false
+  loading = false,
+  children
 }) => {
   const theme = useThemeClasses();
 
@@ -72,16 +74,20 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
       footer={footer}
       maxWidth="sm"
     >
-      <div className="flex items-start gap-4">
-        <div className={`flex-shrink-0 ${styles.icon}`}>
-          <AlertTriangle className="w-6 h-6" />
+      {children || (
+        <div className="flex items-start gap-4">
+          <div className={`flex-shrink-0 ${styles.icon}`}>
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <div className="flex-1">
+            {message && (
+              <p className={`text-sm ${theme.text.secondary} leading-relaxed`}>
+                {message}
+              </p>
+            )}
+          </div>
         </div>
-        <div className="flex-1">
-          <p className={`text-sm ${theme.text.secondary} leading-relaxed`}>
-            {message}
-          </p>
-        </div>
-      </div>
+      )}
     </Modal>
   );
 };

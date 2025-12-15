@@ -150,6 +150,7 @@ CREATE TABLE IF NOT EXISTS "videos" (
   "resolution" varchar(20),
   "aspect_ratio" "aspect_ratio_enum",
   "status" "video_status_enum" DEFAULT 'initial',
+  "annotation_count" integer DEFAULT 0,
   "change_log" text,
   "is_case_file" boolean DEFAULT false,
   "is_main_delivery" boolean DEFAULT false,

@@ -26,28 +26,51 @@ export class SupabaseStorageService {
     contentType?: string,
   ): Promise<{ url: string; key: string }> {
     if (!this.supabase) {
-      throw new Error('Supabase is not configured');
+      console.error('[SupabaseStorageService] Supabase 未配置');
+      throw new Error('Supabase is not configured. Please check SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables.');
     }
 
-    const { data, error } = await this.supabase.storage
-      .from(this.bucketName)
-      .upload(path, file, {
-        contentType,
-        upsert: true,
-      });
+    console.log(`[SupabaseStorageService] 开始上传文件:`, {
+      path,
+      contentType,
+      size: file.length,
+      bucket: this.bucketName,
+    });
 
-    if (error) {
-      throw new Error(`Failed to upload file: ${error.message}`);
+    try {
+      const { data, error } = await this.supabase.storage
+        .from(this.bucketName)
+        .upload(path, file, {
+          contentType,
+          upsert: true,
+        });
+
+      if (error) {
+        console.error('[SupabaseStorageService] 上传失败:', error);
+        const statusCode = (error as any).statusCode || (error as any).status || 'unknown';
+        throw new Error(`Failed to upload file to Supabase: ${error.message} (${statusCode})`);
+      }
+
+      if (!data) {
+        throw new Error('Upload succeeded but no data returned');
+      }
+
+      console.log(`[SupabaseStorageService] 文件上传成功:`, data.path);
+
+      const { data: urlData } = this.supabase.storage
+        .from(this.bucketName)
+        .getPublicUrl(path);
+
+      console.log(`[SupabaseStorageService] 公共URL:`, urlData.publicUrl);
+
+      return {
+        url: urlData.publicUrl,
+        key: path,
+      };
+    } catch (error) {
+      console.error('[SupabaseStorageService] 上传异常:', error);
+      throw error;
     }
-
-    const { data: urlData } = this.supabase.storage
-      .from(this.bucketName)
-      .getPublicUrl(path);
-
-    return {
-      url: urlData.publicUrl,
-      key: path,
-    };
   }
 
   async deleteFile(path: string): Promise<void> {

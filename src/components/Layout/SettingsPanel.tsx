@@ -27,8 +27,11 @@ export const SettingsPanel: React.FC = () => {
   const [userTeamRole, setUserTeamRole] = useState<string | null>(null);
   const [currentTeam, setCurrentTeam] = useState<Team | null>(null);
 
-  // Settings state
-  const [settingsActiveTab, setSettingsActiveTab] = useState<SettingsTab>('teams');
+  // Settings state - 使用全局状态
+  const settingsActiveTab = state.settingsActiveTab;
+  const setSettingsActiveTab = (tab: SettingsTab) => {
+    dispatch({ type: 'SET_SETTINGS_TAB', payload: tab });
+  };
   
   // 团队管理
   const [teams, setTeams] = useState<Team[]>([]);
@@ -395,8 +398,22 @@ export const SettingsPanel: React.FC = () => {
     );
   }
 
+  // 根据检索面板的可见性和模块类型调整位置
+  // 设置模块：检索面板宽度为180px，其他模块为320px
+  const getLeftOffset = () => {
+    if (!state.isRetrievalPanelVisible) {
+      return 'left-[64px]';
+    }
+    if (state.activeModule === 'settings') {
+      return 'left-[244px]'; // 64px (sidebar) + 180px (retrieval panel)
+    }
+    return 'left-[384px]'; // 64px (sidebar) + 320px (retrieval panel)
+  };
+  
+  const leftOffset = getLeftOffset();
+  
   return (
-    <div className={`fixed left-[64px] top-14 bottom-0 right-0 ${theme.bg.primary}`}>
+    <div className={`fixed ${leftOffset} top-14 bottom-0 right-0 ${theme.bg.primary} transition-all duration-300`}>
       <div className="h-full flex flex-col">
         {/* Header */}
         <div className={`px-6 py-4 border-b ${theme.border.primary} ${theme.bg.secondary} flex justify-between items-center`}>
@@ -408,54 +425,6 @@ export const SettingsPanel: React.FC = () => {
           </div>
           <button onClick={handleClose}>
             <X className={`w-5 h-5 ${theme.text.muted} ${theme.text.hover}`} />
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className={`flex border-b ${theme.border.primary} ${theme.bg.primary} overflow-x-auto`}>
-          <button
-            onClick={() => setSettingsActiveTab('teams')}
-            className={`px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-              settingsActiveTab === 'teams' 
-                ? 'text-indigo-400 border-b-2 border-indigo-400' 
-                : `${theme.text.muted} ${theme.text.hover}`
-            }`}
-          >
-            <Shield className="w-4 h-4 inline mr-2" />
-            团队管理
-          </button>
-          <button
-            onClick={() => setSettingsActiveTab('groups')}
-            className={`px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-              settingsActiveTab === 'groups' 
-                ? 'text-indigo-400 border-b-2 border-indigo-400' 
-                : `${theme.text.muted} ${theme.text.hover}`
-            }`}
-          >
-            <FolderOpen className="w-4 h-4 inline mr-2" />
-            项目分组
-          </button>
-          <button
-            onClick={() => setSettingsActiveTab('projects')}
-            className={`px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-              settingsActiveTab === 'projects' 
-                ? 'text-indigo-400 border-b-2 border-indigo-400' 
-                : `${theme.text.muted} ${theme.text.hover}`
-            }`}
-          >
-            <FileVideo className="w-4 h-4 inline mr-2" />
-            项目
-          </button>
-          <button
-            onClick={() => setSettingsActiveTab('tags')}
-            className={`px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-              settingsActiveTab === 'tags' 
-                ? 'text-indigo-400 border-b-2 border-indigo-400' 
-                : `${theme.text.muted} ${theme.text.hover}`
-            }`}
-          >
-            <Tag className="w-4 h-4 inline mr-2" />
-            标签
           </button>
         </div>
 

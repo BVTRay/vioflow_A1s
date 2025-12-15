@@ -1,5 +1,5 @@
 
-import React, { useReducer, createContext, useContext, useEffect } from 'react';
+import React, { useReducer, createContext, useContext, useEffect, useRef } from 'react';
 import { Header } from './components/Layout/Header';
 import { Sidebar } from './components/Layout/Sidebar';
 import { RetrievalPanel } from './components/Layout/RetrievalPanel';
@@ -8,13 +8,18 @@ import { MainBrowser } from './components/Layout/MainBrowser';
 import { ReviewOverlay } from './components/Layout/ReviewOverlay';
 import { Dashboard } from './components/Layout/Dashboard';
 import { SettingsPanel } from './components/Layout/SettingsPanel';
+import { ShareModule } from './components/Layout/ShareModule';
 import { Drawer } from './components/UI/Drawer';
 import { AppState, Action, Project, Video, DeliveryData, Notification as AppNotification } from './types';
-import { FileUp, CheckCircle, BellRing, Loader2 } from 'lucide-react';
+import { FileUp, CheckCircle, BellRing, Loader2, X } from 'lucide-react';
 import { useApiData } from './hooks/useApiData';
 import { TeamProvider } from './contexts/TeamContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { useThemeClasses } from './hooks/useThemeClasses';
+import { uploadAbortControllers } from './utils/uploadManager';
+import { ToastContainer } from './components/UI/Toast';
+import { toastManager } from './hooks/useToast';
+import { Toast } from './components/UI/Toast';
 
 // --- MOCK DATA ---
 const INITIAL_PROJECTS: Project[] = [
@@ -54,6 +59,11 @@ const initialState: AppState = {
   activeDrawer: 'none',
   searchTerm: '',
   activeTag: '全部',
+  isRetrievalPanelVisible: true,
+  isTagPanelExpanded: false,
+  selectedGroupTag: null,
+  selectedGroupTags: [],
+  isTagMultiSelectMode: false,
   browserViewMode: 'grid',
   browserCardSize: 'medium',
   reviewViewMode: 'files',
@@ -65,6 +75,15 @@ const initialState: AppState = {
   recentOpenedProjects: [],
   showcaseSelection: [],
   workbenchActionType: null,
+  workbenchCreateMode: null,
+  workbenchEditProjectId: null,
+  pendingProjectGroup: null,
+  shouldTriggerFileSelect: false,
+  quickUploadMode: false,
+  selectedShareProjects: [],
+  shareMultiSelectMode: false,
+  selectedShareProjectId: null,
+  settingsActiveTab: 'teams',
 };
 
 // --- REDUCER ---
@@ -312,6 +331,11 @@ function appReducer(state: AppState, action: Action): AppState {
         ...state,
         videos: state.videos.map(v => v.id === action.payload.videoId ? { ...v, status: action.payload.status } : v)
       };
+    case 'UPDATE_VIDEO':
+      return {
+        ...state,
+        videos: state.videos.map(v => v.id === action.payload.id ? action.payload : v)
+      };
     case 'TOGGLE_CART_ITEM':
       const exists = state.cart.includes(action.payload);
       return {
@@ -322,14 +346,57 @@ function appReducer(state: AppState, action: Action): AppState {
       return { ...state, searchTerm: action.payload };
     case 'SET_TAG':
       return { ...state, activeTag: action.payload };
+    case 'TOGGLE_TAG_PANEL':
+      // 当关闭标签面板时，清除选中状态
+      const willBeExpanded = !state.isTagPanelExpanded;
+      return { 
+        ...state, 
+        isTagPanelExpanded: willBeExpanded,
+        selectedGroupTag: willBeExpanded ? state.selectedGroupTag : null, // 关闭时清除选中状态
+        selectedGroupTags: willBeExpanded ? state.selectedGroupTags : [] // 关闭时清除多选状态
+      };
+    case 'SET_GROUP_TAG':
+      return { ...state, selectedGroupTag: action.payload, selectedGroupTags: [] }; // 单选时清空多选
+    case 'TOGGLE_TAG_MULTI_SELECT_MODE':
+      return { 
+        ...state, 
+        isTagMultiSelectMode: !state.isTagMultiSelectMode,
+        selectedGroupTag: null, // 切换模式时清空单选
+        selectedGroupTags: [] // 切换模式时清空多选
+      };
+    case 'TOGGLE_GROUP_TAG': {
+      const tagName = action.payload;
+      const isSelected = state.selectedGroupTags.includes(tagName);
+      return {
+        ...state,
+        selectedGroupTags: isSelected
+          ? state.selectedGroupTags.filter(t => t !== tagName)
+          : [...state.selectedGroupTags, tagName],
+        selectedGroupTag: null // 多选时清空单选
+      };
+    }
+    case 'CLEAR_GROUP_TAGS':
+      return { ...state, selectedGroupTags: [] };
     case 'TOGGLE_DRAWER':
       return { ...state, activeDrawer: action.payload };
     case 'TOGGLE_REVIEW_MODE':
       return { ...state, isReviewMode: action.payload };
     case 'TOGGLE_WORKBENCH':
       return { ...state, showWorkbench: action.payload };
+    case 'TOGGLE_RETRIEVAL_PANEL':
+      return { ...state, isRetrievalPanelVisible: !state.isRetrievalPanelVisible };
     case 'SET_WORKBENCH_ACTION_TYPE':
       return { ...state, workbenchActionType: action.payload };
+    case 'SET_WORKBENCH_CREATE_MODE':
+      return { ...state, workbenchCreateMode: action.payload };
+    case 'SET_WORKBENCH_EDIT_MODE':
+      return { ...state, workbenchEditProjectId: action.payload };
+    case 'SET_PENDING_PROJECT_GROUP':
+      return { ...state, pendingProjectGroup: action.payload };
+    case 'SET_SHOULD_TRIGGER_FILE_SELECT':
+      return { ...state, shouldTriggerFileSelect: action.payload };
+    case 'SET_QUICK_UPLOAD_MODE':
+      return { ...state, quickUploadMode: action.payload };
     case 'SET_BROWSER_VIEW_MODE':
       return { ...state, browserViewMode: action.payload };
     case 'SET_BROWSER_CARD_SIZE':
@@ -348,6 +415,11 @@ function appReducer(state: AppState, action: Action): AppState {
         ...state,
         uploadQueue: state.uploadQueue.filter(item => item.id !== action.payload)
       };
+    case 'CANCEL_UPLOAD':
+      return {
+        ...state,
+        uploadQueue: state.uploadQueue.filter(item => item.id !== action.payload)
+      };
     case 'SET_PROJECTS':
       return { ...state, projects: action.payload };
     case 'SET_VIDEOS':
@@ -356,6 +428,33 @@ function appReducer(state: AppState, action: Action): AppState {
       return { ...state, tags: action.payload };
     case 'SET_DELIVERIES':
       return { ...state, deliveries: action.payload };
+    // Share module actions
+    case 'TOGGLE_SHARE_PROJECT': {
+      const projectId = action.payload;
+      const isSelected = state.selectedShareProjects.includes(projectId);
+      return {
+        ...state,
+        selectedShareProjects: isSelected
+          ? state.selectedShareProjects.filter(id => id !== projectId)
+          : [...state.selectedShareProjects, projectId]
+      };
+    }
+    case 'CLEAR_SHARE_PROJECTS':
+      return { ...state, selectedShareProjects: [] };
+    case 'SET_SHARE_PROJECTS':
+      return { ...state, selectedShareProjects: action.payload };
+    case 'TOGGLE_SHARE_MULTI_SELECT_MODE':
+      return { 
+        ...state, 
+        shareMultiSelectMode: !state.shareMultiSelectMode,
+        // 切换模式时清空选择
+        selectedShareProjects: [],
+        selectedShareProjectId: null
+      };
+    case 'SELECT_SHARE_PROJECT':
+      return { ...state, selectedShareProjectId: action.payload };
+    case 'SET_SETTINGS_TAB':
+      return { ...state, settingsActiveTab: action.payload };
     case 'ADD_TAG':
       // 如果标签已存在，不重复添加
       if (state.tags.find(t => t.id === action.payload.id)) {
@@ -423,6 +522,42 @@ const AppContent: React.FC<{ state: AppState; dispatch: React.Dispatch<Action> }
   // 所有 Hooks 必须在组件顶层调用，不能有条件调用
   const { theme } = useTheme();
   const themeClassesHook = useThemeClasses(); // 移到顶层
+  
+  // Toast 状态管理
+  const [toasts, setToasts] = React.useState<Toast[]>([]);
+  
+  React.useEffect(() => {
+    const unsubscribe = toastManager.subscribe((newToasts) => {
+      setToasts(newToasts);
+    });
+    return unsubscribe;
+  }, []);
+  
+  const handleCloseToast = React.useCallback((id: string) => {
+    toastManager.close(id);
+  }, []);
+
+  // 取消上传函数
+  const cancelUpload = (uploadId: string) => {
+    const abortController = uploadAbortControllers.get(uploadId);
+    if (abortController) {
+      abortController.abort();
+      uploadAbortControllers.delete(uploadId);
+    }
+    dispatch({ type: 'CANCEL_UPLOAD', payload: uploadId });
+    
+    // 发送取消通知
+    dispatch({
+      type: 'ADD_NOTIFICATION',
+      payload: {
+        id: Date.now().toString(),
+        type: 'info',
+        title: '上传已取消',
+        message: '上传任务已取消',
+        time: '刚刚'
+      }
+    });
+  };
   const { 
     projects: apiProjects, 
     videos: apiVideos, 
@@ -541,9 +676,21 @@ const AppContent: React.FC<{ state: AppState; dispatch: React.Dispatch<Action> }
                                       style={{ width: `${item.progress}%` }}
                                   ></div>
                               </div>
-                              <div className={`flex justify-between text-[10px] ${theme.text.muted} mt-1`}>
-                                  <span>{item.progress}%</span>
-                                  <span>{item.progress < 100 ? '正在上传...' : '处理中...'}</span>
+                              <div className={`flex justify-between items-center text-[10px] ${theme.text.muted} mt-1`}>
+                                  <div className="flex items-center gap-2">
+                                      <span>{item.progress}%</span>
+                                      <span>{item.progress < 100 ? '正在上传...' : '处理中...'}</span>
+                                  </div>
+                                  {item.status === 'uploading' && (
+                                      <button
+                                          onClick={() => cancelUpload(item.id)}
+                                          className={`px-2 py-1 ${theme.bg.tertiary} ${theme.text.muted} ${theme.bg.hover} ${theme.text.hover} rounded transition-colors flex items-center gap-1`}
+                                          title="取消上传"
+                                      >
+                                          <X className="w-3 h-3" />
+                                          <span>取消</span>
+                                      </button>
+                                  )}
                               </div>
                           </div>
                       </div>
@@ -598,7 +745,8 @@ const AppContent: React.FC<{ state: AppState; dispatch: React.Dispatch<Action> }
             onChangeModule={(mod) => dispatch({ type: 'SET_MODULE', payload: mod })} 
           />
 
-          {state.activeModule !== 'dashboard' && state.activeModule !== 'settings' && <RetrievalPanel />}
+          {state.activeModule !== 'dashboard' && state.activeModule !== 'share' && <RetrievalPanel />}
+          {state.activeModule === 'share' && <RetrievalPanel />}
 
           {state.activeModule === 'dashboard' ? (
             <>
@@ -608,6 +756,10 @@ const AppContent: React.FC<{ state: AppState; dispatch: React.Dispatch<Action> }
           ) : state.activeModule === 'settings' ? (
             <>
               <SettingsPanel />
+            </>
+          ) : state.activeModule === 'share' ? (
+            <>
+              <ShareModule />
             </>
           ) : (
             <>
@@ -636,6 +788,9 @@ const AppContent: React.FC<{ state: AppState; dispatch: React.Dispatch<Action> }
           >
               {renderNotificationsContent()}
           </Drawer>
+
+          {/* Toast 提示容器 */}
+          <ToastContainer toasts={toasts} onClose={handleCloseToast} />
 
     </div>
   );

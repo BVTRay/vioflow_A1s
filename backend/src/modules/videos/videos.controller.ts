@@ -5,6 +5,7 @@ import {
   Body,
   Param,
   Patch,
+  Delete,
   UseGuards,
   Request,
   Query,
@@ -70,5 +71,35 @@ export class VideosController {
   @Patch(':id/toggle-main-delivery')
   toggleMainDelivery(@Param('id') id: string) {
     return this.videosService.toggleMainDelivery(id);
+  }
+
+  @Patch(':id/status')
+  updateStatus(@Param('id') id: string, @Body() body: { status: 'initial' | 'annotated' | 'approved' }) {
+    return this.videosService.updateStatus(id, body.status);
+  }
+
+  @Get(':id/playback-url')
+  getPlaybackUrl(@Param('id') id: string, @Query('signed') signed?: string) {
+    const useSignedUrl = signed !== 'false'; // 默认使用签名URL
+    return this.videosService.getPlaybackUrl(id, useSignedUrl).then(url => ({ url }));
+  }
+
+  @Delete(':id')
+  async deleteVideo(
+    @Param('id') id: string,
+    @Query('deleteAllVersions') deleteAllVersions?: string,
+  ) {
+    const video = await this.videosService.findOne(id);
+    const shouldDeleteAll = deleteAllVersions === 'true';
+    
+    if (shouldDeleteAll) {
+      // 删除所有版本
+      await this.videosService.deleteAllVersions(video.project_id, video.base_name);
+      return { message: '所有版本已删除' };
+    } else {
+      // 只删除当前版本
+      await this.videosService.deleteVersion(id);
+      return { message: '视频版本已删除' };
+    }
   }
 }
