@@ -65,7 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeModule, onChangeModule }
                 const response = await authApi.login({ username: 'admin@vioflow.com', password: 'admin' });
                 if (response.accessToken || response.access_token) {
                   // 保存admin的token
-                  apiClient.setToken(response.access_token || response.accessToken);
+                  apiClient.setToken((response.access_token || response.accessToken) ?? null);
                   // 跳转到开发者后台
                   navigate('/admin/users');
                 }

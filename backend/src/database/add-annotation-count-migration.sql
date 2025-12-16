@@ -12,3 +12,5 @@ SET annotation_count = (
 )
 WHERE annotation_count = 0 OR annotation_count IS NULL;
 
+
+

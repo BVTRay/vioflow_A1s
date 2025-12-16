@@ -9,7 +9,7 @@ import { projectGroupsApi, ProjectGroup } from '../../api/project-groups';
 import { usersApi } from '../../api/users';
 import { 
   FolderOpen, FileVideo, Tag, Users, X, Trash2, Edit2, Save, PlusSquare, 
-  Shield, UserPlus, Search, Copy, CheckCircle, XCircle, Settings as SettingsIcon, Check
+  Shield, UserPlus, Search, Copy, CheckCircle, XCircle, Settings as SettingsIcon, Check, AlertTriangle
 } from 'lucide-react';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
 
@@ -370,6 +370,28 @@ export const SettingsPanel: React.FC = () => {
         payload: { ...project, group: newGroup }
       });
       projectsApi.update(projectId, { group: newGroup }).catch(console.error);
+    }
+  };
+
+  const [showDeleteProjectConfirm, setShowDeleteProjectConfirm] = useState<string | null>(null);
+
+  const handleDeleteProject = async (projectId: string) => {
+    try {
+      await projectsApi.remove(projectId);
+      // 从状态中移除项目
+      const updatedProjects = projects.filter(p => p.id !== projectId);
+      dispatch({ type: 'SET_PROJECTS', payload: updatedProjects });
+      // 如果删除的是当前选中的项目，清除选中状态
+      const { selectedProjectId } = state;
+      if (selectedProjectId === projectId) {
+        dispatch({ type: 'SELECT_PROJECT', payload: null });
+      }
+      setShowDeleteProjectConfirm(null);
+      alert('项目已删除');
+    } catch (error) {
+      console.error('Failed to delete project:', error);
+      alert('删除项目失败');
+      setShowDeleteProjectConfirm(null);
     }
   };
 
@@ -958,16 +980,27 @@ export const SettingsPanel: React.FC = () => {
                       <div key={p.id} className={`p-4 ${theme.bg.secondary} border ${theme.border.primary} rounded-lg`}>
                         <div className="flex items-center justify-between mb-3">
                           <span className={`text-sm font-medium ${theme.text.secondary}`}>{p.name}</span>
-                          <span className={`text-xs px-2 py-1 rounded ${
-                            p.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' :
-                            p.status === 'finalized' ? 'bg-orange-500/20 text-orange-400' :
-                            p.status === 'delivered' ? 'bg-indigo-500/20 text-indigo-400' :
-                            `${theme.bg.tertiary} ${theme.text.muted}`
-                          }`}>
-                            {p.status === 'active' ? '进行中' :
-                             p.status === 'finalized' ? '已定版' :
-                             p.status === 'delivered' ? '已交付' : '已归档'}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              p.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' :
+                              p.status === 'finalized' ? 'bg-orange-500/20 text-orange-400' :
+                              p.status === 'delivered' ? 'bg-indigo-500/20 text-indigo-400' :
+                              `${theme.bg.tertiary} ${theme.text.muted}`
+                            }`}>
+                              {p.status === 'active' ? '进行中' :
+                               p.status === 'finalized' ? '已定版' :
+                               p.status === 'delivered' ? '已交付' : '已归档'}
+                            </span>
+                            {isAdmin && (
+                              <button
+                                onClick={() => setShowDeleteProjectConfirm(p.id)}
+                                className="p-1.5 text-zinc-500 hover:text-red-400 transition-colors"
+                                title="删除项目"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <div className="flex items-center gap-3">
                           <label className={`text-xs ${theme.text.muted}`}>组别:</label>
@@ -1053,6 +1086,61 @@ export const SettingsPanel: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* 删除项目确认弹窗 */}
+      {showDeleteProjectConfirm && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className={`${theme.bg.modal} ${theme.text.primary} border ${theme.border.secondary} w-full max-w-md rounded-xl shadow-2xl flex flex-col overflow-hidden`}>
+            <div className={`px-5 py-4 border-b ${theme.border.primary} flex items-center justify-between ${theme.bg.primary}`}>
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-500" />
+                <h3 className={`font-semibold ${theme.text.primary}`}>确认删除项目</h3>
+              </div>
+              <button 
+                onClick={() => setShowDeleteProjectConfirm(null)}
+                className="p-1.5 hover:bg-zinc-800 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4 text-zinc-500" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="flex items-center gap-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
+                <div className="text-sm text-red-200">
+                  <p className="font-medium mb-1">此操作不可撤销</p>
+                  <p className="text-xs opacity-80">删除项目后，该项目下的所有文件都会被永久删除。</p>
+                </div>
+              </div>
+              {(() => {
+                const projectToDelete = projects.find(p => p.id === showDeleteProjectConfirm);
+                if (projectToDelete) {
+                  return (
+                    <div className={`p-3 ${theme.bg.tertiary} rounded-lg`}>
+                      <p className={`text-sm ${theme.text.secondary} mb-1`}>项目名称：</p>
+                      <p className={`text-sm font-medium ${theme.text.primary}`}>{projectToDelete.name}</p>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+            <div className={`p-4 border-t ${theme.border.primary} flex justify-end gap-2 ${theme.bg.primary}`}>
+              <button
+                onClick={() => setShowDeleteProjectConfirm(null)}
+                className={`px-4 py-2 text-sm ${theme.text.muted} hover:text-white transition-colors`}
+              >
+                取消
+              </button>
+              <button
+                onClick={() => handleDeleteProject(showDeleteProjectConfirm)}
+                className="px-4 py-2 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors"
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

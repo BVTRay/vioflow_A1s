@@ -79,3 +79,4 @@ cat .env | grep DATABASE_URL | sed 's/DATABASE_URL=//' | xargs psql -c "ALTER TA
    - 尝试通过 `192.168.110.112:3009` 访问前端
    - 尝试上传一个视频，应该不再出现 500 错误
 
+

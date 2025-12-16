@@ -80,10 +80,15 @@ const initialState: AppState = {
   pendingProjectGroup: null,
   shouldTriggerFileSelect: false,
   quickUploadMode: false,
+  workbenchView: 'none',
+  workbenchContext: {},
   selectedShareProjects: [],
   shareMultiSelectMode: false,
   selectedShareProjectId: null,
   settingsActiveTab: 'teams',
+  showVersionHistory: false,
+  versionHistoryViewMode: 'grid',
+  versionHistoryBaseName: null,
 };
 
 // --- REDUCER ---
@@ -97,20 +102,40 @@ function appReducer(state: AppState, action: Action): AppState {
         selectedVideoId: null,
         searchTerm: '',
         showWorkbench: false, // Settings panel is separate, don't open workbench
-        workbenchActionType: null // Clear workbench action type when switching modules
+        workbenchActionType: null, // Clear workbench action type when switching modules
+        workbenchView: 'none',
+        workbenchContext: {},
+        showVersionHistory: false,
+        versionHistoryBaseName: null,
+        workbenchEditProjectId: null,
+        workbenchCreateMode: null
       };
     case 'SELECT_PROJECT':
       return { 
         ...state, 
         selectedProjectId: action.payload, 
         selectedVideoId: null,
-        showWorkbench: true // Auto open when project selected
+        // 不再自动打开操作台，只有点击新建/编辑按钮时才打开
+        showWorkbench: false,
+        workbenchView: 'none',
+        workbenchContext: {},
+        showVersionHistory: false,
+        versionHistoryBaseName: null,
+        workbenchEditProjectId: null,
+        workbenchCreateMode: null
       };
     case 'SELECT_VIDEO':
       return { 
         ...state, 
         selectedVideoId: action.payload, 
-        showWorkbench: true // Auto open when video selected
+        // 不再自动打开操作台，只有点击新建/编辑按钮时才打开
+        showWorkbench: false,
+        workbenchView: 'none',
+        workbenchContext: {},
+        showVersionHistory: false,
+        versionHistoryBaseName: null,
+        workbenchEditProjectId: null,
+        workbenchCreateMode: null
       };
     case 'ADD_PROJECT':
       return { 
@@ -282,50 +307,6 @@ function appReducer(state: AppState, action: Action): AppState {
           p.id === action.payload.packageId ? { ...p, isActive: action.payload.isActive } : p
         )
       };
-    // --- SHOWCASE ---
-    case 'SET_SHOWCASE_VIEW_MODE':
-      return { ...state, showcaseViewMode: action.payload };
-    case 'SET_FILTERED_SHOWCASE_VIDEOS':
-      return { ...state, filteredShowcaseVideos: action.payload };
-    case 'ADD_TO_SHOWCASE_BROWSER':
-      return {
-        ...state,
-        filteredShowcaseVideos: state.filteredShowcaseVideos.includes(action.payload)
-          ? state.filteredShowcaseVideos
-          : [...state.filteredShowcaseVideos, action.payload]
-      };
-    case 'CLEAR_SHOWCASE_BROWSER':
-      return { ...state, filteredShowcaseVideos: [] };
-    case 'GENERATE_SHOWCASE_PACKAGE': {
-      const newPackage = {
-        id: `sp${Date.now()}`,
-        title: action.payload.title,
-        description: action.payload.description,
-        mode: action.payload.mode,
-        clientName: action.payload.clientName,
-        link: `https://vioflow.io/showcase/${Date.now()}`,
-        createdAt: new Date().toISOString(),
-        viewCount: 0,
-        isActive: true,
-        items: state.cart.map((videoId, index) => ({
-          videoId,
-          order: index,
-          description: ''
-        }))
-      };
-      return {
-        ...state,
-        showcasePackages: [...state.showcasePackages, newPackage],
-        cart: [] // 清空操作台
-      };
-    }
-    case 'TOGGLE_SHOWCASE_PACKAGE':
-      return {
-        ...state,
-        showcasePackages: state.showcasePackages.map(p => 
-          p.id === action.payload.packageId ? { ...p, isActive: action.payload.isActive } : p
-        )
-      };
     case 'UPDATE_VIDEO_STATUS':
       return {
         ...state,
@@ -383,8 +364,72 @@ function appReducer(state: AppState, action: Action): AppState {
       return { ...state, isReviewMode: action.payload };
     case 'TOGGLE_WORKBENCH':
       return { ...state, showWorkbench: action.payload };
+    case 'OPEN_WORKBENCH_VIEW': {
+      const { view, context } = action.payload;
+      // 基础状态：清理所有窗口相关状态
+      const baseState = {
+        ...state,
+        showWorkbench: true,
+        workbenchView: view,
+        workbenchContext: context || {},
+        showVersionHistory: false,
+        versionHistoryBaseName: null,
+        versionHistoryViewMode: 'grid',
+        workbenchEditProjectId: null,
+        workbenchCreateMode: null,
+        quickUploadMode: view === 'upload' ? state.quickUploadMode : false,
+        selectedVideoId: null // 默认清空选中的视频
+      };
+      
+      // 根据不同视图类型设置特定状态
+      if (view === 'newProject') {
+        return {
+          ...baseState,
+          workbenchCreateMode: 'project'
+        };
+      }
+      if (view === 'projectSettings') {
+        return {
+          ...baseState,
+          workbenchEditProjectId: context?.projectId || null
+        };
+      }
+      if (view === 'versionHistory') {
+        return {
+          ...baseState,
+          showVersionHistory: true,
+          versionHistoryBaseName: context?.baseName || null,
+          versionHistoryViewMode: context?.viewMode || 'grid'
+        };
+      }
+      // 默认：upload 视图
+      return baseState;
+    }
+    case 'CLOSE_WORKBENCH':
+      return {
+        ...state,
+        showWorkbench: false,
+        workbenchView: 'none',
+        workbenchContext: {},
+        showVersionHistory: false,
+        versionHistoryBaseName: null,
+        workbenchEditProjectId: null,
+        workbenchCreateMode: null,
+        quickUploadMode: false
+      };
     case 'TOGGLE_RETRIEVAL_PANEL':
-      return { ...state, isRetrievalPanelVisible: !state.isRetrievalPanelVisible };
+      // 【重要】切换检索模式/文件模式
+      // 在审阅、交付、案例这三个主要业务模块下：
+      // - 检索模式（isRetrievalPanelVisible = true）：检索面板显示，主浏览区显示选中项目的视频
+      // - 文件模式（isRetrievalPanelVisible = false）：检索面板隐藏，主浏览区切换为资源管理器视图
+      const newPanelVisible = !state.isRetrievalPanelVisible;
+      return { 
+        ...state, 
+        isRetrievalPanelVisible: newPanelVisible,
+        // 当检索面板被隐藏时（切换到文件模式），如果操作台是用于新建操作，则保持显示
+        // 否则隐藏操作台（因为文件模式下通常不需要操作台）
+        showWorkbench: newPanelVisible ? state.showWorkbench : (state.workbenchCreateMode ? state.showWorkbench : false)
+      };
     case 'SET_WORKBENCH_ACTION_TYPE':
       return { ...state, workbenchActionType: action.payload };
     case 'SET_WORKBENCH_CREATE_MODE':
@@ -428,6 +473,8 @@ function appReducer(state: AppState, action: Action): AppState {
       return { ...state, tags: action.payload };
     case 'SET_DELIVERIES':
       return { ...state, deliveries: action.payload };
+    case 'SET_RECENT_OPENED_PROJECTS':
+      return { ...state, recentOpenedProjects: action.payload };
     // Share module actions
     case 'TOGGLE_SHARE_PROJECT': {
       const projectId = action.payload;
@@ -455,6 +502,33 @@ function appReducer(state: AppState, action: Action): AppState {
       return { ...state, selectedShareProjectId: action.payload };
     case 'SET_SETTINGS_TAB':
       return { ...state, settingsActiveTab: action.payload };
+    case 'SHOW_VERSION_HISTORY':
+      return { 
+        ...state, 
+        showVersionHistory: true,
+        versionHistoryBaseName: action.payload.baseName,
+        versionHistoryViewMode: action.payload.viewMode || 'grid',
+        showWorkbench: true, // 打开操作台，但展示历史版本而非上传
+        selectedVideoId: null,
+        workbenchView: 'versionHistory',
+        workbenchContext: { baseName: action.payload.baseName, viewMode: action.payload.viewMode || 'grid' },
+        // 清理其他窗口状态，确保只显示历史版本窗口
+        workbenchEditProjectId: null,
+        workbenchCreateMode: null,
+        quickUploadMode: false
+      };
+    case 'HIDE_VERSION_HISTORY':
+      return { 
+        ...state, 
+        showVersionHistory: false,
+        versionHistoryBaseName: null,
+        workbenchView: state.workbenchView === 'versionHistory' ? 'upload' : state.workbenchView
+      };
+    case 'SET_VERSION_HISTORY_VIEW_MODE':
+      return { 
+        ...state, 
+        versionHistoryViewMode: action.payload
+      };
     case 'ADD_TAG':
       // 如果标签已存在，不重复添加
       if (state.tags.find(t => t.id === action.payload.id)) {
@@ -751,6 +825,7 @@ const AppContent: React.FC<{ state: AppState; dispatch: React.Dispatch<Action> }
           {state.activeModule === 'dashboard' ? (
             <>
               <Dashboard />
+              {/* 操作台：Dashboard 场景不再依赖检索面板可见性，避免快速上传被隐藏 */}
               <Workbench visible={state.showWorkbench} />
             </>
           ) : state.activeModule === 'settings' ? (
@@ -763,6 +838,7 @@ const AppContent: React.FC<{ state: AppState; dispatch: React.Dispatch<Action> }
             </>
           ) : (
             <>
+              {/* 操作台：在检索模式下显示，或者在文件模式下当 showWorkbench 为 true 时也显示（用于新建组/项目） */}
               <Workbench visible={state.showWorkbench} />
               <MainBrowser />
             </>

@@ -16,18 +16,30 @@ const getApiBaseUrl = () => {
   const hostname = window.location.hostname;
   const port = '3002';
   
-  // 如果是 localhost 或 127.0.0.1，使用 localhost
+  // 调试信息
+  console.log('🔍 检测到的 hostname:', hostname);
+  console.log('🔍 当前完整地址:', window.location.origin);
+  
+  // 默认使用服务器 IP 地址
+  const serverIp = '192.168.110.112';
+  
+  // 如果是 localhost 或 127.0.0.1，使用服务器 IP
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return `http://localhost:${port}/api`;
+    console.log('✅ 使用服务器 IP API 地址:', `http://${serverIp}:${port}/api`);
+    return `http://${serverIp}:${port}/api`;
   }
   
-  // 如果是内网 IP（192.168.x.x 或 172.x.x.x），使用相同的 IP
-  if (hostname.match(/^(192\.168\.|172\.|10\.)/)) {
+  // 如果是内网 IP（192.168.x.x、172.x.x.x 或 10.x.x.x），使用相同的 IP
+  // 也检查是否是纯 IP 地址格式（IPv4）
+  const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+  if (hostname.match(/^(192\.168\.|172\.|10\.)/) || ipv4Regex.test(hostname)) {
+    console.log('✅ 使用 IP 地址 API:', `http://${hostname}:${port}/api`);
     return `http://${hostname}:${port}/api`;
   }
   
-  // 默认使用 localhost
-  return `http://localhost:${port}/api`;
+  // 默认使用服务器 IP
+  console.warn('⚠️ 未识别的 hostname，使用默认服务器 IP API 地址');
+  return `http://${serverIp}:${port}/api`;
 };
 
 const API_BASE_URL = getApiBaseUrl();
@@ -62,6 +74,8 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
       },
+      timeout: 30000, // 30秒超时
+      withCredentials: true, // 允许携带凭证（用于 CORS）
     });
 
     // 请求拦截器：添加token和team_id
@@ -75,26 +89,28 @@ class ApiClient {
           config.headers['X-Dev-Mode'] = 'true';
         }
         // 添加 team_id 到请求头（如果存在）
-        // 登录和认证相关的请求不需要 teamId，所以不显示警告
+        // 登录和认证相关的请求不需要 teamId，所以不显示警告，也不添加 teamId
         const isAuthRequest = config.url?.includes('/auth/') || config.url?.includes('/login');
-        if (this.teamId) {
-          config.headers['X-Team-Id'] = this.teamId;
-          console.log(`📤 API 请求 [${config.method?.toUpperCase()} ${config.url}]: 添加 teamId=${this.teamId}`);
-        } else if (!isAuthRequest) {
-          // 只有非认证请求才显示警告
-          console.warn(`⚠️ API 请求 [${config.method?.toUpperCase()} ${config.url}]: 没有 teamId`);
-        }
-        // 同时添加到查询参数（某些 API 可能需要）
-        // 如果已经有 params，添加到现有 params；如果没有，创建新的 params
-        if (this.teamId) {
-          if (config.params) {
-            // 如果已经有 params，添加 teamId（如果还没有）
-            if (!config.params.teamId) {
-              config.params.teamId = this.teamId;
+        
+        // 只有非认证请求才添加 teamId
+        if (!isAuthRequest) {
+          if (this.teamId) {
+            config.headers['X-Team-Id'] = this.teamId;
+            console.log(`📤 API 请求 [${config.method?.toUpperCase()} ${config.url}]: 添加 teamId=${this.teamId}`);
+            // 同时添加到查询参数（某些 API 可能需要）
+            // 如果已经有 params，添加到现有 params；如果没有，创建新的 params
+            if (config.params) {
+              // 如果已经有 params，添加 teamId（如果还没有）
+              if (!config.params.teamId) {
+                config.params.teamId = this.teamId;
+              }
+            } else {
+              // 如果没有 params，创建新的
+              config.params = { teamId: this.teamId };
             }
           } else {
-            // 如果没有 params，创建新的
-            config.params = { teamId: this.teamId };
+            // 只有非认证请求才显示警告
+            console.warn(`⚠️ API 请求 [${config.method?.toUpperCase()} ${config.url}]: 没有 teamId`);
           }
         }
         return config;
@@ -122,12 +138,18 @@ class ApiClient {
             url: error.config?.url,
             method: error.config?.method,
             message: error.message,
+            baseURL: error.config?.baseURL,
+            fullURL: error.config?.baseURL + error.config?.url,
+            hostname: typeof window !== 'undefined' ? window.location.hostname : 'N/A',
           });
           console.error('可能的原因:');
           console.error('1. 后端服务未运行或无法访问');
           console.error('2. API 地址配置错误 (当前:', API_BASE_URL, ')');
           console.error('3. CORS 配置问题');
           console.error('4. 网络连接问题');
+          console.error('5. 如果通过 IP 访问前端，请确保 API 地址也使用相同的 IP');
+          console.error('   当前前端地址:', typeof window !== 'undefined' ? window.location.origin : 'N/A');
+          console.error('   当前 API 地址:', API_BASE_URL);
         } else {
           // 请求配置出错
           console.error('❌ API 请求配置错误:', error.message);
@@ -180,23 +202,33 @@ class ApiClient {
   }
 
   async request<T = any>(config: AxiosRequestConfig): Promise<T> {
-    return this.client.request<T>(config);
+    // 响应拦截器已经返回了 response.data，所以这里直接返回 response
+    const response = await this.client.request<T>(config);
+    return response as T;
   }
 
   async get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return this.client.get<T>(url, config);
+    // 响应拦截器已经返回了 response.data，所以这里直接返回 response
+    const response = await this.client.get<T>(url, config);
+    return response as T;
   }
 
   async post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    return this.client.post<T>(url, data, config);
+    // 响应拦截器已经返回了 response.data，所以这里直接返回 response
+    const response = await this.client.post<T>(url, data, config);
+    return response as T;
   }
 
   async patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    return this.client.patch<T>(url, data, config);
+    // 响应拦截器已经返回了 response.data，所以这里直接返回 response
+    const response = await this.client.patch<T>(url, data, config);
+    return response as T;
   }
 
   async delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return this.client.delete<T>(url, config);
+    // 响应拦截器已经返回了 response.data，所以这里直接返回 response
+    const response = await this.client.delete<T>(url, config);
+    return response as T;
   }
 }
 

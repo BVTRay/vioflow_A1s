@@ -6,11 +6,13 @@ import { Project } from './entities/project.entity';
 import { ProjectMember } from './entities/project-member.entity';
 import { AuditLog } from '../audit/entities/audit-log.entity';
 import { TeamsModule } from '../teams/teams.module';
+import { VideosModule } from '../videos/videos.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, ProjectMember, AuditLog]),
     forwardRef(() => TeamsModule),
+    VideosModule,
   ],
   controllers: [ProjectsController],
   providers: [ProjectsService],

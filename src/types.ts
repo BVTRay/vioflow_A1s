@@ -155,9 +155,24 @@ export interface AppState {
   showcasePackages: ShowcasePackage[]; // 案例包记录
   
   // Retrieval Panel State
+  // ============================================
+  // 【重要】业务模块的两种工作模式说明：
+  // 在审阅、交付、案例这三个主要业务模块下，有两种工作模式：
+  // 
+  // 1. 【检索模式】检索模式：当 isRetrievalPanelVisible = true 时
+  //    - 检索面板显示在左侧，提供项目列表、搜索、标签筛选等功能
+  //    - 主浏览区显示选中项目的视频文件
+  //    - 用户可以通过检索面板快速定位和筛选项目
+  // 
+  // 2. 【文件模式】文件模式：当 isRetrievalPanelVisible = false 时
+  //    - 检索面板隐藏，主浏览区占据更多空间
+  //    - 主浏览区切换为资源管理器视图，按组/项目层级展示所有内容
+  //    - 类似文件资源管理器，可以浏览整个项目结构
+  //    - 适用于需要查看完整项目结构的场景
+  // ============================================
   searchTerm: string;
   activeTag: string;
-  isRetrievalPanelVisible: boolean; // 检索面板是否可见
+  isRetrievalPanelVisible: boolean; // 检索面板是否可见（控制检索模式/文件模式切换）
   isTagPanelExpanded: boolean; // 标签面板是否展开
   selectedGroupTag: string | null; // 选中的分组标签（单选模式）
   selectedGroupTags: string[]; // 选中的分组标签列表（多选模式）
@@ -174,6 +189,14 @@ export interface AppState {
   pendingProjectGroup?: string | null; // 待创建项目的组名（从主浏览区传递）
   shouldTriggerFileSelect?: boolean; // 是否应该自动触发文件选择（用于快速上传）
   quickUploadMode?: boolean; // 快速上传模式：在操作台显示项目选择界面
+  workbenchView?: 'none' | 'newProject' | 'projectSettings' | 'upload' | 'versionHistory'; // 操作台当前视图
+  workbenchContext?: {
+    projectId?: string | null;
+    videoId?: string | null;
+    baseName?: string | null;
+    viewMode?: 'grid' | 'list';
+    from?: string;
+  }; // 操作台上下文
   
   // Share Module State
   selectedShareProjects: string[]; // 分享模块中选中的项目ID列表
@@ -182,11 +205,16 @@ export interface AppState {
   
   // Settings Module State
   settingsActiveTab: 'teams' | 'groups' | 'projects' | 'tags'; // 设置模块当前激活的标签页
+  
+  // Video Version History State
+  showVersionHistory?: boolean; // 是否在操作台中显示历史版本
+  versionHistoryViewMode?: 'grid' | 'list'; // 历史版本视图模式：卡片/列表
+  versionHistoryBaseName?: string | null; // 当前查看历史版本的基础名称
 }
 
 export type Action =
   | { type: 'SET_MODULE'; payload: ModuleType }
-  | { type: 'SELECT_PROJECT'; payload: string }
+  | { type: 'SELECT_PROJECT'; payload: string | null }
   | { type: 'SELECT_VIDEO'; payload: string | null }
   | { type: 'ADD_PROJECT'; payload: Project }
   | { type: 'UPDATE_PROJECT'; payload: Project }
@@ -233,6 +261,7 @@ export type Action =
   | { type: 'UPDATE_VIDEO'; payload: Video }
   | { type: 'SET_BROWSER_VIEW_MODE'; payload: 'grid' | 'list' }
   | { type: 'SET_BROWSER_CARD_SIZE'; payload: 'small' | 'medium' | 'large' }
+  | { type: 'SET_REVIEW_VIEW_MODE'; payload: 'files' | 'packages' }
   | { type: 'SET_DELIVERY_VIEW_MODE'; payload: 'files' | 'packages' }
   | { type: 'ADD_UPLOAD'; payload: UploadItem }
   | { type: 'UPDATE_UPLOAD_PROGRESS'; payload: { id: string; progress: number } }
@@ -243,6 +272,8 @@ export type Action =
   | { type: 'SET_WORKBENCH_ACTION_TYPE'; payload: 'review' | 'delivery' | 'showcase' | null } // 设置工作台操作类型
   | { type: 'SET_WORKBENCH_CREATE_MODE'; payload: 'group' | 'project' | null } // 设置工作台创建模式
   | { type: 'SET_WORKBENCH_EDIT_MODE'; payload: string | null } // 设置工作台编辑项目ID（在操作台中编辑项目设置）
+  | { type: 'OPEN_WORKBENCH_VIEW'; payload: { view: 'newProject' | 'projectSettings' | 'upload' | 'versionHistory'; context?: { projectId?: string | null; videoId?: string | null; baseName?: string | null; viewMode?: 'grid' | 'list'; from?: string } } } // 统一打开操作台视图
+  | { type: 'CLOSE_WORKBENCH' } // 统一关闭操作台视图
   | { type: 'SET_PENDING_PROJECT_GROUP'; payload: string | null } // 设置待创建项目的组名
   | { type: 'SET_SHOULD_TRIGGER_FILE_SELECT'; payload: boolean } // 设置是否应该自动触发文件选择
   | { type: 'SET_QUICK_UPLOAD_MODE'; payload: boolean } // 设置快速上传模式
@@ -256,4 +287,7 @@ export type Action =
   | { type: 'SET_SHARE_PROJECTS'; payload: string[] } // 设置分享模块中的项目选择
   | { type: 'TOGGLE_SHARE_MULTI_SELECT_MODE' } // 切换分享模块多选模式
   | { type: 'SELECT_SHARE_PROJECT'; payload: string | null } // 选择分享模块中的项目（单选模式）
-  | { type: 'SET_SETTINGS_TAB'; payload: 'teams' | 'groups' | 'projects' | 'tags' }; // 设置设置模块的激活标签页
+  | { type: 'SET_SETTINGS_TAB'; payload: 'teams' | 'groups' | 'projects' | 'tags' }
+  | { type: 'SHOW_VERSION_HISTORY'; payload: { baseName: string; viewMode?: 'grid' | 'list' } } // 显示历史版本
+  | { type: 'HIDE_VERSION_HISTORY' } // 隐藏历史版本
+  | { type: 'SET_VERSION_HISTORY_VIEW_MODE'; payload: 'grid' | 'list' }; // 设置历史版本视图模式 // 设置设置模块的激活标签页

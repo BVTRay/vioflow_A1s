@@ -21,16 +21,35 @@ export interface LoginResponse {
 
 export const authApi = {
   login: async (data: LoginRequest): Promise<LoginResponse> => {
-    // 统一转换为 username 字段（后端期望的格式）
-    const loginData = {
-      username: data.username || data.email || '',
-      password: data.password,
-    };
-    const response = await apiClient.post<any>('/auth/login', loginData);
-    // 后端返回 access_token，转换为 accessToken 以便前端使用
-    const token = response.access_token || response.accessToken;
-    if (token) {
+    try {
+      // 统一转换为 username 字段（后端期望的格式）
+      const loginData = {
+        username: data.username || data.email || '',
+        password: data.password,
+      };
+      
+      console.log('🔐 发送登录请求:', { username: loginData.username });
+      
+      const response = await apiClient.post<any>('/auth/login', loginData);
+      
+      console.log('🔐 收到登录响应:', response);
+      
+      // 检查响应是否存在
+      if (!response) {
+        console.error('❌ 登录响应为空');
+        throw new Error('登录失败：未收到服务器响应');
+      }
+      
+      // 后端可能返回 access_token 或 accessToken，兼容两种格式
+      const token = response.access_token || response.accessToken;
+      if (!token) {
+        console.error('❌ 登录响应中没有 token，响应数据:', response);
+        throw new Error('登录失败：未收到认证令牌');
+      }
+      
+      console.log('✅ 登录成功，获取到 token');
       apiClient.setToken(token);
+      
       // 返回统一格式的响应
       return {
         ...response,
@@ -41,8 +60,15 @@ export const authApi = {
           avatarUrl: response.user?.avatar_url || response.user?.avatarUrl,
         },
       };
+    } catch (error: any) {
+      console.error('❌ 登录过程出错:', error);
+      // 如果是我们抛出的错误，直接抛出
+      if (error.message && error.message.includes('登录失败')) {
+        throw error;
+      }
+      // 其他错误，包装后抛出
+      throw new Error(error.response?.data?.message || error.message || '登录失败，请检查账号和密码');
     }
-    return response;
   },
 
   logout: async (): Promise<void> => {

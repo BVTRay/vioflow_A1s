@@ -53,8 +53,10 @@ export const LoginPage: React.FC = () => {
         if (response.accessToken || response.access_token) {
           console.log('🔧 开发者模式：已自动登录 ray@bugong.com 账号');
           // 保存ray的token到localStorage，用于从开发者后台返回时恢复
-          const rayToken = response.access_token || response.accessToken;
-          localStorage.setItem('ray_user_token', rayToken);
+          const rayToken = (response.access_token || response.accessToken) ?? '';
+          if (rayToken) {
+            localStorage.setItem('ray_user_token', rayToken);
+          }
           // token已经通过authApi.login自动保存了
         } else {
           throw new Error('未收到认证令牌');

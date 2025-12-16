@@ -16,6 +16,7 @@ async function bootstrap() {
   // 默认允许的域名（始终包含）
   const defaultOrigins: (string | RegExp)[] = [
     'http://localhost:3009',
+    'http://192.168.110.112:3009', // 服务器 IP 地址
     /^http:\/\/192\.168\.\d+\.\d+:3009$/, // 允许所有内网IP的3009端口
     /^http:\/\/127\.0\.0\.1:3009$/, // 允许127.0.0.1
     /^http:\/\/172\.\d+\.\d+\.\d+:3009$/, // 允许Docker网络IP
@@ -83,8 +84,8 @@ async function bootstrap() {
   await app.listen(port, '0.0.0.0'); // 监听所有网络接口
   
   console.log(`✓ 后端服务已启动`);
-  console.log(`✓ API地址: http://localhost:${port}`);
-  console.log(`✓ 前端地址: ${configService.get('CORS_ORIGIN', 'http://localhost:3009')}`);
+  console.log(`✓ API地址: http://192.168.110.112:${port}`);
+  console.log(`✓ 前端地址: ${configService.get('CORS_ORIGIN', 'http://192.168.110.112:3009')}`);
   console.log(`\n测试账号:`);
   console.log(`  管理员: admin@vioflow.com / admin`);
   console.log(`  成员: sarah@vioflow.com / admin`);

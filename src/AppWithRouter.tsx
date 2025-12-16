@@ -48,13 +48,14 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
           }
           const hostname = window.location.hostname;
           const port = '3002';
+          const serverIp = '192.168.110.112';
           if (hostname === 'localhost' || hostname === '127.0.0.1') {
-            return `http://localhost:${port}/api`;
+            return `http://${serverIp}:${port}/api`;
           }
           if (hostname.match(/^(192\.168\.|172\.|10\.)/)) {
             return `http://${hostname}:${port}/api`;
           }
-          return `http://localhost:${port}/api`;
+          return `http://${serverIp}:${port}/api`;
         };
         const apiBaseUrl = getApiBaseUrl();
         const response = await fetch(`${apiBaseUrl}/auth/me`, {

@@ -91,5 +91,9 @@ export const projectsApi = {
   addMember: async (id: string, userId: string, role?: string) => {
     return apiClient.post(`/projects/${id}/members`, { userId, role });
   },
+
+  remove: async (id: string): Promise<void> => {
+    return apiClient.delete(`/projects/${id}`);
+  },
 };
 

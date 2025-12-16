@@ -24,6 +24,24 @@ const HighlightText = ({ text, highlight }: { text: string; highlight: string })
     );
 };
 
+/**
+ * RetrievalPanel 检索面板组件
+ * 
+ * 【重要】业务模块的两种工作模式：
+ * 
+ * 在审阅、交付、案例这三个主要业务模块下，有两种工作模式：
+ * 
+ * 1. 【检索模式】当 isRetrievalPanelVisible = true 时
+ *    - 检索面板显示在左侧，提供项目列表、搜索、标签筛选等功能
+ *    - 主浏览区显示选中项目的视频文件
+ *    - 用户可以通过检索面板快速定位和筛选项目
+ * 
+ * 2. 【文件模式】当 isRetrievalPanelVisible = false 时
+ *    - 检索面板隐藏，主浏览区占据更多空间
+ *    - 主浏览区切换为资源管理器视图，按组/项目层级展示所有内容
+ *    - 类似文件资源管理器，可以浏览整个项目结构
+ *    - 适用于需要查看完整项目结构的场景
+ */
 export const RetrievalPanel: React.FC = () => {
   const { state, dispatch } = useStore();
   const { activeModule, projects, selectedProjectId, searchTerm, activeTag, videos, selectedShareProjects, isRetrievalPanelVisible, shareMultiSelectMode, selectedShareProjectId, isTagPanelExpanded, selectedGroupTag, selectedGroupTags, isTagMultiSelectMode, tags, settingsActiveTab } = state;
@@ -95,9 +113,11 @@ export const RetrievalPanel: React.FC = () => {
       // 清除选中的项目，确保显示新建项目表单
       dispatch({ type: 'SELECT_PROJECT', payload: null });
       dispatch({ type: 'SELECT_VIDEO', payload: null });
-      // 设置创建模式并打开工作台
-      dispatch({ type: 'SET_WORKBENCH_CREATE_MODE', payload: 'project' });
-      dispatch({ type: 'TOGGLE_WORKBENCH', payload: true });
+      // 统一入口：新建项目
+      dispatch({ 
+        type: 'OPEN_WORKBENCH_VIEW', 
+        payload: { view: 'newProject', context: { from: 'retrieval-panel' } } 
+      });
       return;
     }
     
@@ -138,9 +158,10 @@ export const RetrievalPanel: React.FC = () => {
           dispatch({ type: 'SELECT_VIDEO', payload: null });
           // 选中项目并打开操作台
           dispatch({ type: 'SELECT_PROJECT', payload: project.id });
-          dispatch({ type: 'TOGGLE_WORKBENCH', payload: true });
-          // 设置编辑模式标识
-          dispatch({ type: 'SET_WORKBENCH_EDIT_MODE', payload: project.id });
+      dispatch({ 
+        type: 'OPEN_WORKBENCH_VIEW', 
+        payload: { view: 'projectSettings', context: { projectId: project.id, from: 'retrieval-panel' } } 
+      });
           return;
       }
 

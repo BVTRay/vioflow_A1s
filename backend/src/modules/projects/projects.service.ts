@@ -6,6 +6,7 @@ import { ProjectMember, MemberRole } from './entities/project-member.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { TeamsService } from '../teams/teams.service';
+import { VideosService } from '../videos/videos.service';
 import { TeamRole } from '../teams/entities/team-member.entity';
 import { AuditLog } from '../audit/entities/audit-log.entity';
 
@@ -20,6 +21,7 @@ export class ProjectsService {
     private auditLogRepository: Repository<AuditLog>,
     @Inject(forwardRef(() => TeamsService))
     private teamsService: TeamsService,
+    private videosService: VideosService,
   ) {}
 
   /**
@@ -290,6 +292,9 @@ export class ProjectsService {
       userId,
       [TeamRole.SUPER_ADMIN, TeamRole.ADMIN], // 只有管理员可以删除项目
     );
+
+    // 删除该项目下的所有视频及其存储文件
+    await this.videosService.deleteByProject(id);
 
     // 记录审计日志
     if (project.team_id) {

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Play, MoreVertical, Plus, Check, Clock, LayoutGrid, List, SlidersHorizontal, FileVideo, Film, CheckCircle2, Share2, AlertTriangle, Lock, Download, Copy, X, ArrowRight, Package, Power, Eye, ChevronRight, ChevronDown, Folder } from 'lucide-react';
+import { Play, MoreVertical, Plus, Check, Clock, LayoutGrid, List, SlidersHorizontal, FileVideo, Film, CheckCircle2, Share2, AlertTriangle, Lock, Download, Copy, X, ArrowRight, Package, Power, Eye, ChevronRight, ChevronDown, Folder, Upload, Trash2 } from 'lucide-react';
 import { useStore } from '../../App';
 import { Video, DeliveryPackage } from '../../types';
 import { PreviewPlayer } from './PreviewPlayer';
@@ -8,6 +8,92 @@ import { sharesApi } from '../../api/shares';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
 import { useTeam } from '../../contexts/TeamContext';
 
+// 组图标组件 - 简约的多个文件夹叠加设计，细腻简约风格
+const GroupIcon: React.FC<{ size?: number; className?: string }> = ({ size = 24, className = '' }) => {
+  return (
+    <svg 
+      width={size} 
+      height={size} 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="1.2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+      className={className}
+    >
+      {/* 背景文件夹 - 最淡 */}
+      <path d="M3 6h11a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H3a1.5 1.5 0 0 1-1.5-1.5v-9A1.5 1.5 0 0 1 3 6z" opacity="0.25" />
+      <path d="M3 6V4.5a1.5 1.5 0 0 1 1.5-1.5h3.5l1.5 1.5h5a1.5 1.5 0 0 1 1.5 1.5" opacity="0.25" />
+      {/* 中间文件夹 */}
+      <path d="M4.5 7.5h11a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-11a1.5 1.5 0 0 1-1.5-1.5v-9a1.5 1.5 0 0 1 1.5-1.5z" opacity="0.4" />
+      <path d="M4.5 7.5V6a1.5 1.5 0 0 1 1.5-1.5h3.5l1.5 1.5h5a1.5 1.5 0 0 1 1.5 1.5" opacity="0.4" />
+      {/* 前景文件夹 - 最清晰 */}
+      <path d="M6 9h11a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5v-9A1.5 1.5 0 0 1 6 9z" />
+      <path d="M6 9V7.5a1.5 1.5 0 0 1 1.5-1.5h3.5l1.5 1.5h5a1.5 1.5 0 0 1 1.5 1.5" />
+    </svg>
+  );
+};
+
+// 项目图标组件 - 简约的单个文件夹设计，细腻简约风格
+const ProjectIcon: React.FC<{ size?: number; className?: string }> = ({ size = 24, className = '' }) => {
+  return (
+    <svg 
+      width={size} 
+      height={size} 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="1.2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M4 5.5h12a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5V7a1.5 1.5 0 0 1 1.5-1.5z" />
+      <path d="M4 5.5V4a1.5 1.5 0 0 1 1.5-1.5h4l1.5 1.5h6a1.5 1.5 0 0 1 1.5 1.5" />
+    </svg>
+  );
+};
+
+/**
+ * MainBrowser 主浏览区组件
+ * 
+ * 【重要】业务模块的两种工作模式：
+ * 
+ * 在审阅、交付、案例这三个主要业务模块下，有两种工作模式：
+ * 
+ * 1. 【检索模式】当 isRetrievalPanelVisible = true 时
+ *    - 检索面板显示在左侧，提供项目列表、搜索、标签筛选等功能
+ *    - 主浏览区显示选中项目的视频文件
+ *    - 用户可以通过检索面板快速定位和筛选项目
+ * 
+ * 2. 【文件模式】当 isRetrievalPanelVisible = false 时
+ *    - 检索面板隐藏，主浏览区占据更多空间
+ *    - 主浏览区切换为资源管理器视图（renderFileExplorerView），按组/项目层级展示所有内容
+ *    - 类似文件资源管理器，可以浏览整个项目结构
+ *    - 适用于需要查看完整项目结构的场景
+ * 
+ * 【重要】文件模式的层级结构（全局注释）：
+ * 
+ * 文件模式采用三级层级结构，类似文件资源管理器：
+ * 
+ * 1. 【根目录】（第一层，explorerView === 'groups'）
+ *    - 显示所有项目分组（组）
+ *    - 每个组包含多个项目
+ *    - 操作：新建组
+ * 
+ * 2. 【组目录】（第二层，explorerView === 'projects' && selectedGroupName）
+ *    - 显示该组内的所有项目
+ *    - 每个项目包含多个视频
+ *    - 操作：新建项目（组默认为当前组）
+ * 
+ * 3. 【项目目录】（第三层，explorerView === 'videos' && selectedProjectId）
+ *    - 显示该项目内的所有视频
+ *    - 视频按系列分组显示（相同基础名称的不同版本）
+ *    - 操作：上传视频（项目默认为当前项目）
+ * 
+ * 注意：当提到"组"、"项目"、"视频"时，它们分别对应这三个不同的层级。
+ */
 export const MainBrowser: React.FC = () => {
   const { state, dispatch } = useStore();
   const theme = useThemeClasses();
@@ -136,7 +222,7 @@ export const MainBrowser: React.FC = () => {
     
     const matchedTags: string[] = [];
     
-    tagsToFilter.forEach(tagName => {
+    tagsToFilter.forEach((tagName: string) => {
       const tag = tags.find(t => t.name === tagName);
       const hasTag = video.tags?.includes(tagName) || (tag && video.tagIds?.includes(tag.id));
       if (hasTag) {
@@ -164,11 +250,30 @@ export const MainBrowser: React.FC = () => {
   } else if (selectedProjectId) {
       // Review/Delivery: Show videos for specific project
       displayVideos = videos.filter(v => v.projectId === selectedProjectId);
+  } else if (activeModule === 'review') {
+      // 审阅模块且未选中项目时，显示近期活跃视频（按最后活动时间排序，取前 12）
+      const recent = [...videos]
+        .filter(v => !!v.lastOpenedAt || !!v.uploadTime || !!v.createdAt)
+        .sort((a, b) => {
+          const aTime = new Date(a.lastOpenedAt || a.uploadTime || a.createdAt || 0).getTime();
+          const bTime = new Date(b.lastOpenedAt || b.uploadTime || b.createdAt || 0).getTime();
+          return bTime - aTime;
+        })
+        .slice(0, 12);
+      displayVideos = recent;
   }
 
   // Margin Calculation
+  // 【检索模式/文件模式】根据检索面板可见性调整左侧边距
+  // - 检索模式（isRetrievalPanelVisible = true）：左侧边距 384px（侧边栏64px + 检索面板320px）
+  // - 文件模式（isRetrievalPanelVisible = false）：左侧边距 64px（仅侧边栏）
   const leftMargin = isRetrievalPanelVisible ? 'ml-[384px]' : 'ml-[64px]';
-  const marginClass = `${leftMargin} pt-14 pb-10 transition-all duration-300 ease-in-out ${showWorkbench ? 'mr-[390px]' : 'mr-4'}`;
+  // 右侧边距：
+  // - 检索模式：当操作台可见时应用右侧边距（操作台以侧边栏形式显示）
+  // - 文件模式：操作台以模态覆盖形式显示，不挤压主浏览区，因此不应用右侧边距
+  const isFileMode = !isRetrievalPanelVisible && (activeModule === 'review' || activeModule === 'delivery' || activeModule === 'showcase');
+  const rightMargin = (showWorkbench && !isFileMode) ? 'mr-[390px]' : 'mr-4';
+  const marginClass = `${leftMargin} pt-14 pb-10 transition-all duration-300 ease-in-out ${rightMargin}`;
   
   // 资源管理器视图导航状态
   const [explorerView, setExplorerView] = React.useState<'groups' | 'projects' | 'videos'>(() => {
@@ -252,6 +357,32 @@ export const MainBrowser: React.FC = () => {
   };
 
   const renderHeader = () => {
+    // 检索模式下的 header（审阅模块）- 只显示项目信息，不显示上传按钮
+    if (isRetrievalPanelVisible && activeModule === 'review' && project) {
+      const statusMap = {
+        'active': '进行中',
+        'finalized': '已定版',
+        'delivered': '已交付',
+        'archived': '已归档'
+      };
+      return (
+        <div className="min-w-0 flex-shrink">
+          <div className="flex items-center gap-2 text-xs text-zinc-500 mb-1 whitespace-nowrap">
+            <span className="truncate">{project.client}</span>
+            <span className="flex-shrink-0">/</span>
+            <span className={`uppercase px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider flex-shrink-0
+              ${project.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : ''}
+              ${project.status === 'finalized' ? 'bg-orange-500/10 text-orange-400' : ''}
+              ${project.status === 'delivered' ? 'bg-indigo-500/10 text-indigo-400' : ''}
+            `}>
+              {statusMap[project.status]}
+            </span>
+          </div>
+          <h1 className="text-xl font-semibold text-zinc-100 tracking-tight whitespace-nowrap truncate">{project.name}</h1>
+        </div>
+      );
+    }
+    
     // 资源管理器视图的 header
     if (!isRetrievalPanelVisible && (activeModule === 'review' || activeModule === 'delivery' || activeModule === 'showcase')) {
       if (explorerView === 'videos' && selectedProjectId) {
@@ -348,12 +479,17 @@ export const MainBrowser: React.FC = () => {
     );
   };
 
-  // Group videos by "Series" (base filename without vX_ prefix)
+  // Group videos by "Series" (prefer后端的 baseName，fallback 去掉前缀的文件名)
   const groupVideosBySeries = (videos: Video[]) => {
       const groups: Record<string, Video[]> = {};
-      videos.forEach(video => {
-          // Regex to strip v1_ v12_ etc from start
-          const baseName = video.name.replace(/^v\d+_/, '');
+
+      const getBaseName = (v: Video) => {
+          const raw = v.baseName || v.originalFilename || v.name;
+          return raw.replace(/^v\d+_/, '');
+      };
+
+      videos.forEach((video) => {
+          const baseName = getBaseName(video);
           if (!groups[baseName]) {
               groups[baseName] = [];
           }
@@ -361,7 +497,6 @@ export const MainBrowser: React.FC = () => {
       });
       
       // Sort versions within groups (Descending: v2 -> v1)
-      // This ensures the LATEST version is at index 0 (Leftmost in Grid)
       Object.keys(groups).forEach(key => {
           groups[key].sort((a, b) => b.version - a.version);
       });
@@ -378,8 +513,62 @@ export const MainBrowser: React.FC = () => {
           justification: '',
           allowDownload: false,
           hasPassword: false,
-          generatedLink: ''
+          password: '',
+          generatedLink: '',
+          isLoading: false,
+          error: ''
       });
+  };
+
+  // 处理上传新版本
+  const handleUploadNewVersion = (video: Video) => {
+      // 为某个视频上传新版本：先选中项目，再选中视频，最后打开操作台
+      dispatch({ type: 'SELECT_PROJECT', payload: video.projectId });
+      dispatch({ type: 'SELECT_VIDEO', payload: video.id });
+      dispatch({ 
+        type: 'OPEN_WORKBENCH_VIEW', 
+        payload: { view: 'upload', context: { projectId: video.projectId, videoId: video.id, from: 'video-card' } } 
+      });
+  };
+
+  // 处理删除视频
+  const handleDeleteVideo = async (video: Video) => {
+      if (!confirm(`确定要删除视频 "${video.name}" 吗？此操作不可恢复。`)) {
+          return;
+      }
+      
+      try {
+          const { videosApi } = await import('../../api/videos');
+          await videosApi.delete(video.id, false);
+          
+          // 从state中移除视频（通过过滤）
+          const updatedVideos = videos.filter(v => v.id !== video.id);
+          dispatch({
+              type: 'SET_VIDEOS',
+              payload: updatedVideos
+          });
+          
+          // 如果删除的是当前选中的视频，清除选中状态
+          if (selectedVideoId === video.id) {
+              dispatch({ type: 'SELECT_VIDEO', payload: null });
+          }
+          
+          // 发送成功通知
+          dispatch({
+              type: 'ADD_NOTIFICATION',
+              payload: {
+                  id: Date.now().toString(),
+                  type: 'success',
+                  title: '删除成功',
+                  message: `视频 "${video.name}" 已删除`,
+                  time: '刚刚'
+              }
+          });
+      } catch (error: any) {
+          console.error('删除视频失败:', error);
+          const errorMessage = error?.response?.data?.message || error?.message || '删除失败，请重试';
+          alert(errorMessage);
+      }
   };
 
   const handleGenerateLink = async () => {
@@ -593,7 +782,12 @@ export const MainBrowser: React.FC = () => {
       );
   };
 
-  // 资源管理器视图：Mac Finder 风格的网格卡片视图
+  /**
+   * 【文件模式】资源管理器视图：Mac Finder 风格的网格卡片视图
+   * 
+   * 当检索面板隐藏时（isRetrievalPanelVisible = false），主浏览区切换到此视图
+   * 按组/项目层级展示所有内容，类似文件资源管理器
+   */
   const renderFileExplorerView = () => {
     const moduleProjects = getModuleProjects();
     const filteredProjects = searchTerm 
@@ -601,6 +795,31 @@ export const MainBrowser: React.FC = () => {
       : moduleProjects;
     const groupedProjects = groupProjectsByGroup(filteredProjects);
     const groupNames = Object.keys(groupedProjects).sort();
+    
+    // 获取组内项目的预览图URL列表（最多4个）
+    const getGroupProjectPreviews = (projectIds: string[]): string[] => {
+      const previews: string[] = [];
+      for (const projectId of projectIds) {
+        if (previews.length >= 4) break;
+        const projectVideos = videos.filter(v => v.projectId === projectId);
+        if (projectVideos.length > 0) {
+          const firstVideo = projectVideos[0];
+          const url = firstVideo.thumbnailUrl || `https://picsum.photos/seed/${firstVideo.id}/400/225`;
+          previews.push(url);
+        }
+      }
+      return previews;
+    };
+    
+    // 获取项目预览图的辅助函数
+    const getProjectPreviewUrl = (projectId: string): string | null => {
+      const projectVideos = videos.filter(v => v.projectId === projectId);
+      if (projectVideos.length > 0) {
+        const firstVideo = projectVideos[0];
+        return firstVideo.thumbnailUrl || `https://picsum.photos/seed/${firstVideo.id}/400/225`;
+      }
+      return null;
+    };
     
     // 第三层：显示项目内的视频
     if (explorerView === 'videos' && selectedProjectId) {
@@ -618,22 +837,37 @@ export const MainBrowser: React.FC = () => {
         return (
           <div className="flex flex-col items-center justify-center py-20 text-zinc-600">
             <Film className="w-12 h-12 mb-4 opacity-20" />
-            <p>该项目暂无视频。</p>
-            <button
-              onClick={navigateBack}
-              className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
-            >
-              返回
-            </button>
+            <p className="mb-4">该项目暂无视频。</p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  dispatch({ type: 'SELECT_PROJECT', payload: selectedProjectId });
+                  dispatch({ 
+                    type: 'OPEN_WORKBENCH_VIEW', 
+                    payload: { view: 'upload', context: { projectId: selectedProjectId, from: 'project-empty' } } 
+                  });
+                }}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
+              >
+                上传视频
+              </button>
+              <button
+                onClick={navigateBack}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm transition-colors"
+              >
+                返回
+              </button>
+            </div>
           </div>
         );
       }
       
       // 显示视频（支持网格/列表视图）
       if (browserViewMode === 'list') {
+        // In list view, only show the latest version (First in the sorted array because we sorted descending)
         const latestVideos = seriesNames.map(name => {
           const versions = groups[name];
-          return versions[0];
+          return { video: versions[0], versionCount: versions.length, baseName: name }; 
         });
         const gapClass = browserCardSize === 'small' ? 'gap-0.5' : browserCardSize === 'medium' ? 'gap-2' : 'gap-4';
         
@@ -647,10 +881,26 @@ export const MainBrowser: React.FC = () => {
                 <ChevronRight className="w-4 h-4 rotate-180" />
                 返回
               </button>
-              <h2 className="text-lg font-semibold text-zinc-200">{selectedProject.name}</h2>
+              {/* 【项目目录】上传视频按钮 - 仅审阅模块 */}
+              {activeModule === 'review' && (
+                <button
+                  onClick={() => {
+                    // 【文件模式】在项目目录下，点击上传视频按钮，打开操作台上传视频
+                    dispatch({ type: 'SELECT_PROJECT', payload: selectedProjectId });
+                    dispatch({ 
+                      type: 'OPEN_WORKBENCH_VIEW', 
+                      payload: { view: 'upload', context: { projectId: selectedProjectId, from: 'project-toolbar' } } 
+                    });
+                  }}
+                  className="ml-auto flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>上传视频</span>
+                </button>
+              )}
             </div>
             <div className={`flex flex-col ${gapClass}`}>
-              {latestVideos.map((video) => (
+              {latestVideos.map(({ video, versionCount, baseName }) => (
                 <VideoCard
                   key={video.id}
                   video={video}
@@ -662,6 +912,15 @@ export const MainBrowser: React.FC = () => {
                   isDeliveryDelivered={activeModule === 'delivery' && selectedProject.status === 'delivered'}
                   isSelected={activeModule === 'delivery' && selectedProject.status === 'delivered' ? selectedDeliveryFiles.includes(video.id) : false}
                   matchedTags={getMatchedTagsForVideo(video)}
+                  isRetrievalMode={isRetrievalPanelVisible && activeModule === 'review'}
+                  versionCount={versionCount > 1 ? versionCount : undefined}
+                  onVersionClick={versionCount > 1 ? () => {
+                    // 点击版本号，打开操作台显示历史版本
+                    dispatch({ 
+                      type: 'SHOW_VERSION_HISTORY', 
+                      payload: { baseName, viewMode: 'list' } 
+                    });
+                  } : undefined}
                   onThumbnailClick={() => {
                     if (activeModule === 'delivery' || activeModule === 'showcase') {
                       setPreviewVideoId(video.id);
@@ -678,6 +937,8 @@ export const MainBrowser: React.FC = () => {
                   onToggleCart={() => dispatch({ type: 'TOGGLE_CART_ITEM', payload: video.id })}
                   onShare={() => handleShareClick(video, true)}
                   onToggleSelection={activeModule === 'delivery' && selectedProject.status === 'delivered' ? () => dispatch({ type: 'TOGGLE_DELIVERY_FILE_SELECTION', payload: video.id }) : undefined}
+                  onUploadNewVersion={activeModule === 'review' ? () => handleUploadNewVersion(video) : undefined}
+                  onDelete={activeModule === 'review' ? () => handleDeleteVideo(video) : undefined}
                 />
               ))}
             </div>
@@ -685,15 +946,13 @@ export const MainBrowser: React.FC = () => {
         );
       }
       
-      // 网格视图 - 视频
+      // Grid Mode - 网格视图（与检索模式保持一致）
       const cardWidthClass = 
-        browserCardSize === 'small' ? 'min-w-[180px] max-w-[180px]' : 
-        browserCardSize === 'medium' ? 'min-w-[280px] max-w-[280px]' : 
-        'min-w-[420px] max-w-[420px]';
-      const rowGapClass = 
-        browserCardSize === 'small' ? 'gap-6' : 
-        browserCardSize === 'medium' ? 'gap-10' : 
-        'gap-14';
+        browserCardSize === 'small' 
+          ? 'min-w-[180px] max-w-[180px]' 
+          : browserCardSize === 'medium' 
+          ? 'min-w-[280px] max-w-[280px]' 
+          : 'min-w-[420px] max-w-[420px]';
       
       return (
         <div>
@@ -706,52 +965,77 @@ export const MainBrowser: React.FC = () => {
               返回
             </button>
             <h2 className="text-lg font-semibold text-zinc-200">{selectedProject.name}</h2>
+            {/* 【项目目录】上传视频按钮 - 仅审阅模块 */}
+            {activeModule === 'review' && (
+              <button
+                onClick={() => {
+                  // 【文件模式】在项目目录下，点击上传视频按钮，打开操作台上传视频
+                  dispatch({ type: 'SELECT_PROJECT', payload: selectedProjectId });
+                  dispatch({ 
+                    type: 'OPEN_WORKBENCH_VIEW', 
+                    payload: { view: 'upload', context: { projectId: selectedProjectId, from: 'project-toolbar' } } 
+                  });
+                }}
+                className="ml-auto flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>上传视频</span>
+              </button>
+            )}
           </div>
-          <div className={`flex flex-col ${rowGapClass}`}>
+          <div className={`grid ${
+            browserCardSize === 'small' 
+              ? 'gap-2 grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8' 
+              : browserCardSize === 'medium' 
+              ? 'gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
+              : 'gap-4 grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'
+          }`}>
             {seriesNames.map(name => {
               const versions = groups[name];
-              const latestVersionId = versions[0].id;
+              const latestVideo = versions[0]; // First is latest due to Descending sort
+              const hasMultipleVersions = versions.length > 1;
+
               return (
-                <div key={name} className="animate-in fade-in duration-500 slide-in-from-bottom-2">
-                  <div className="flex items-center gap-3 mb-3 border-b border-zinc-800/50 pb-2">
-                    <FileVideo className="w-5 h-5 text-indigo-500" />
-                    <h3 className="text-base font-medium text-zinc-200 tracking-tight">{name}</h3>
-                    <span className={`text-[10px] ${theme.text.muted} ${theme.bg.secondary} px-2 py-0.5 rounded-full border ${theme.border.primary}`}>
-                      {versions.length} 个版本
-                    </span>
-                  </div>
-                  <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
-                    {versions.map((video) => (
-                      <div key={video.id} className={cardWidthClass}>
-                        <VideoCard
-                          video={video}
-                          viewMode='grid'
-                          cardSize={browserCardSize}
-                          activeModule={activeModule}
-                          isInCart={cart.includes(video.id)}
-                          isLatest={video.id === latestVersionId}
-                          isDeliveryDelivered={activeModule === 'delivery' && selectedProject.status === 'delivered'}
-                          isSelected={activeModule === 'delivery' && selectedProject.status === 'delivered' ? selectedDeliveryFiles.includes(video.id) : false}
-                          matchedTags={getMatchedTagsForVideo(video)}
-                          onThumbnailClick={() => {
-                            if (activeModule === 'delivery' || activeModule === 'showcase') {
-                              setPreviewVideoId(video.id);
-                            } else {
-                              dispatch({ type: 'TOGGLE_REVIEW_MODE', payload: true });
-                            }
-                          }}
-                          onBodyClick={() => {
-                    if (activeModule !== 'review') {
-                      dispatch({ type: 'SELECT_VIDEO', payload: video.id });
-                    }
-                  }}
-                          onToggleCart={() => dispatch({ type: 'TOGGLE_CART_ITEM', payload: video.id })}
-                          onShare={() => handleShareClick(video, video.id === latestVersionId)}
-                          onToggleSelection={activeModule === 'delivery' && selectedProject.status === 'delivered' ? () => dispatch({ type: 'TOGGLE_DELIVERY_FILE_SELECTION', payload: video.id }) : undefined}
-                        />
-                      </div>
-                    ))}
-                  </div>
+                <div key={name} className={cardWidthClass}>
+                  <VideoCard 
+                    video={latestVideo} 
+                    viewMode='grid'
+                    cardSize={browserCardSize}
+                    activeModule={activeModule}
+                    isInCart={cart.includes(latestVideo.id)}
+                    isLatest={true}
+                    isDeliveryDelivered={activeModule === 'delivery' && selectedProject.status === 'delivered'}
+                    isSelected={activeModule === 'delivery' && selectedProject.status === 'delivered' ? selectedDeliveryFiles.includes(latestVideo.id) : false}
+                    matchedTags={getMatchedTagsForVideo(latestVideo)}
+                    isRetrievalMode={isRetrievalPanelVisible && activeModule === 'review'}
+                    versionCount={hasMultipleVersions ? versions.length : undefined}
+                    onVersionClick={hasMultipleVersions ? () => {
+                      // 点击版本号，打开操作台显示历史版本
+                      dispatch({ 
+                        type: 'SHOW_VERSION_HISTORY', 
+                        payload: { baseName: name, viewMode: 'grid' } 
+                      });
+                    } : undefined}
+                    onThumbnailClick={() => {
+                      if (activeModule === 'delivery' || activeModule === 'showcase') {
+                        setPreviewVideoId(latestVideo.id);
+                      } else {
+                        dispatch({ type: 'SELECT_VIDEO', payload: latestVideo.id });
+                        dispatch({ type: 'TOGGLE_REVIEW_MODE', payload: true });
+                        // 视频会自动播放（在 ReviewOverlay 中实现）
+                      }
+                    }}
+                    onBodyClick={() => {
+                      if (activeModule !== 'review') {
+                        dispatch({ type: 'SELECT_VIDEO', payload: latestVideo.id });
+                      }
+                    }}
+                    onToggleCart={() => dispatch({ type: 'TOGGLE_CART_ITEM', payload: latestVideo.id })}
+                    onShare={() => handleShareClick(latestVideo, true)}
+                    onToggleSelection={activeModule === 'delivery' && selectedProject.status === 'delivered' ? () => dispatch({ type: 'TOGGLE_DELIVERY_FILE_SELECTION', payload: latestVideo.id }) : undefined}
+                    onUploadNewVersion={activeModule === 'review' ? () => handleUploadNewVersion(latestVideo) : undefined}
+                    onDelete={activeModule === 'review' ? () => handleDeleteVideo(latestVideo) : undefined}
+                  />
                 </div>
               );
             })}
@@ -835,9 +1119,13 @@ export const MainBrowser: React.FC = () => {
                 <div className={`${theme.bg.secondary} border ${theme.border.primary} rounded-lg mb-2`}>
                   <button
                     onClick={() => {
+                      // 【文件模式】在文件模式下，直接打开操作台，不打开检索面板
+                      // 设置待创建项目的组名为当前选中的组
                       dispatch({ type: 'SET_PENDING_PROJECT_GROUP', payload: selectedGroupName });
-                      dispatch({ type: 'SET_WORKBENCH_CREATE_MODE', payload: 'project' });
-                      dispatch({ type: 'TOGGLE_WORKBENCH', payload: true });
+                    dispatch({ 
+                      type: 'OPEN_WORKBENCH_VIEW', 
+                      payload: { view: 'newProject', context: { from: 'group-list', projectId: null } } 
+                    });
                     }}
                     className="flex items-center gap-2 px-3 py-2 w-full hover:bg-zinc-800/50 transition-colors text-sm text-zinc-400 hover:text-zinc-200"
                   >
@@ -884,7 +1172,10 @@ export const MainBrowser: React.FC = () => {
                           onClick={(e) => {
                             e.stopPropagation();
                             dispatch({ type: 'SELECT_PROJECT', payload: project.id });
-                            dispatch({ type: 'TOGGLE_WORKBENCH', payload: true });
+                            dispatch({ 
+                              type: 'OPEN_WORKBENCH_VIEW', 
+                              payload: { view: 'upload', context: { projectId: project.id, from: 'group-list' } } 
+                            });
                           }}
                           className="p-1 hover:bg-indigo-500/20 rounded text-indigo-400 hover:opacity-100 transition-opacity"
                           title="上传视频"
@@ -947,6 +1238,23 @@ export const MainBrowser: React.FC = () => {
             <span className={`text-xs ${theme.text.muted} ${theme.bg.secondary} px-2 py-0.5 rounded-full`}>
               {groupProjects.length} 个项目
             </span>
+            {/* 【组目录】新建项目按钮 - 仅审阅模块 */}
+            {activeModule === 'review' && (
+              <button
+                onClick={() => {
+                  // 【文件模式】在组目录下，点击新建项目按钮，打开操作台新建项目（组默认为当前组）
+                  dispatch({ type: 'SET_PENDING_PROJECT_GROUP', payload: selectedGroupName });
+                  dispatch({ 
+                    type: 'OPEN_WORKBENCH_VIEW', 
+                    payload: { view: 'newProject', context: { from: 'group-grid' } } 
+                  });
+                }}
+                className="ml-auto flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>新建项目</span>
+              </button>
+            )}
           </div>
           <div className={`grid ${
             browserCardSize === 'small' 
@@ -959,9 +1267,13 @@ export const MainBrowser: React.FC = () => {
             {activeModule === 'review' && (
               <div
                 onClick={() => {
+                  // 【文件模式】在文件模式下，直接打开操作台，不打开检索面板
+                  // 设置待创建项目的组名为当前选中的组
                   dispatch({ type: 'SET_PENDING_PROJECT_GROUP', payload: selectedGroupName });
-                  dispatch({ type: 'SET_WORKBENCH_CREATE_MODE', payload: 'project' });
-                  dispatch({ type: 'TOGGLE_WORKBENCH', payload: true });
+                  dispatch({ 
+                    type: 'OPEN_WORKBENCH_VIEW', 
+                    payload: { view: 'newProject', context: { from: 'group-grid-card' } } 
+                  });
                 }}
                 className={`group relative ${browserCardSize === 'small' ? 'p-2' : browserCardSize === 'medium' ? 'p-3' : 'p-4'} ${theme.bg.secondary} border-2 border-dashed ${theme.border.primary} rounded-lg cursor-pointer hover:border-indigo-500/50 hover:bg-zinc-800/50 transition-all flex flex-col items-center justify-center text-center min-h-[120px]`}
               >
@@ -977,27 +1289,55 @@ export const MainBrowser: React.FC = () => {
               const projectVideosCount = videos.filter(v => v.projectId === project.id).length;
               const isSelected = selectedItems.has(project.id);
               const paddingClass = browserCardSize === 'small' ? 'p-2' : browserCardSize === 'medium' ? 'p-3' : 'p-4';
-              const iconContainerClass = browserCardSize === 'small' ? 'w-12 h-12 mb-2' : browserCardSize === 'medium' ? 'w-14 h-14 mb-2.5' : 'w-16 h-16 mb-3';
-              const iconSizeClass = browserCardSize === 'small' ? 'w-6 h-6' : browserCardSize === 'medium' ? 'w-7 h-7' : 'w-8 h-8';
+              const previewUrl = getProjectPreviewUrl(project.id);
+              const previewHeightClass = browserCardSize === 'small' ? 'h-24 mb-2' : browserCardSize === 'medium' ? 'h-32 mb-2.5' : 'h-40 mb-3';
               const titleSizeClass = browserCardSize === 'small' ? 'text-xs' : browserCardSize === 'medium' ? 'text-sm' : 'text-base';
               const metaSizeClass = browserCardSize === 'small' ? 'text-[10px]' : 'text-xs';
               return (
                 <div
                   key={project.id}
                   onClick={() => handleItemClick(project.id, () => navigateToProject(project.id))}
-                  className={`group relative ${paddingClass} ${theme.bg.secondary} border ${isSelected ? 'border-indigo-500 bg-indigo-500/10' : theme.border.primary} rounded-lg cursor-pointer hover:border-indigo-500/50 hover:bg-zinc-800/50 transition-all flex flex-col items-center text-center`}
+                  className={`group relative ${paddingClass} ${theme.bg.secondary} border ${isSelected ? 'border-indigo-500 bg-indigo-500/10' : theme.border.primary} rounded-lg cursor-pointer hover:border-indigo-500/50 hover:bg-zinc-800/50 transition-all flex flex-col overflow-hidden`}
                 >
-                  <div className={`${iconContainerClass} flex items-center justify-center bg-indigo-500/10 rounded-lg group-hover:bg-indigo-500/20 transition-colors`}>
-                    <FileVideo className={`${iconSizeClass} text-indigo-500`} />
+                  {/* 项目图标 + 1个视频的预览图 */}
+                  <div className={`w-full ${previewHeightClass} shrink-0 relative bg-zinc-800/30 rounded-lg overflow-hidden`}>
+                    {/* 项目图标 - 左上角 */}
+                    <div className="absolute top-1.5 left-1.5 z-10">
+                      <ProjectIcon 
+                        size={browserCardSize === 'small' ? 16 : browserCardSize === 'medium' ? 18 : 20} 
+                        className="text-indigo-400/90 drop-shadow-sm" 
+                      />
+                    </div>
+                    {/* 视频预览图 */}
+                    {previewUrl ? (
+                      <img 
+                        src={previewUrl} 
+                        alt={project.name}
+                        className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <ProjectIcon 
+                          size={browserCardSize === 'small' ? 24 : browserCardSize === 'medium' ? 32 : 40} 
+                          className="text-indigo-500/50" 
+                        />
+                      </div>
+                    )}
                   </div>
-                  <h3 className={`${titleSizeClass} font-medium mb-1 truncate w-full ${isSelected ? 'text-indigo-300' : theme.text.secondary} group-hover:text-indigo-300 transition-colors`} title={project.name}>
-                    {project.name}
-                  </h3>
-                  <div className={`${metaSizeClass} text-zinc-500 mb-1 truncate w-full`} title={project.client}>
-                    {project.client}
-                  </div>
-                  <div className={`${metaSizeClass} text-zinc-600 mt-auto`}>
-                    {projectVideosCount} 个视频
+                  <div className="flex flex-col items-center text-center flex-1 min-h-0 mt-2">
+                    <h3 className={`${titleSizeClass} font-medium mb-1 truncate w-full ${isSelected ? 'text-indigo-300' : theme.text.secondary} group-hover:text-indigo-300 transition-colors`} title={project.name}>
+                      {project.name}
+                    </h3>
+                    <div className={`${metaSizeClass} text-zinc-500 mb-1 truncate w-full`} title={project.client}>
+                      {project.client}
+                    </div>
+                    <div className={`${metaSizeClass} text-zinc-600 mt-auto`}>
+                      {projectVideosCount} 个视频
+                    </div>
                   </div>
                 </div>
               );
@@ -1025,8 +1365,13 @@ export const MainBrowser: React.FC = () => {
             <div className={`${theme.bg.secondary} border ${theme.border.primary} rounded-lg mb-2`}>
               <button
                 onClick={() => {
-                  dispatch({ type: 'SET_WORKBENCH_CREATE_MODE', payload: 'group' });
-                  dispatch({ type: 'TOGGLE_WORKBENCH', payload: true });
+                  // 【文件模式】在文件模式下，直接打开操作台，不打开检索面板
+                  // 新建组在根目录下，不需要设置组名
+                  dispatch({ type: 'SET_PENDING_PROJECT_GROUP', payload: null });
+                  dispatch({ 
+                    type: 'OPEN_WORKBENCH_VIEW', 
+                    payload: { view: 'newProject', context: { from: 'root-group' } } 
+                  });
                 }}
                 className="flex items-center gap-2 px-3 py-2 w-full hover:bg-zinc-800/50 transition-colors text-sm text-zinc-400 hover:text-zinc-200"
               >
@@ -1072,10 +1417,14 @@ export const MainBrowser: React.FC = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        // 【文件模式】在文件模式下，直接打开操作台，不打开检索面板
+                        // 设置待创建项目的组名为当前组
                         setSelectedGroupName(groupName);
                         dispatch({ type: 'SET_PENDING_PROJECT_GROUP', payload: groupName });
-                        dispatch({ type: 'SET_WORKBENCH_CREATE_MODE', payload: 'project' });
-                        dispatch({ type: 'TOGGLE_WORKBENCH', payload: true });
+                    dispatch({ 
+                      type: 'OPEN_WORKBENCH_VIEW', 
+                      payload: { view: 'newProject', context: { from: 'group-list-action', projectId: null } } 
+                    });
                       }}
                       className="p-1 hover:bg-indigo-500/20 rounded text-indigo-400 hover:opacity-100 transition-opacity"
                       title="新建项目"
@@ -1126,7 +1475,10 @@ export const MainBrowser: React.FC = () => {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   dispatch({ type: 'SELECT_PROJECT', payload: project.id });
-                                  dispatch({ type: 'TOGGLE_WORKBENCH', payload: true });
+                                  dispatch({ 
+                                    type: 'OPEN_WORKBENCH_VIEW', 
+                                    payload: { view: 'upload', context: { projectId: project.id, from: 'group-list-project' } } 
+                                  });
                                 }}
                                 className="p-1 hover:bg-indigo-500/20 rounded text-indigo-400 hover:opacity-100 transition-opacity"
                                 title="上传视频"
@@ -1191,8 +1543,13 @@ export const MainBrowser: React.FC = () => {
         {activeModule === 'review' && (
           <div
             onClick={() => {
-              dispatch({ type: 'SET_WORKBENCH_CREATE_MODE', payload: 'group' });
-              dispatch({ type: 'TOGGLE_WORKBENCH', payload: true });
+              // 【文件模式】在文件模式下，直接打开操作台，不打开检索面板
+              // 新建组在根目录下，不需要设置组名
+              dispatch({ type: 'SET_PENDING_PROJECT_GROUP', payload: null });
+              dispatch({ 
+                type: 'OPEN_WORKBENCH_VIEW', 
+                payload: { view: 'newProject', context: { from: 'root-group-grid' } } 
+              });
             }}
             className={`group relative ${browserCardSize === 'small' ? 'p-2' : browserCardSize === 'medium' ? 'p-3' : 'p-4'} ${theme.bg.secondary} border-2 border-dashed ${theme.border.primary} rounded-lg cursor-pointer hover:border-indigo-500/50 hover:bg-zinc-800/50 transition-all flex flex-col items-center justify-center text-center min-h-[120px]`}
           >
@@ -1208,9 +1565,10 @@ export const MainBrowser: React.FC = () => {
           const groupProjects = groupedProjects[groupName];
           const totalVideos = groupProjects.reduce((sum, p) => sum + videos.filter(v => v.projectId === p.id).length, 0);
           const isSelected = selectedItems.has(`group_${groupName}`);
+          const projectIds = groupProjects.map(p => p.id);
+          const projectPreviews = getGroupProjectPreviews(projectIds);
           const paddingClass = browserCardSize === 'small' ? 'p-2' : browserCardSize === 'medium' ? 'p-3' : 'p-4';
-          const iconContainerClass = browserCardSize === 'small' ? 'w-12 h-12 mb-2' : browserCardSize === 'medium' ? 'w-14 h-14 mb-2.5' : 'w-16 h-16 mb-3';
-          const iconSizeClass = browserCardSize === 'small' ? 'w-6 h-6' : browserCardSize === 'medium' ? 'w-7 h-7' : 'w-8 h-8';
+          const previewHeightClass = browserCardSize === 'small' ? 'h-24 mb-2' : browserCardSize === 'medium' ? 'h-32 mb-2.5' : 'h-40 mb-3';
           const titleSizeClass = browserCardSize === 'small' ? 'text-xs' : browserCardSize === 'medium' ? 'text-sm' : 'text-base';
           const metaSizeClass = browserCardSize === 'small' ? 'text-[10px]' : 'text-xs';
           
@@ -1218,19 +1576,62 @@ export const MainBrowser: React.FC = () => {
             <div
               key={groupName}
               onClick={() => handleItemClick(`group_${groupName}`, () => navigateToGroup(groupName))}
-              className={`group relative ${paddingClass} ${theme.bg.secondary} border ${isSelected ? 'border-indigo-500 bg-indigo-500/10' : theme.border.primary} rounded-lg cursor-pointer hover:border-indigo-500/50 hover:bg-zinc-800/50 transition-all flex flex-col items-center text-center`}
+              className={`group relative ${paddingClass} ${theme.bg.secondary} border ${isSelected ? 'border-indigo-500 bg-indigo-500/10' : theme.border.primary} rounded-lg cursor-pointer hover:border-indigo-500/50 hover:bg-zinc-800/50 transition-all flex flex-col overflow-hidden`}
             >
-              <div className={`${iconContainerClass} flex items-center justify-center bg-indigo-500/10 rounded-lg group-hover:bg-indigo-500/20 transition-colors`}>
-                <Folder className={`${iconSizeClass} text-indigo-500`} />
+              {/* 组图标 + 4个项目的预览图（2x2网格） */}
+              <div className={`w-full ${previewHeightClass} shrink-0 relative bg-zinc-800/30 rounded-lg overflow-hidden`}>
+                {/* 组图标 - 左上角 */}
+                <div className="absolute top-1.5 left-1.5 z-10">
+                  <GroupIcon 
+                    size={browserCardSize === 'small' ? 16 : browserCardSize === 'medium' ? 18 : 20} 
+                    className="text-indigo-400/90 drop-shadow-sm" 
+                  />
+                </div>
+                {/* 4个项目的预览图 - 2x2网格 */}
+                {projectPreviews.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-0.5 h-full p-0.5">
+                    {[...Array(4)].map((_, index) => {
+                      const previewUrl = projectPreviews[index];
+                      return (
+                        <div key={index} className="relative bg-zinc-800 overflow-hidden">
+                          {previewUrl ? (
+                            <img 
+                              src={previewUrl} 
+                              alt={`${groupName} 项目 ${index + 1}`}
+                              className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-zinc-800/50 flex items-center justify-center">
+                              <div className="w-3 h-3 border border-zinc-600 rounded" />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <GroupIcon 
+                      size={browserCardSize === 'small' ? 24 : browserCardSize === 'medium' ? 32 : 40} 
+                      className="text-indigo-500/50" 
+                    />
+                  </div>
+                )}
               </div>
-              <h3 className={`${titleSizeClass} font-medium mb-1 truncate w-full ${isSelected ? 'text-indigo-300' : theme.text.secondary} group-hover:text-indigo-300 transition-colors`} title={groupName}>
-                {groupName}
-              </h3>
-              <div className={`${metaSizeClass} text-zinc-500 mb-1`}>
-                {groupProjects.length} 个项目
-              </div>
-              <div className={`${metaSizeClass} text-zinc-600 mt-auto`}>
-                {totalVideos} 个视频
+              <div className="flex flex-col items-center text-center flex-1 min-h-0 mt-2">
+                <h3 className={`${titleSizeClass} font-medium mb-1 truncate w-full ${isSelected ? 'text-indigo-300' : theme.text.secondary} group-hover:text-indigo-300 transition-colors`} title={groupName}>
+                  {groupName}
+                </h3>
+                <div className={`${metaSizeClass} text-zinc-500 mb-1`}>
+                  {groupProjects.length} 个项目
+                </div>
+                <div className={`${metaSizeClass} text-zinc-600 mt-auto`}>
+                  {totalVideos} 个视频
+                </div>
               </div>
             </div>
           );
@@ -1240,7 +1641,8 @@ export const MainBrowser: React.FC = () => {
   };
 
   const renderContent = () => {
-      // 如果面板隐藏，显示资源管理器视图（按组显示项目）
+      // 【文件模式】如果检索面板隐藏，显示资源管理器视图（按组显示项目）
+      // 在审阅、交付、案例模块下，当 isRetrievalPanelVisible = false 时，切换到文件模式
       if (!isRetrievalPanelVisible && (activeModule === 'review' || activeModule === 'delivery' || activeModule === 'showcase')) {
           return renderFileExplorerView();
       }
@@ -1265,7 +1667,21 @@ export const MainBrowser: React.FC = () => {
           return (
               <div className="flex flex-col items-center justify-center py-20 text-zinc-600">
                   <Film className="w-12 h-12 mb-4 opacity-20" />
-                  <p>该项目暂无视频。</p>
+                  <p className="mb-4">该项目暂无视频。</p>
+                  {activeModule === 'review' && project && (
+                      <button
+                          onClick={() => {
+                              dispatch({ type: 'SELECT_PROJECT', payload: project.id });
+                              dispatch({ 
+                                type: 'OPEN_WORKBENCH_VIEW', 
+                                payload: { view: 'upload', context: { projectId: project.id, from: 'project-empty' } } 
+                              });
+                          }}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
+                      >
+                          上传视频
+                      </button>
+                  )}
               </div>
           );
       }
@@ -1274,15 +1690,34 @@ export const MainBrowser: React.FC = () => {
           // In list view, only show the latest version (First in the sorted array because we sorted descending)
           const latestVideos = seriesNames.map(name => {
               const versions = groups[name];
-              return versions[0]; 
+              return { video: versions[0], versionCount: versions.length, baseName: name }; 
           });
 
           // List Gap
           const gapClass = browserCardSize === 'small' ? 'gap-0.5' : browserCardSize === 'medium' ? 'gap-2' : 'gap-4';
 
           return (
-              <div className={`flex flex-col ${gapClass}`}>
-                  {latestVideos.map((video) => (
+              <div>
+                  {/* 检索模式下上传视频按钮工具栏 - 仅审阅模块 */}
+                  {isRetrievalPanelVisible && activeModule === 'review' && project && (
+                      <div className="flex items-center gap-3 mb-4">
+                          <h2 className="text-lg font-semibold text-zinc-200">{project.name}</h2>
+                          <button
+                              onClick={() => {
+                                  dispatch({ 
+                                    type: 'OPEN_WORKBENCH_VIEW', 
+                                    payload: { view: 'upload', context: { projectId: project?.id || null, from: 'retrieval-toolbar' } } 
+                                  });
+                              }}
+                              className="ml-auto flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
+                          >
+                              <Plus className="w-4 h-4" />
+                              <span>上传视频</span>
+                          </button>
+                      </div>
+                  )}
+                  <div className={`flex flex-col ${gapClass}`}>
+                      {latestVideos.map(({ video, versionCount, baseName }) => (
                       <VideoCard 
                           key={video.id} 
                           video={video} 
@@ -1294,10 +1729,20 @@ export const MainBrowser: React.FC = () => {
                           isDeliveryDelivered={activeModule === 'delivery' && !!project && project.status === 'delivered'}
                           isSelected={activeModule === 'delivery' && project && project.status === 'delivered' ? selectedDeliveryFiles.includes(video.id) : false}
                           matchedTags={getMatchedTagsForVideo(video)}
+                          isRetrievalMode={isRetrievalPanelVisible && activeModule === 'review'}
+                          versionCount={versionCount > 1 ? versionCount : undefined}
+                          onVersionClick={versionCount > 1 ? () => {
+                            // 点击版本号，打开操作台显示历史版本
+                            dispatch({ 
+                              type: 'SHOW_VERSION_HISTORY', 
+                              payload: { baseName, viewMode: 'list' } 
+                            });
+                          } : undefined}
                           onThumbnailClick={() => {
                             if (activeModule === 'delivery' || activeModule === 'showcase') {
                               setPreviewVideoId(video.id);
                             } else {
+                              dispatch({ type: 'SELECT_VIDEO', payload: video.id });
                               dispatch({ type: 'TOGGLE_REVIEW_MODE', payload: true });
                             }
                           }}
@@ -1309,77 +1754,93 @@ export const MainBrowser: React.FC = () => {
                           onToggleCart={() => dispatch({ type: 'TOGGLE_CART_ITEM', payload: video.id })}
                           onShare={() => handleShareClick(video, true)}
                           onToggleSelection={activeModule === 'delivery' && project && project.status === 'delivered' ? () => dispatch({ type: 'TOGGLE_DELIVERY_FILE_SELECTION', payload: video.id }) : undefined}
+                          onUploadNewVersion={activeModule === 'review' ? () => handleUploadNewVersion(video) : undefined}
+                          onDelete={activeModule === 'review' ? () => handleDeleteVideo(video) : undefined}
                       />
                   ))}
+                  </div>
               </div>
           );
       }
 
       // Grid Mode
-      const cardWidthClass = 
-        browserCardSize === 'small' ? 'min-w-[180px] max-w-[180px]' : 
-        browserCardSize === 'medium' ? 'min-w-[280px] max-w-[280px]' : 
-        'min-w-[420px] max-w-[420px]';
-      
-      const rowGapClass = 
-         browserCardSize === 'small' ? 'gap-6' : 
-         browserCardSize === 'medium' ? 'gap-10' : 
-         'gap-14';
-
       return (
-          <div className={`flex flex-col ${rowGapClass}`}>
+          <div>
+              {/* 检索模式下上传视频按钮工具栏 - 仅审阅模块 */}
+              {isRetrievalPanelVisible && activeModule === 'review' && project && (
+                  <div className="flex items-center gap-3 mb-4">
+                      <h2 className="text-lg font-semibold text-zinc-200">{project.name}</h2>
+                      <button
+                          onClick={() => {
+                              dispatch({ 
+                                type: 'OPEN_WORKBENCH_VIEW', 
+                                payload: { view: 'upload', context: { projectId: project?.id || null, from: 'retrieval-toolbar-grid' } } 
+                              });
+                          }}
+                          className="ml-auto flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
+                      >
+                          <Plus className="w-4 h-4" />
+                          <span>上传视频</span>
+                      </button>
+                  </div>
+              )}
+              <div className={`grid ${
+            browserCardSize === 'small' 
+              ? 'gap-2 grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8' 
+              : browserCardSize === 'medium' 
+              ? 'gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
+              : 'gap-4 grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'
+          }`}>
               {seriesNames.map(name => {
                   const versions = groups[name];
-                  const latestVersionId = versions[0].id; // First is latest due to Descending sort
+                  const latestVideo = versions[0]; // First is latest due to Descending sort
+                  const hasMultipleVersions = versions.length > 1;
 
                   return (
-                    <div key={name} className="animate-in fade-in duration-500 slide-in-from-bottom-2">
-                        <div className="flex items-center gap-3 mb-3 border-b border-zinc-800/50 pb-2">
-                            <FileVideo className="w-5 h-5 text-indigo-500" />
-                            <h2 className="text-base font-medium text-zinc-200 tracking-tight">{name}</h2>
-                            <span className={`text-[10px] ${theme.text.muted} ${theme.bg.secondary} px-2 py-0.5 rounded-full border ${theme.border.primary}`}>
-                                {versions.length} 个版本
-                            </span>
-                        </div>
-                        
-                        {/* Horizontal Version Scroll/Grid */}
-                        <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
-                            {versions.map((video) => (
-                                <div key={video.id} className={cardWidthClass}>
-                                    <VideoCard 
-                                        video={video} 
-                                        viewMode='grid'
-                                        cardSize={browserCardSize}
-                                        activeModule={activeModule}
-                                        isInCart={cart.includes(video.id)}
-                                        isLatest={video.id === latestVersionId}
-                                        isDeliveryDelivered={activeModule === 'delivery' && !!project && project.status === 'delivered'}
-                                        isSelected={activeModule === 'delivery' && project && project.status === 'delivered' ? selectedDeliveryFiles.includes(video.id) : false}
-                                        matchedTags={getMatchedTagsForVideo(video)}
-                                        onThumbnailClick={() => {
-                                          if (activeModule === 'delivery' || activeModule === 'showcase') {
-                                            setPreviewVideoId(video.id);
-                                          } else {
-                                            dispatch({ type: 'SELECT_VIDEO', payload: video.id });
-                                            dispatch({ type: 'TOGGLE_REVIEW_MODE', payload: true });
-                                            // 视频会自动播放（在 ReviewOverlay 中实现）
-                                          }
-                                        }}
-                                        onBodyClick={() => {
-                                          if (activeModule !== 'review') {
-                                            dispatch({ type: 'SELECT_VIDEO', payload: video.id });
-                                          }
-                                        }}
-                                        onToggleCart={() => dispatch({ type: 'TOGGLE_CART_ITEM', payload: video.id })}
-                                        onShare={() => handleShareClick(video, video.id === latestVersionId)}
-                                        onToggleSelection={activeModule === 'delivery' && project && project.status === 'delivered' ? () => dispatch({ type: 'TOGGLE_DELIVERY_FILE_SELECTION', payload: video.id }) : undefined}
-                                    />
-                                </div>
-                            ))}
-                        </div>
+                    <div key={name} className="w-full">
+                        <VideoCard 
+                            video={latestVideo} 
+                            viewMode='grid'
+                            cardSize={browserCardSize}
+                            activeModule={activeModule}
+                            isInCart={cart.includes(latestVideo.id)}
+                            isLatest={true}
+                            isDeliveryDelivered={activeModule === 'delivery' && !!project && project.status === 'delivered'}
+                            isSelected={activeModule === 'delivery' && project && project.status === 'delivered' ? selectedDeliveryFiles.includes(latestVideo.id) : false}
+                            matchedTags={getMatchedTagsForVideo(latestVideo)}
+                            isRetrievalMode={isRetrievalPanelVisible && activeModule === 'review'}
+                            versionCount={hasMultipleVersions ? versions.length : undefined}
+                            onVersionClick={hasMultipleVersions ? () => {
+                              // 点击版本号，打开操作台显示历史版本
+                              dispatch({ 
+                                type: 'SHOW_VERSION_HISTORY', 
+                                payload: { baseName: name, viewMode: 'grid' } 
+                              });
+                            } : undefined}
+                            onThumbnailClick={() => {
+                              if (activeModule === 'delivery' || activeModule === 'showcase') {
+                                setPreviewVideoId(latestVideo.id);
+                              } else {
+                                dispatch({ type: 'SELECT_VIDEO', payload: latestVideo.id });
+                                dispatch({ type: 'TOGGLE_REVIEW_MODE', payload: true });
+                                // 视频会自动播放（在 ReviewOverlay 中实现）
+                              }
+                            }}
+                            onBodyClick={() => {
+                              if (activeModule !== 'review') {
+                                dispatch({ type: 'SELECT_VIDEO', payload: latestVideo.id });
+                              }
+                            }}
+                            onToggleCart={() => dispatch({ type: 'TOGGLE_CART_ITEM', payload: latestVideo.id })}
+                            onShare={() => handleShareClick(latestVideo, true)}
+                            onToggleSelection={activeModule === 'delivery' && project && project.status === 'delivered' ? () => dispatch({ type: 'TOGGLE_DELIVERY_FILE_SELECTION', payload: latestVideo.id }) : undefined}
+                            onUploadNewVersion={activeModule === 'review' && isRetrievalPanelVisible ? () => handleUploadNewVersion(latestVideo) : undefined}
+                            onDelete={activeModule === 'review' && isRetrievalPanelVisible ? () => handleDeleteVideo(latestVideo) : undefined}
+                        />
                     </div>
                   );
               })}
+              </div>
           </div>
       );
   };
@@ -1847,11 +2308,17 @@ const VideoCard: React.FC<{
     isLatest: boolean;
     isSelected?: boolean; // 交付模块选中状态
     isDeliveryDelivered?: boolean; // 交付模块是否已交付状态
+    matchedTags?: string[]; // 匹配的标签
+    isRetrievalMode?: boolean; // 是否在检索模式下
+    versionCount?: number; // 版本数量（如果有多个版本）
+    onVersionClick?: () => void; // 点击版本号时的回调
     onThumbnailClick: () => void;
     onBodyClick: () => void;
     onToggleCart: () => void;
     onShare: () => void;
     onToggleSelection?: () => void; // 交付模块选择切换
+    onUploadNewVersion?: () => void; // 上传新版本
+    onDelete?: () => void; // 删除视频
 }> = ({ 
     video, 
     viewMode, 
@@ -1862,11 +2329,16 @@ const VideoCard: React.FC<{
     isSelected = false, 
     isDeliveryDelivered = false,
     matchedTags = [],
-    onThumbnailClick, 
-    onBodyClick, 
-    onToggleCart, 
+    isRetrievalMode = false,
+    versionCount,
+    onVersionClick,
+    onThumbnailClick,
+    onBodyClick,
+    onToggleCart,
     onShare,
-    onToggleSelection 
+    onToggleSelection,
+    onUploadNewVersion,
+    onDelete
 }) => {
   
   if (viewMode === 'list') {
@@ -1925,7 +2397,7 @@ const VideoCard: React.FC<{
                         {/* 显示被命中的标签 */}
                         {matchedTags.length > 0 && (
                           <div className="flex items-center gap-1 flex-wrap">
-                            {matchedTags.map(tagName => (
+                            {matchedTags.map((tagName: string) => (
                               <span 
                                 key={tagName}
                                 className="px-1.5 py-0.5 rounded text-[9px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30"
@@ -1956,13 +2428,34 @@ const VideoCard: React.FC<{
                         {isSelected ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
                     </button>
                 ) : activeModule !== 'showcase' ? (
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onShare(); }}
-                        className={`p-1.5 rounded transition-colors ${isLatest ? 'text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10' : 'text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800'}`}
-                        title={isLatest ? "对外分享" : "分享历史版本"}
-                    >
-                        <Share2 className="w-4 h-4" />
-                    </button>
+                    <>
+                        {/* 审阅模块下，在分享按钮左侧添加上传和删除按钮（检索模式和文件模式都显示） */}
+                        {activeModule === 'review' && onUploadNewVersion && onDelete && (
+                            <>
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); onUploadNewVersion(); }}
+                                    className="p-1.5 rounded transition-colors text-zinc-400 hover:text-indigo-400 hover:bg-indigo-500/10"
+                                    title="上传新版本"
+                                >
+                                    <Upload className="w-4 h-4" />
+                                </button>
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                                    className="p-1.5 rounded transition-colors text-zinc-400 hover:text-red-400 hover:bg-red-500/10"
+                                    title="删除视频"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </>
+                        )}
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onShare(); }}
+                            className={`p-1.5 rounded transition-colors ${isLatest ? 'text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10' : 'text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800'}`}
+                            title={isLatest ? "对外分享" : "分享历史版本"}
+                        >
+                            <Share2 className="w-4 h-4" />
+                        </button>
+                    </>
                 ) : (
                     <button 
                         onClick={(e) => { e.stopPropagation(); onToggleCart(); }}
@@ -1977,24 +2470,20 @@ const VideoCard: React.FC<{
   }
 
   // GRID VIEW
-  const thumbHeight = 
-    cardSize === 'small' ? 'h-24' : 
-    cardSize === 'medium' ? 'h-36' : 
-    'h-52'; 
-  
+  // 移除固定高度，改为 flex-1 自适应，并使用 aspect-[2/3] 固定卡片比例
   const fontSize = cardSize === 'small' ? 'text-xs' : 'text-sm';
 
   return (
     <div 
       onClick={onBodyClick}
-      className={`group relative bg-zinc-900 border rounded-lg overflow-hidden transition-all cursor-pointer shadow-sm hover:shadow-xl hover:shadow-black/50 flex flex-col h-full
+      className={`group relative bg-zinc-900 border rounded-lg overflow-hidden transition-all cursor-pointer shadow-sm hover:shadow-xl hover:shadow-black/50 flex flex-col w-full aspect-[2/3]
         ${isInCart ? 'border-indigo-500 ring-1 ring-indigo-500/50' : ''}
         ${isSelected ? 'border-emerald-500 ring-1 ring-emerald-500/50' : ''}
         ${!isInCart && !isSelected ? 'border-zinc-800 hover:border-zinc-600' : ''}
       `}
     >
-      {/* Thumbnail */}
-      <div className={`relative ${thumbHeight} bg-zinc-800 w-full overflow-hidden shrink-0`}>
+      {/* Thumbnail - 强制 1:1 比例且不压缩 */}
+      <div className={`relative w-full aspect-square bg-zinc-800 overflow-hidden shrink-0`}>
         <div onClick={(e) => { e.stopPropagation(); onThumbnailClick(); }} className="w-full h-full relative group/thumb">
              <img 
                 src={video.thumbnailUrl || `https://picsum.photos/seed/${video.id}/400/225`} 
@@ -2015,10 +2504,32 @@ const VideoCard: React.FC<{
         </div>
 
         {/* Badges */}
-        <div className="absolute top-2 left-2 flex gap-1">
+        <div className="absolute top-2 left-2 flex gap-1 z-10">
             {/* 案例模块中，所有视频都不显示版本号 */}
             {activeModule !== 'showcase' && (
-                <span className="bg-black/70 backdrop-blur-md text-[10px] font-bold px-1.5 py-0.5 rounded text-zinc-200 border border-white/10">v{video.version}</span>
+                <span 
+                    onClick={(e) => {
+                        if (onVersionClick && versionCount && versionCount > 1) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            onVersionClick();
+                        }
+                    }}
+                    onMouseDown={(e) => {
+                        // 阻止 mousedown 事件冒泡，避免触发卡片的点击
+                        if (onVersionClick && versionCount && versionCount > 1) {
+                            e.stopPropagation();
+                        }
+                    }}
+                    className={`bg-black/70 backdrop-blur-md text-[10px] font-bold px-1.5 py-0.5 rounded text-zinc-200 border border-white/10 ${
+                        onVersionClick && versionCount && versionCount > 1 
+                            ? 'cursor-pointer hover:bg-indigo-500/50 hover:border-indigo-400 transition-colors' 
+                            : ''
+                    }`}
+                    title={versionCount && versionCount > 1 ? `点击查看 ${versionCount} 个版本` : undefined}
+                >
+                    v{video.version}{versionCount && versionCount > 1 ? ` (${versionCount})` : ''}
+                </span>
             )}
             {video.status === 'annotated' && (
               <span className="bg-indigo-500 text-[10px] font-bold px-1.5 py-0.5 rounded text-white">
@@ -2027,56 +2538,78 @@ const VideoCard: React.FC<{
             )}
             {video.status === 'approved' && <span className="bg-emerald-500 text-[10px] font-bold px-1.5 py-0.5 rounded text-white">已通过</span>}
         </div>
-        <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-md text-[10px] font-mono px-1.5 py-0.5 rounded text-zinc-200">
+        
+        {/* Duration - Moved to top-right */}
+        <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-md text-[10px] font-mono px-1.5 py-0.5 rounded text-zinc-200 z-10">
             {video.duration}
         </div>
-      </div>
 
-      {/* Info Body */}
-      <div className={`flex-1 flex flex-col ${cardSize === 'small' ? 'p-2' : 'p-3'}`}>
-        <div className="flex items-start justify-between mb-1">
-            <h3 className={`font-medium text-zinc-200 truncate pr-2 group-hover:text-indigo-400 transition-colors ${fontSize}`} title={video.name}>{video.name}</h3>
-            
-            <div className="flex items-center gap-1">
-                {isDeliveryDelivered && onToggleSelection ? (
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onToggleSelection(); }}
-                        className={`p-1 rounded transition-colors ${isSelected ? 'bg-emerald-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}
-                    >
-                        {isSelected ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                    </button>
-                ) : activeModule !== 'showcase' ? (
+        {/* Action Buttons - Moved to bottom-right */}
+        <div className="absolute bottom-2 right-2 flex items-center gap-1 z-10 px-2" onClick={e => e.stopPropagation()}>
+            {isDeliveryDelivered && onToggleSelection ? (
+                <button 
+                    onClick={(e) => { e.stopPropagation(); onToggleSelection(); }}
+                    className={`p-1.5 rounded transition-colors backdrop-blur-md border border-white/10 ${isSelected ? 'bg-emerald-500 text-white' : 'bg-black/60 text-zinc-300 hover:text-white hover:bg-zinc-700'}`}
+                >
+                    {isSelected ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                </button>
+            ) : activeModule !== 'showcase' ? (
+                <>
+                    {/* 审阅模块下，在分享按钮左侧添加上传和删除按钮（检索模式和文件模式都显示） */}
+                    {activeModule === 'review' && onUploadNewVersion && onDelete && (
+                        <>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); onUploadNewVersion(); }}
+                                className="p-1.5 rounded transition-colors backdrop-blur-md border border-white/10 bg-black/60 text-zinc-300 hover:text-indigo-300 hover:bg-black/80"
+                                title="上传新版本"
+                            >
+                                <Upload className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                                className="p-1.5 rounded transition-colors backdrop-blur-md border border-white/10 bg-black/60 text-zinc-300 hover:text-red-300 hover:bg-black/80"
+                                title="删除视频"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                        </>
+                    )}
                     <button 
                         onClick={(e) => { e.stopPropagation(); onShare(); }}
-                        className={`p-1 rounded transition-colors ${isLatest ? 'text-indigo-400 hover:text-white hover:bg-indigo-500' : 'text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800'}`}
+                        className={`p-1.5 rounded transition-colors backdrop-blur-md border border-white/10 ${isLatest ? 'bg-black/60 text-indigo-400 hover:text-indigo-300 hover:bg-black/80' : 'bg-black/60 text-zinc-300 hover:text-zinc-200 hover:bg-black/80'}`}
                         title={isLatest ? "对外分享" : "分享历史版本"}
                     >
                         <Share2 className="w-3.5 h-3.5" />
                     </button>
-                ) : (
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onToggleCart(); }}
-                        className={`p-1 rounded transition-colors ${isInCart ? 'bg-indigo-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}
-                    >
-                        {isInCart ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                    </button>
-                )}
-            </div>
+                </>
+            ) : (
+                <button 
+                    onClick={(e) => { e.stopPropagation(); onToggleCart(); }}
+                    className={`p-1.5 rounded transition-colors backdrop-blur-md border border-white/10 ${isInCart ? 'bg-indigo-500 text-white' : 'bg-black/60 text-zinc-300 hover:text-white hover:bg-black/80'}`}
+                >
+                    {isInCart ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                </button>
+            )}
+        </div>
+      </div>
+
+      {/* Info Body - 剩余空间自适应 */}
+      <div className={`flex flex-col flex-1 min-h-0 ${cardSize === 'small' ? 'p-2' : 'p-3'}`}>
+        <div className={`mb-auto ${cardSize === 'small' ? '' : 'mb-2'}`}>
+            <h3 className={`font-medium text-zinc-200 line-clamp-2 group-hover:text-indigo-400 transition-colors ${fontSize}`} title={video.name}>{video.name}</h3>
         </div>
         
-        {/* Change Log Preview */}
+        {/* Change Log Preview - 只在非 small 尺寸显示 */}
         {cardSize !== 'small' && (
             video.changeLog ? (
-                <p className="text-[10px] text-zinc-500 line-clamp-3 bg-zinc-950/50 p-1.5 rounded mb-2 border border-zinc-800/50 min-h-[40px]">
+                <p className="text-[10px] text-zinc-500 line-clamp-2 bg-zinc-950/50 p-1.5 rounded mb-2 border border-zinc-800/50">
                     {video.changeLog}
                 </p>
-            ) : (
-                <p className="text-[10px] text-zinc-700 italic mb-2 min-h-[40px] flex items-center">无修改记录</p>
-            )
+            ) : null
         )}
 
-        {/* 显示被命中的标签 */}
-        {matchedTags.length > 0 && (
+        {/* 显示被命中的标签 - 只在非 small 尺寸显示 */}
+        {cardSize !== 'small' && matchedTags.length > 0 && (
           <div className="flex items-center gap-1 flex-wrap mb-2">
             {matchedTags.map(tagName => (
               <span 
@@ -2089,10 +2622,14 @@ const VideoCard: React.FC<{
           </div>
         )}
 
-        <div className="mt-auto flex items-center justify-between text-[11px] text-zinc-500 pt-2 border-t border-zinc-800/50">
-            <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {video.uploadTime}</span>
-            <span className="font-mono">{video.resolution || 'HD'}</span>
-        </div>
+        {cardSize !== 'small' && (
+            <div className={`pt-2 border-t border-zinc-800/50 flex items-center justify-between gap-2 shrink-0 mt-auto`}>
+                {/* 时间信息 - 小尺寸隐藏 */}
+                <div className="flex flex-col text-[10px] text-zinc-500 min-w-0">
+                    <span className="flex items-center gap-1 truncate"><Clock className="w-3 h-3" /> {video.uploadTime}</span>
+                </div>
+            </div>
+        )}
       </div>
     </div>
   );

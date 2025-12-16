@@ -15,6 +15,7 @@ export interface ShareLink {
 }
 
 export interface ShareLinkDetail extends ShareLink {
+  password_hash?: string;
   video?: {
     id: string;
     name: string;
@@ -64,12 +65,13 @@ export const sharesApi = {
     } else {
       const hostname = window.location.hostname;
       const port = '3002';
+      const serverIp = '192.168.110.112';
       if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        apiBaseUrl = `http://localhost:${port}/api`;
+        apiBaseUrl = `http://${serverIp}:${port}/api`;
       } else if (hostname.match(/^(192\.168\.|172\.|10\.)/)) {
         apiBaseUrl = `http://${hostname}:${port}/api`;
       } else {
-        apiBaseUrl = `http://localhost:${port}/api`;
+        apiBaseUrl = `http://${serverIp}:${port}/api`;
       }
     }
     const response = await fetch(`${apiBaseUrl}/shares/${token}`, {
@@ -100,12 +102,13 @@ export const sharesApi = {
     } else {
       const hostname = window.location.hostname;
       const port = '3002';
+      const serverIp = '192.168.110.112';
       if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        apiBaseUrl = `http://localhost:${port}/api`;
+        apiBaseUrl = `http://${serverIp}:${port}/api`;
       } else if (hostname.match(/^(192\.168\.|172\.|10\.)/)) {
         apiBaseUrl = `http://${hostname}:${port}/api`;
       } else {
-        apiBaseUrl = `http://localhost:${port}/api`;
+        apiBaseUrl = `http://${serverIp}:${port}/api`;
       }
     }
     const response = await fetch(`${apiBaseUrl}/shares/${token}/verify-password`, {

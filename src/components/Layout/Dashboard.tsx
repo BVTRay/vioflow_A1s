@@ -129,19 +129,26 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  // 快速上传 - 打开操作台（审阅模块）
+  // 快速上传 - 针对指定项目直接进入上传面板
   const handleQuickUpload = (projectId: string) => {
     dispatch({ type: 'SELECT_PROJECT', payload: projectId });
     dispatch({ type: 'SET_WORKBENCH_ACTION_TYPE', payload: 'review' });
-    dispatch({ type: 'TOGGLE_WORKBENCH', payload: true });
+    dispatch({ type: 'SET_QUICK_UPLOAD_MODE', payload: false });
+    dispatch({
+      type: 'OPEN_WORKBENCH_VIEW',
+      payload: { view: 'upload', context: { projectId, from: 'dashboard-quick' } }
+    });
   };
 
-  // 打开快速上传 - 直接打开操作台
+  // 打开快速上传 - 先进入项目选择器，再进入上传
   const handleOpenQuickUpload = () => {
     dispatch({ type: 'SELECT_PROJECT', payload: '' }); // 清空选中的项目
     dispatch({ type: 'SET_WORKBENCH_ACTION_TYPE', payload: 'review' });
-    dispatch({ type: 'SET_QUICK_UPLOAD_MODE', payload: true }); // 设置快速上传模式
-    dispatch({ type: 'TOGGLE_WORKBENCH', payload: true });
+    dispatch({ type: 'SET_QUICK_UPLOAD_MODE', payload: true }); // 设置快速上传模式，先选项目
+    dispatch({
+      type: 'OPEN_WORKBENCH_VIEW',
+      payload: { view: 'upload', context: { from: 'dashboard-quick-open' } }
+    });
   };
 
   // 确认定版

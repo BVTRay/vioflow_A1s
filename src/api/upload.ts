@@ -28,9 +28,12 @@ const getApiBaseUrl = () => {
   const hostname = window.location.hostname;
   const port = '3002';
   
-  // 如果是 localhost 或 127.0.0.1，使用 localhost
+  // 默认使用服务器 IP 地址
+  const serverIp = '192.168.110.112';
+  
+  // 如果是 localhost 或 127.0.0.1，使用服务器 IP
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return `http://localhost:${port}/api`;
+    return `http://${serverIp}:${port}/api`;
   }
   
   // 如果是内网 IP（192.168.x.x 或 172.x.x.x），使用相同的 IP
@@ -38,8 +41,8 @@ const getApiBaseUrl = () => {
     return `http://${hostname}:${port}/api`;
   }
   
-  // 默认使用 localhost
-  return `http://localhost:${port}/api`;
+  // 默认使用服务器 IP
+  return `http://${serverIp}:${port}/api`;
 };
 
 export const uploadApi = {

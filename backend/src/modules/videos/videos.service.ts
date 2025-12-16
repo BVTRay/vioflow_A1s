@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Video, VideoStatus, VideoType, StorageTier, AspectRatio } from './entities/video.entity';
 import { VideoTag } from './entities/video-tag.entity';
 import { SupabaseStorageService } from '../../common/storage/supabase-storage.service';
@@ -284,6 +284,48 @@ export class VideosService {
 
     // 删除所有数据库记录
     await this.videoRepository.remove(videos);
+  }
+
+  /**
+   * 删除某个项目下的所有视频及其存储文件
+   */
+  async deleteByProject(projectId: string): Promise<number> {
+    const videos = await this.videoRepository.find({
+      where: { project_id: projectId },
+    });
+
+    if (videos.length === 0) {
+      return 0;
+    }
+
+    const videoIds = videos.map((video) => video.id);
+
+    for (const video of videos) {
+      if (video.storage_key) {
+        try {
+          await this.storageService.deleteFile(video.storage_key);
+        } catch (error) {
+          console.warn(`Failed to delete storage file for video ${video.id}:`, error);
+        }
+      }
+
+      if (video.thumbnail_url) {
+        try {
+          const urlParts = video.thumbnail_url.split('/');
+          const thumbnailKey = urlParts[urlParts.length - 1];
+          if (thumbnailKey && thumbnailKey !== video.thumbnail_url) {
+            await this.storageService.deleteFile(thumbnailKey);
+          }
+        } catch (error) {
+          console.warn(`Failed to delete thumbnail for video ${video.id}:`, error);
+        }
+      }
+    }
+
+    await this.videoTagRepository.delete({ video_id: In(videoIds) });
+    await this.videoRepository.remove(videos);
+
+    return videos.length;
   }
 }
 
