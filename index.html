@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vioflow MAM</title>
+    <!-- Google Fonts - JetBrains Mono 等宽字体 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- We keep Tailwind CDN for this prototype to adhere to your 'no external CSS' request, 
          though in a full production app you might install 'tailwindcss' in package.json -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -20,13 +24,19 @@
               }
             },
             fontFamily: {
-              sans: ['Inter', 'system-ui', 'sans-serif'],
+              sans: ['"JetBrains Mono"', 'Consolas', 'Monaco', 'monospace'],
+              mono: ['"JetBrains Mono"', 'Consolas', 'Monaco', 'monospace'],
             }
           }
         }
       }
     </script>
     <style>
+      /* 全局等宽字体设置 */
+      * {
+        font-family: 'JetBrains Mono', Consolas, Monaco, 'Courier New', monospace !important;
+      }
+      
       /* Custom Scrollbar for that professional feel */
       ::-webkit-scrollbar {
         width: 6px;
@@ -78,6 +88,31 @@
         --theme-border: #1e293b; /* slate-800 */
         --theme-text-primary: #f1f5f9; /* slate-100 */
         --theme-text-secondary: #e2e8f0; /* slate-200 */
+      }
+
+      /* 呼吸感高亮动效 - 用于传输队列图标 */
+      @keyframes icon-breathe {
+        0%, 100% {
+          opacity: 0.7;
+          transform: scale(1);
+          filter: drop-shadow(0 0 0 rgba(99, 102, 241, 0));
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1.15);
+          filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.8));
+        }
+      }
+
+      @keyframes pulse-glow {
+        0%, 100% {
+          transform: scale(1);
+          box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
+        }
+        50% {
+          transform: scale(1.1);
+          box-shadow: 0 0 10px 2px rgba(99, 102, 241, 0.5);
+        }
       }
     </style>
   <script type="importmap">

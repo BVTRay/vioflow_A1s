@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, CheckCircle2, X, Share, PlaySquare, FileCheck, ShieldAlert, MonitorPlay, GripVertical, FileVideo, AlertCircle, GitBranch, PlusSquare, History, ArrowRight, Upload, FileText, Copyright, Film, Tag, CheckCircle, Link2, Package, Download, Power, User, Users, ChevronDown, Settings, FolderOpen, Trash2, Edit2, Save, Loader2, List, LayoutGrid } from 'lucide-react';
+import { UploadCloud, CheckCircle2, X, Share, PlaySquare, FileCheck, ShieldAlert, MonitorPlay, GripVertical, FileVideo, AlertCircle, GitBranch, PlusSquare, History, ArrowRight, Upload, FileText, Copyright, Film, Tag, CheckCircle, Link2, Package, Download, Power, User, Users, ChevronDown, Settings, FolderOpen, Trash2, Edit2, Save, Loader2, List, LayoutGrid, Play, Globe, Copy, ExternalLink, ArrowUp, ArrowDown, MessageSquare, Sparkles } from 'lucide-react';
 import { useStore } from '../../App';
 import { Video, DeliveryData, Project } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
@@ -8,6 +8,7 @@ import { projectsApi } from '../../api/projects';
 import { tagsApi } from '../../api/tags';
 import { usersApi } from '../../api/users';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
+import { toastManager } from '../../hooks/useToast';
 
 interface WorkbenchProps {
   visible: boolean;
@@ -56,6 +57,39 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
 
   // Custom tag input state (for delivery module)
   const [newTagInput, setNewTagInput] = useState('');
+
+  // Showcase package generation state
+  const [showcaseConfig, setShowcaseConfig] = useState<{
+    isModalOpen: boolean;
+    mode: 'quick_player' | 'pitch_page';
+    clientName: string;
+    packageTitle: string;
+    welcomeMessage: string;
+    contactInfo: string;
+    itemDescriptions: Record<string, string>; // videoId -> description
+    editingDescriptionId: string | null;
+  }>({
+    isModalOpen: false,
+    mode: 'quick_player',
+    clientName: '',
+    packageTitle: '',
+    welcomeMessage: '',
+    contactInfo: '',
+    itemDescriptions: {},
+    editingDescriptionId: null
+  });
+  const [isGeneratingPackage, setIsGeneratingPackage] = useState(false);
+  const [generatedPackageLink, setGeneratedPackageLink] = useState<string | null>(null);
+  
+  // 获取预设分组（从 localStorage）
+  const getPresetGroups = (): string[] => {
+    try {
+      const saved = localStorage.getItem('preset_project_groups');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  };
 
   // New Project Form State
   const [projectFormData, setProjectFormData] = useState({ 
@@ -183,6 +217,14 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
   const startUpload = async () => {
       if (!uploadConfig.file || !project) return;
 
+      // 检查文件大小（Supabase 免费版限制 50MB）
+      const MAX_FILE_SIZE_MB = 50;
+      const fileSizeMB = uploadConfig.file.size / 1024 / 1024;
+      if (fileSizeMB > MAX_FILE_SIZE_MB) {
+          toastManager.error(`文件太大：${fileSizeMB.toFixed(1)}MB，最大支持 ${MAX_FILE_SIZE_MB}MB。请压缩视频后重试。`);
+          return;
+      }
+
       // 验证必填项
       if (uploadConfig.uploadMode === 'addVersion') {
           // 为视频上传新版本时，必须要有selectedExistingVideoId
@@ -240,26 +282,29 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
 
       const uploadId = `u_${Date.now()}`;
 
+      // 1. 立即关闭操作台
+      handleClose();
+
+      // 2. Add to Global Queue
+      dispatch({
+          type: 'ADD_UPLOAD',
+          payload: {
+              id: uploadId,
+              filename: finalName,
+              progress: 0,
+              status: 'uploading',
+              targetProjectName: project.name
+          }
+      });
+
+      // 3. Toast 提示正在上传
+      toastManager.info(`正在上传 "${finalName}"，请稍候...`, { duration: 4000 });
+
       try {
           // 导入上传API
           const { uploadApi } = await import('../../api/upload');
           
-          // 1. Add to Global Queue
-          dispatch({
-              type: 'ADD_UPLOAD',
-              payload: {
-                  id: uploadId,
-                  filename: finalName,
-                  progress: 0,
-                  status: 'uploading',
-                  targetProjectName: project.name
-              }
-          });
-
-          // 2. Open Transfer Drawer to show progress
-          dispatch({ type: 'TOGGLE_DRAWER', payload: 'transfer' });
-
-          // 3. 实际上传
+          // 4. 实际上传
           const uploadedVideo = await uploadApi.uploadVideo(
               uploadConfig.file,
               project.id,
@@ -277,7 +322,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
               }
           );
 
-          // 4. 上传完成
+          // 5. 上传完成
           dispatch({ type: 'COMPLETE_UPLOAD', payload: uploadId });
           dispatch({
               type: 'ADD_VIDEO',
@@ -296,14 +341,19 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                   isCaseFile: false,
                   isMainDelivery: false,
                   size: uploadedVideo.size,
-                  duration: '00:00:00', // 需要从实际视频获取
-                  resolution: '1920x1080', // 需要从实际视频获取
+                  duration: uploadedVideo.duration || undefined,
+                  resolution: uploadedVideo.resolution || undefined,
+                  aspectRatio: uploadedVideo.aspectRatio,
+                  thumbnailUrl: uploadedVideo.thumbnailUrl,
                   status: uploadedVideo.status,
                   changeLog: uploadedVideo.changeLog || (uploadConfig.uploadMode === 'addVersion' ? '上传新版本' : '上传新视频')
               }
           });
 
-          // 5. 发送成功通知
+          // 6. Toast 提示上传成功
+          toastManager.success(`"${finalName}" 上传成功！`);
+
+          // 7. 发送成功通知（保留用于通知中心）
           dispatch({
               type: 'ADD_NOTIFICATION',
               payload: {
@@ -314,13 +364,14 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                   time: '刚刚'
               }
           });
-
-          // 6. 上传完成后关闭操作台（所有入口一致）
-          handleClose();
       } catch (error: any) {
           console.error('上传失败:', error);
           dispatch({ type: 'COMPLETE_UPLOAD', payload: uploadId });
           const errorMessage = error?.response?.data?.message || error?.message || '上传失败，请重试';
+          
+          // Toast 提示上传失败
+          toastManager.error(`上传失败: ${errorMessage}`);
+          
           dispatch({
               type: 'ADD_NOTIFICATION',
               payload: {
@@ -374,12 +425,14 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
       const date = new Date();
       const prefix = `${date.getFullYear().toString().slice(-2)}${(date.getMonth() + 1).toString().padStart(2, '0')}_`;
       if (!projectFormData.name) {
+        // 获取第一个可用的分组作为默认值
+        const defaultGroup = getPresetGroups()[0] || '未分类';
         setProjectFormData({ 
           name: prefix, 
           client: '', 
           lead: '',
           postLead: '',
-          group: '广告片',
+          group: defaultGroup,
           isNewGroup: false,
           team: [],
           newMemberInput: ''
@@ -886,9 +939,11 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
     }
 
     // 如果显示历史版本，优先显示历史版本视图
-    if (view === 'versionHistory' && versionHistoryBaseName && selectedProjectId) {
+    // 使用 workbenchContext.projectId 以支持在没有选中项目时也能显示历史版本
+    const versionHistoryProjectId = workbenchContext?.projectId || selectedProjectId;
+    if (view === 'versionHistory' && versionHistoryBaseName && versionHistoryProjectId) {
       const historyVersions = videos.filter(v => 
-        v.projectId === selectedProjectId && 
+        v.projectId === versionHistoryProjectId && 
         (v.baseName || v.name.replace(/^v\d+_/, '')) === versionHistoryBaseName
       ).sort((a, b) => b.version - a.version); // Sort Descending (Newest first)
 
@@ -1108,7 +1163,8 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
 
     // 情况2：项目设置编辑模式
     if (view === 'projectSettings' && project && workbenchEditProjectId === project.id) {
-        const existingGroups = Array.from(new Set(projects.map(p => p.group).filter(g => g && g !== '未分类')));
+        const projectGroupNames = projects.map(p => p.group).filter(g => g && g !== '未分类');
+        const existingGroups = Array.from(new Set([...projectGroupNames, ...getPresetGroups()]));
 
         const handleAddTeamMember = () => {
             if (editProjectFormData.newMemberInput.trim()) {
@@ -1323,7 +1379,31 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                                         className="flex-1 bg-zinc-950 border border-indigo-500 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                                     />
                                     <button 
-                                        onClick={() => setEditProjectFormData({...editProjectFormData, isNewGroup: false, group: '广告片'})}
+                                        onClick={() => {
+                                            const newGroupName = editProjectFormData.group.trim();
+                                            if (!newGroupName) {
+                                                alert('请输入分组名称');
+                                                return;
+                                            }
+                                            if (existingGroups.includes(newGroupName)) {
+                                                alert('该分组名称已存在');
+                                                return;
+                                            }
+                                            // 保存到预设分组
+                                            const currentPresets = getPresetGroups();
+                                            if (!currentPresets.includes(newGroupName)) {
+                                                localStorage.setItem('preset_project_groups', JSON.stringify([...currentPresets, newGroupName]));
+                                            }
+                                            // 切换回下拉模式并选中新分组
+                                            setEditProjectFormData({...editProjectFormData, isNewGroup: false, group: newGroupName});
+                                        }}
+                                        disabled={isUpdatingProject}
+                                        className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        确认
+                                    </button>
+                                    <button 
+                                        onClick={() => setEditProjectFormData({...editProjectFormData, isNewGroup: false, group: project.group || existingGroups[0] || '未分类'})}
                                         disabled={isUpdatingProject}
                                         className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
@@ -1345,11 +1425,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                                         className="w-full appearance-none bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         <option value="未分类">未分类</option>
-                                        <option value="广告片">广告片</option>
-                                        <option value="社交媒体">社交媒体</option>
-                                        <option value="长视频">长视频</option>
-                                        <option value="纪录片">纪录片</option>
-                                        {existingGroups.filter(g => !['广告片', '社交媒体', '长视频', '纪录片', '未分类'].includes(g)).map(g => <option key={g} value={g}>{g}</option>)}
+                                        {existingGroups.map(g => <option key={g} value={g}>{g}</option>)}
                                         <option disabled>──────────</option>
                                         <option value="__NEW__">+ 新建组别</option>
                                     </select>
@@ -1447,10 +1523,13 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
       const date = new Date();
       const prefix = `${date.getFullYear().toString().slice(-2)}${(date.getMonth() + 1).toString().padStart(2, '0')}_`;
       const initialName = projectFormData.name || prefix;
-      const initialGroup = projectFormData.group || '广告片';
       
-      // 获取现有的组别列表
-      const existingGroups = Array.from(new Set(projects.map(p => p.group).filter(g => g && g !== '未分类')));
+      // 获取现有的组别列表（包含预设分组）
+      const projectGroupNames = projects.map(p => p.group).filter(g => g && g !== '未分类');
+      const existingGroups = Array.from(new Set([...projectGroupNames, ...getPresetGroups()]));
+      
+      // 使用第一个可用分组作为默认值
+      const initialGroup = projectFormData.group || existingGroups[0] || '未分类';
 
       const handleAddTeamMember = () => {
         if (projectFormData.newMemberInput.trim()) {
@@ -1472,14 +1551,23 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
       const handleCreateProject = async () => {
         if (!projectFormData.name.trim()) return;
 
+        // 保存表单数据用于后台创建
+        const formDataToSubmit = { ...projectFormData };
+        
+        // 立即关闭窗口
+        handleClose();
+        
+        // 显示创建中的 toast
+        const toastId = toastManager.info(`正在创建项目「${formDataToSubmit.name}」...`, { duration: 0 });
+
         try {
           // 调用 API 创建项目（自动使用当前团队的 teamId）
           const newProject = await projectsApi.create({
-            name: projectFormData.name,
-            client: projectFormData.client || '客户',
-            lead: projectFormData.lead || '待定',
-            postLead: projectFormData.postLead || '待定',
-            group: projectFormData.group || '未分类',
+            name: formDataToSubmit.name,
+            client: formDataToSubmit.client || '客户',
+            lead: formDataToSubmit.lead || '待定',
+            postLead: formDataToSubmit.postLead || '待定',
+            group: formDataToSubmit.group || '未分类',
           });
           
           // 添加到本地状态
@@ -1488,15 +1576,19 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
             payload: {
               id: newProject.id,
               name: newProject.name,
-              client: newProject.client || projectFormData.client || '客户',
-              lead: newProject.lead || projectFormData.lead || '待定',
-              postLead: newProject.postLead || projectFormData.postLead || '待定',
-              group: newProject.group || projectFormData.group || '未分类',
+              client: newProject.client || formDataToSubmit.client || '客户',
+              lead: newProject.lead || formDataToSubmit.lead || '待定',
+              postLead: newProject.postLead || formDataToSubmit.postLead || '待定',
+              group: newProject.group || formDataToSubmit.group || '未分类',
               status: newProject.status || 'active',
               createdDate: newProject.createdDate || new Date().toISOString().split('T')[0],
-              team: projectFormData.team
+              team: formDataToSubmit.team
             }
           });
+
+          // 关闭进度 toast，显示成功 toast
+          toastManager.close(toastId);
+          toastManager.success(`项目「${formDataToSubmit.name}」创建成功！`);
 
           // 重置表单
           setProjectFormData({ 
@@ -1511,7 +1603,9 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
           });
         } catch (error) {
           console.error('Failed to create project:', error);
-          alert('创建项目失败，请重试');
+          // 关闭进度 toast，显示错误 toast
+          toastManager.close(toastId);
+          toastManager.error(`项目「${formDataToSubmit.name}」创建失败，请重试`);
         }
       };
 
@@ -1594,6 +1688,29 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                       className="flex-1 bg-zinc-950 border border-indigo-500 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none"
                     />
                     <button 
+                      onClick={() => {
+                        const newGroupName = projectFormData.group.trim();
+                        if (!newGroupName) {
+                          alert('请输入分组名称');
+                          return;
+                        }
+                        if (existingGroups.includes(newGroupName)) {
+                          alert('该分组名称已存在');
+                          return;
+                        }
+                        // 保存到预设分组
+                        const currentPresets = getPresetGroups();
+                        if (!currentPresets.includes(newGroupName)) {
+                          localStorage.setItem('preset_project_groups', JSON.stringify([...currentPresets, newGroupName]));
+                        }
+                        // 切换回下拉模式并选中新分组
+                        setProjectFormData({...projectFormData, isNewGroup: false, group: newGroupName});
+                      }}
+                      className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs"
+                    >
+                      确认
+                    </button>
+                    <button 
                       onClick={() => setProjectFormData({...projectFormData, isNewGroup: false, group: initialGroup})}
                       className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs"
                     >
@@ -1613,11 +1730,11 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                       }}
                       className="w-full appearance-none bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 outline-none"
                     >
-                      <option value="广告片">广告片</option>
-                      <option value="社交媒体">社交媒体</option>
-                      <option value="长视频">长视频</option>
-                      <option value="纪录片">纪录片</option>
-                      {existingGroups.filter(g => !['广告片', '社交媒体', '长视频', '纪录片'].includes(g)).map(g => <option key={g} value={g}>{g}</option>)}
+                      {existingGroups.length > 0 ? (
+                        existingGroups.map(g => <option key={g} value={g}>{g}</option>)
+                      ) : (
+                        <option value="未分类">未分类</option>
+                      )}
                       <option disabled>──────────</option>
                       <option value="__NEW__">+ 新建组别</option>
                     </select>
@@ -2116,60 +2233,457 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
   // --- SHOWCASE MODULE LOGIC ---
   const renderShowcaseWorkbench = () => {
     const cartItems = videos.filter(v => cart.includes(v.id));
+    
+    // 按 cart 顺序排列
+    const orderedCartItems = cart.map(id => cartItems.find(v => v.id === id)).filter(Boolean) as typeof cartItems;
+
+    // 移动项目顺序
+    const moveItem = (index: number, direction: 'up' | 'down') => {
+      const newCart = [...cart];
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= newCart.length) return;
+      [newCart[index], newCart[targetIndex]] = [newCart[targetIndex], newCart[index]];
+      // 更新 cart 顺序
+      dispatch({ type: 'SET_CART', payload: newCart });
+    };
+
+    // 清空购物车
+    const handleClearCart = () => {
+      dispatch({ type: 'CLEAR_CART' });
+      setShowcaseConfig(prev => ({ ...prev, itemDescriptions: {} }));
+    };
+
+    // 打开生成弹窗
+    const handleOpenGenerateModal = () => {
+      setShowcaseConfig(prev => ({
+        ...prev,
+        isModalOpen: true,
+        packageTitle: '',
+        welcomeMessage: '',
+        contactInfo: ''
+      }));
+      setGeneratedPackageLink(null);
+    };
+
+    // 生成案例包
+    const handleGeneratePackage = async () => {
+      setIsGeneratingPackage(true);
+      try {
+        // 模拟API调用
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // 生成链接
+        const linkId = Date.now().toString(36);
+        const link = showcaseConfig.mode === 'quick_player' 
+          ? `https://vioflow.io/play/${linkId}`
+          : `https://vioflow.io/pitch/${linkId}`;
+        
+        setGeneratedPackageLink(link);
+        
+        // 创建案例包记录
+        dispatch({
+          type: 'GENERATE_SHOWCASE_PACKAGE',
+          payload: {
+            title: showcaseConfig.packageTitle || '未命名案例包',
+            description: showcaseConfig.welcomeMessage,
+            mode: showcaseConfig.mode,
+            clientName: showcaseConfig.clientName
+          }
+        });
+        
+      } catch (error) {
+        console.error('生成案例包失败:', error);
+      } finally {
+        setIsGeneratingPackage(false);
+      }
+    };
+
+    // 复制链接
+    const handleCopyLink = () => {
+      if (generatedPackageLink) {
+        navigator.clipboard.writeText(generatedPackageLink);
+        toastManager.success('链接已复制到剪贴板');
+      }
+    };
+
+    // 关闭弹窗并清空
+    const handleCloseModal = () => {
+      setShowcaseConfig(prev => ({ ...prev, isModalOpen: false }));
+      if (generatedPackageLink) {
+        // 如果已生成链接，清空购物车
+        handleClearCart();
+        setGeneratedPackageLink(null);
+      }
+    };
 
     return (
         <>
+            {/* Header */}
             <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900">
-                <div>
-                   <h2 className="text-sm font-semibold text-zinc-100">打包购物车</h2>
-                   <p className="text-xs text-zinc-500 mt-0.5">{cart.length} 项已选择</p>
+                <div className="flex items-center gap-3">
+                   <div className="p-2 bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 rounded-lg">
+                     <Sparkles className="w-4 h-4 text-violet-400" />
+                   </div>
+                   <div>
+                     <h2 className="text-sm font-semibold text-zinc-100">案例打包</h2>
+                     <p className="text-xs text-zinc-500 mt-0.5">{cart.length} 个视频已选择</p>
+                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                    <button onClick={() => {}} className="text-xs text-indigo-400 hover:text-indigo-300">清空</button>
+                    <button 
+                      onClick={handleClearCart}
+                      disabled={cart.length === 0}
+                      className="text-xs text-zinc-500 hover:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      清空
+                    </button>
                     <button onClick={handleClose}><X className="w-4 h-4 text-zinc-500 hover:text-zinc-200" /></button>
                 </div>
             </div>
 
+            {/* Content */}
             <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
-                {cartItems.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-40 text-zinc-500">
-                        <MonitorPlay className="w-8 h-8 mb-2 opacity-20" />
-                        <p className="text-xs">选择案例视频以构建Showreel</p>
+                {orderedCartItems.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-zinc-500 py-12">
+                        <div className="p-4 bg-zinc-800/50 rounded-2xl mb-4">
+                          <MonitorPlay className="w-10 h-10 opacity-30" />
+                        </div>
+                        <p className="text-sm font-medium text-zinc-400 mb-1">暂无选中的案例视频</p>
+                        <p className="text-xs text-zinc-600 text-center max-w-[200px]">
+                          在浏览区点击视频卡片上的 + 按钮，将视频添加到这里进行打包
+                        </p>
                     </div>
                 ) : (
                     <div className="space-y-2">
-                        {cartItems.map((item) => (
-                            <div key={item.id} className="flex items-center gap-3 p-2 bg-zinc-900 border border-zinc-800 rounded group hover:border-zinc-700">
-                                <GripVertical className="w-4 h-4 text-zinc-600 cursor-grab" />
-                                <div className="w-10 h-10 bg-zinc-800 rounded overflow-hidden shrink-0">
-                                     <img src={`https://picsum.photos/seed/${item.id}/100/100`} className="w-full h-full object-cover" />
+                        {orderedCartItems.map((item, index) => {
+                          const description = showcaseConfig.itemDescriptions[item.id] || '';
+                          const isEditing = showcaseConfig.editingDescriptionId === item.id;
+                          
+                          return (
+                            <div key={item.id} className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden group hover:border-zinc-700 transition-colors">
+                                {/* 视频信息行 */}
+                                <div className="flex items-center gap-3 p-3">
+                                    {/* 排序按钮 */}
+                                    <div className="flex flex-col gap-0.5">
+                                      <button 
+                                        onClick={() => moveItem(index, 'up')}
+                                        disabled={index === 0}
+                                        className="p-0.5 text-zinc-600 hover:text-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed"
+                                      >
+                                        <ArrowUp className="w-3 h-3" />
+                                      </button>
+                                      <button 
+                                        onClick={() => moveItem(index, 'down')}
+                                        disabled={index === orderedCartItems.length - 1}
+                                        className="p-0.5 text-zinc-600 hover:text-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed"
+                                      >
+                                        <ArrowDown className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                    
+                                    {/* 序号 */}
+                                    <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-xs text-zinc-500 font-medium shrink-0">
+                                      {index + 1}
+                                    </div>
+                                    
+                                    {/* 缩略图 */}
+                                    <div className="w-16 h-10 bg-zinc-800 rounded overflow-hidden shrink-0 relative group/thumb">
+                                         <img 
+                                           src={item.thumbnailUrl || `https://picsum.photos/seed/${item.id}/160/100`} 
+                                           className="w-full h-full object-cover" 
+                                           alt={item.name}
+                                         />
+                                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity">
+                                           <Play className="w-4 h-4 text-white" />
+                                         </div>
+                                    </div>
+                                    
+                                    {/* 信息 */}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-xs font-medium text-zinc-200 truncate">{item.name}</div>
+                                        <div className="text-[10px] text-zinc-500">{item.duration || '--:--'} • {item.size || '--'}</div>
+                                    </div>
+                                    
+                                    {/* 操作按钮 */}
+                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button 
+                                          onClick={() => setShowcaseConfig(prev => ({
+                                            ...prev,
+                                            editingDescriptionId: isEditing ? null : item.id
+                                          }))}
+                                          className={`p-1.5 rounded text-zinc-500 transition-colors ${isEditing ? 'bg-indigo-500/20 text-indigo-400' : 'hover:bg-zinc-800 hover:text-zinc-300'}`}
+                                          title="添加说明"
+                                      >
+                                          <MessageSquare className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button 
+                                          onClick={() => dispatch({ type: 'TOGGLE_CART_ITEM', payload: item.id })}
+                                          className="p-1.5 hover:bg-zinc-800 rounded text-zinc-500 hover:text-red-400 transition-colors"
+                                          title="移除"
+                                      >
+                                          <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="text-xs font-medium text-zinc-200 truncate">{item.name}</div>
-                                    <div className="text-[10px] text-zinc-500">{item.duration} • {item.size}</div>
-                                </div>
-                                <button 
-                                    onClick={() => dispatch({ type: 'TOGGLE_CART_ITEM', payload: item.id })}
-                                    className="p-1.5 hover:bg-zinc-800 rounded text-zinc-500 hover:text-red-400"
-                                >
-                                    <X className="w-3.5 h-3.5" />
-                                </button>
+                                
+                                {/* 说明编辑区域 */}
+                                {isEditing && (
+                                  <div className="px-3 pb-3 pt-0">
+                                    <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-2">
+                                      <textarea
+                                        value={description}
+                                        onChange={(e) => setShowcaseConfig(prev => ({
+                                          ...prev,
+                                          itemDescriptions: {
+                                            ...prev.itemDescriptions,
+                                            [item.id]: e.target.value
+                                          }
+                                        }))}
+                                        placeholder="添加视频说明文字（可选，将显示在微站中）..."
+                                        className="w-full bg-transparent text-xs text-zinc-300 placeholder-zinc-600 outline-none resize-none"
+                                        rows={2}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {/* 已有说明显示 */}
+                                {!isEditing && description && (
+                                  <div className="px-3 pb-3 pt-0">
+                                    <div className="text-xs text-zinc-500 bg-zinc-950/50 rounded px-2 py-1.5 line-clamp-2">
+                                      {description}
+                                    </div>
+                                  </div>
+                                )}
                             </div>
-                        ))}
+                          );
+                        })}
                     </div>
                 )}
             </div>
 
+            {/* Footer */}
             <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 backdrop-blur-sm">
                  <button 
                     disabled={cart.length === 0}
-                    onClick={() => alert("模拟生成数据包：\n- Microsite 已创建\n- 下载链接已生成")}
-                    className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all"
+                    onClick={handleOpenGenerateModal}
+                    className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-600 text-white font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all shadow-lg shadow-violet-900/20"
                  >
                     <Share className="w-4 h-4" />
-                    <span>生成数据包</span>
+                    <span>生成案例包</span>
                  </button>
             </div>
+
+            {/* 生成案例包弹窗 */}
+            {showcaseConfig.isModalOpen && (
+              <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-zinc-900 border border-zinc-800 w-full max-w-md rounded-xl shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-hidden">
+                  
+                  {/* 弹窗头部 */}
+                  <div className="px-5 py-4 bg-gradient-to-r from-violet-500/10 to-fuchsia-500/10 border-b border-zinc-800 rounded-t-xl flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 rounded-lg">
+                        <Package className="w-5 h-5 text-violet-400" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-zinc-100">生成案例包</h3>
+                        <p className="text-xs text-zinc-500">{cart.length} 个视频</p>
+                      </div>
+                    </div>
+                    <button onClick={handleCloseModal}>
+                      <X className="w-5 h-5 text-zinc-500 hover:text-zinc-200" />
+                    </button>
+                  </div>
+
+                  {/* 弹窗内容 */}
+                  <div className="p-5 overflow-y-auto flex-1 custom-scrollbar space-y-5">
+                    
+                    {/* 模式选择 */}
+                    <div>
+                      <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">分享模式</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* 快速分享模式 */}
+                        <button
+                          onClick={() => setShowcaseConfig(prev => ({ ...prev, mode: 'quick_player' }))}
+                          className={`p-4 rounded-xl border-2 transition-all text-left ${
+                            showcaseConfig.mode === 'quick_player'
+                              ? 'border-violet-500 bg-violet-500/10'
+                              : 'border-zinc-800 hover:border-zinc-700 bg-zinc-950'
+                          }`}
+                        >
+                          <div className={`p-2 rounded-lg inline-block mb-2 ${
+                            showcaseConfig.mode === 'quick_player' ? 'bg-violet-500/20' : 'bg-zinc-800'
+                          }`}>
+                            <Play className={`w-5 h-5 ${showcaseConfig.mode === 'quick_player' ? 'text-violet-400' : 'text-zinc-500'}`} />
+                          </div>
+                          <div className={`text-sm font-medium ${showcaseConfig.mode === 'quick_player' ? 'text-violet-300' : 'text-zinc-300'}`}>
+                            快速分享
+                          </div>
+                          <div className="text-[10px] text-zinc-500 mt-1">
+                            纯净播放器，适合微信快速分享
+                          </div>
+                        </button>
+
+                        {/* 提案微站模式 */}
+                        <button
+                          onClick={() => setShowcaseConfig(prev => ({ ...prev, mode: 'pitch_page' }))}
+                          className={`p-4 rounded-xl border-2 transition-all text-left ${
+                            showcaseConfig.mode === 'pitch_page'
+                              ? 'border-fuchsia-500 bg-fuchsia-500/10'
+                              : 'border-zinc-800 hover:border-zinc-700 bg-zinc-950'
+                          }`}
+                        >
+                          <div className={`p-2 rounded-lg inline-block mb-2 ${
+                            showcaseConfig.mode === 'pitch_page' ? 'bg-fuchsia-500/20' : 'bg-zinc-800'
+                          }`}>
+                            <Globe className={`w-5 h-5 ${showcaseConfig.mode === 'pitch_page' ? 'text-fuchsia-400' : 'text-zinc-500'}`} />
+                          </div>
+                          <div className={`text-sm font-medium ${showcaseConfig.mode === 'pitch_page' ? 'text-fuchsia-300' : 'text-zinc-300'}`}>
+                            提案微站
+                          </div>
+                          <div className="text-[10px] text-zinc-500 mt-1">
+                            包含Logo、欢迎语的H5页面
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 案例包标题 */}
+                    <div>
+                      <label className="block text-xs font-bold text-zinc-500 uppercase mb-1.5">案例包标题</label>
+                      <input 
+                        type="text"
+                        value={showcaseConfig.packageTitle}
+                        onChange={(e) => setShowcaseConfig(prev => ({ ...prev, packageTitle: e.target.value }))}
+                        placeholder="例如：汽车广告案例合集"
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:border-violet-500 outline-none"
+                      />
+                    </div>
+
+                    {/* 提案微站额外选项 */}
+                    {showcaseConfig.mode === 'pitch_page' && (
+                      <>
+                        {/* 客户名称 */}
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-500 uppercase mb-1.5">客户名称 <span className="text-fuchsia-400">*</span></label>
+                          <input 
+                            type="text"
+                            value={showcaseConfig.clientName}
+                            onChange={(e) => setShowcaseConfig(prev => ({ ...prev, clientName: e.target.value }))}
+                            placeholder="例如：李总、张经理"
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:border-fuchsia-500 outline-none"
+                          />
+                          <p className="text-[10px] text-zinc-600 mt-1">将显示为"To: 李总"的个性化欢迎</p>
+                        </div>
+
+                        {/* 欢迎语 */}
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-500 uppercase mb-1.5">欢迎语 / 项目简介</label>
+                          <textarea 
+                            value={showcaseConfig.welcomeMessage}
+                            onChange={(e) => setShowcaseConfig(prev => ({ ...prev, welcomeMessage: e.target.value }))}
+                            placeholder="例如：这是针对贵司双十一活动的案例参考..."
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:border-fuchsia-500 outline-none resize-none"
+                            rows={3}
+                          />
+                        </div>
+
+                        {/* 联系方式 */}
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-500 uppercase mb-1.5">联系方式</label>
+                          <input 
+                            type="text"
+                            value={showcaseConfig.contactInfo}
+                            onChange={(e) => setShowcaseConfig(prev => ({ ...prev, contactInfo: e.target.value }))}
+                            placeholder="例如：微信：xxx / 电话：138xxxx"
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:border-fuchsia-500 outline-none"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {/* 视频列表预览 */}
+                    <div>
+                      <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">视频列表预览</label>
+                      <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 space-y-2 max-h-32 overflow-y-auto custom-scrollbar">
+                        {orderedCartItems.map((item, index) => (
+                          <div key={item.id} className="flex items-center gap-2 text-xs">
+                            <span className="w-5 h-5 rounded bg-zinc-800 flex items-center justify-center text-zinc-500 text-[10px]">{index + 1}</span>
+                            <span className="text-zinc-400 truncate flex-1">{item.name}</span>
+                            {showcaseConfig.itemDescriptions[item.id] && (
+                              <MessageSquare className="w-3 h-3 text-zinc-600" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 生成成功后显示链接 */}
+                    {generatedPackageLink && (
+                      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-emerald-400 mb-3">
+                          <CheckCircle className="w-4 h-4" />
+                          <span className="text-sm font-medium">案例包已生成</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="text"
+                            value={generatedPackageLink}
+                            readOnly
+                            className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-300 font-mono"
+                          />
+                          <button
+                            onClick={handleCopyLink}
+                            className="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors"
+                            title="复制链接"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </button>
+                          <a
+                            href={generatedPackageLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg transition-colors"
+                            title="打开链接"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 弹窗底部 */}
+                  <div className="p-4 border-t border-zinc-800 flex justify-end gap-3 bg-zinc-950 rounded-b-xl">
+                    <button 
+                      onClick={handleCloseModal}
+                      className="px-4 py-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
+                    >
+                      {generatedPackageLink ? '完成' : '取消'}
+                    </button>
+                    {!generatedPackageLink && (
+                      <button 
+                        onClick={handleGeneratePackage}
+                        disabled={isGeneratingPackage || (showcaseConfig.mode === 'pitch_page' && !showcaseConfig.clientName.trim())}
+                        className="px-5 py-2 text-sm bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-600 text-white font-medium rounded-lg transition-all flex items-center gap-2"
+                      >
+                        {isGeneratingPackage ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>生成中...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Link2 className="w-4 h-4" />
+                            <span>生成链接</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
         </>
     );
   };

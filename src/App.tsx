@@ -323,6 +323,10 @@ function appReducer(state: AppState, action: Action): AppState {
         ...state,
         cart: exists ? state.cart.filter(id => id !== action.payload) : [...state.cart, action.payload]
       };
+    case 'SET_CART':
+      return { ...state, cart: action.payload };
+    case 'CLEAR_CART':
+      return { ...state, cart: [] };
     case 'SET_SEARCH':
       return { ...state, searchTerm: action.payload };
     case 'SET_TAG':
@@ -511,18 +515,28 @@ function appReducer(state: AppState, action: Action): AppState {
         showWorkbench: true, // 打开操作台，但展示历史版本而非上传
         selectedVideoId: null,
         workbenchView: 'versionHistory',
-        workbenchContext: { baseName: action.payload.baseName, viewMode: action.payload.viewMode || 'grid' },
+        workbenchContext: { 
+          baseName: action.payload.baseName, 
+          projectId: action.payload.projectId, // 保存视频所属的项目ID
+          viewMode: action.payload.viewMode || 'grid' 
+        },
         // 清理其他窗口状态，确保只显示历史版本窗口
         workbenchEditProjectId: null,
         workbenchCreateMode: null,
         quickUploadMode: false
       };
     case 'HIDE_VERSION_HISTORY':
+      // 关闭历史版本窗口时，遵循唯一原则：同时关闭操作台
+      // 除非有其他活跃的操作（如新建项目、编辑项目设置）需要保持显示
+      const shouldKeepWorkbenchOpen = state.workbenchCreateMode || state.workbenchEditProjectId;
       return { 
         ...state, 
         showVersionHistory: false,
         versionHistoryBaseName: null,
-        workbenchView: state.workbenchView === 'versionHistory' ? 'upload' : state.workbenchView
+        // 如果没有其他活跃操作，关闭整个操作台
+        showWorkbench: shouldKeepWorkbenchOpen ? true : false,
+        workbenchView: shouldKeepWorkbenchOpen ? (state.workbenchCreateMode ? 'newProject' : 'projectSettings') : 'none',
+        workbenchContext: shouldKeepWorkbenchOpen ? state.workbenchContext : {}
       };
     case 'SET_VERSION_HISTORY_VIEW_MODE':
       return { 

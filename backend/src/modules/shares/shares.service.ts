@@ -3,9 +3,16 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import * as bcrypt from 'bcrypt';
+import * as PDFDocument from 'pdfkit';
+import * as fs from 'fs';
+import * as path from 'path';
 import { ShareLink, ShareLinkType } from './entities/share-link.entity';
 import { ShareLinkAccessLog, AccessAction } from './entities/share-link-access-log.entity';
-import { Annotation } from '../annotations/entities/annotation.entity';
+import { Annotation, AnnotatorUserType } from '../annotations/entities/annotation.entity';
+import { User } from '../users/entities/user.entity';
+import { Team } from '../teams/entities/team.entity';
+import { Video, VideoStatus } from '../videos/entities/video.entity';
+import { Notification, NotificationType } from '../notifications/entities/notification.entity';
 import { TeamsService } from '../teams/teams.service';
 import { TeamRole } from '../teams/entities/team-member.entity';
 
@@ -18,6 +25,10 @@ export class SharesService {
     private accessLogRepository: Repository<ShareLinkAccessLog>,
     @InjectRepository(Annotation)
     private annotationRepository: Repository<Annotation>,
+    @InjectRepository(Video)
+    private videoRepository: Repository<Video>,
+    @InjectRepository(Notification)
+    private notificationRepository: Repository<Notification>,
     @Inject(forwardRef(() => TeamsService))
     private teamsService: TeamsService,
   ) {}
@@ -75,10 +86,27 @@ export class SharesService {
   }
 
   async findByToken(token: string): Promise<ShareLink | null> {
-    const shareLink = await this.shareLinkRepository.findOne({
+    // 支持完整 token 或短链接（token 前8位）
+    let shareLink: ShareLink | null = null;
+    
+    // 首先尝试精确匹配
+    shareLink = await this.shareLinkRepository.findOne({
       where: { token, is_active: true },
       relations: ['video', 'project'],
     });
+
+    // 如果没找到且 token 长度为8（短链接），则模糊匹配
+    if (!shareLink && token.length === 8) {
+      const query = this.shareLinkRepository.createQueryBuilder('share')
+        .leftJoinAndSelect('share.video', 'video')
+        .leftJoinAndSelect('share.project', 'project')
+        .where('share.token LIKE :prefix', { prefix: `${token}%` })
+        .andWhere('share.is_active = :active', { active: true })
+        .orderBy('share.created_at', 'DESC')
+        .limit(1);
+      
+      shareLink = await query.getOne();
+    }
 
     if (!shareLink) {
       return null;
@@ -103,9 +131,21 @@ export class SharesService {
   }
 
   async verifyPassword(token: string, password: string): Promise<boolean> {
-    const shareLink = await this.shareLinkRepository.findOne({
+    // 支持完整 token 或短链接
+    let shareLink: ShareLink | null = await this.shareLinkRepository.findOne({
       where: { token, is_active: true },
     });
+
+    // 如果没找到且 token 长度为8（短链接），则模糊匹配
+    if (!shareLink && token.length === 8) {
+      const query = this.shareLinkRepository.createQueryBuilder('share')
+        .where('share.token LIKE :prefix', { prefix: `${token}%` })
+        .andWhere('share.is_active = :active', { active: true })
+        .orderBy('share.created_at', 'DESC')
+        .limit(1);
+      
+      shareLink = await query.getOne();
+    }
 
     if (!shareLink || !shareLink.password_hash) {
       return false;
@@ -132,11 +172,30 @@ export class SharesService {
     return shareLink;
   }
 
-  // 通过分享token获取批注（公开接口）
-  async getAnnotationsByShareToken(token: string): Promise<Annotation[]> {
-    const shareLink = await this.shareLinkRepository.findOne({
+  // 辅助方法：通过 token 或短链接查找分享链接
+  private async findShareLinkByTokenOrShortCode(token: string): Promise<ShareLink | null> {
+    // 首先尝试精确匹配
+    let shareLink = await this.shareLinkRepository.findOne({
       where: { token, is_active: true },
     });
+
+    // 如果没找到且 token 长度为8（短链接），则模糊匹配
+    if (!shareLink && token.length === 8) {
+      const query = this.shareLinkRepository.createQueryBuilder('share')
+        .where('share.token LIKE :prefix', { prefix: `${token}%` })
+        .andWhere('share.is_active = :active', { active: true })
+        .orderBy('share.created_at', 'DESC')
+        .limit(1);
+      
+      shareLink = await query.getOne();
+    }
+
+    return shareLink;
+  }
+
+  // 通过分享token获取批注（公开接口）
+  async getAnnotationsByShareToken(token: string): Promise<Annotation[]> {
+    const shareLink = await this.findShareLinkByTokenOrShortCode(token);
 
     if (!shareLink || !shareLink.video_id) {
       return [];
@@ -159,14 +218,13 @@ export class SharesService {
     });
   }
 
-  // 通过分享token创建批注（公开接口）
+  // 通过分享token创建批注（公开接口，支持登录用户）
   async createAnnotationByShareToken(
     token: string,
     data: { timecode: string; content: string; clientName?: string },
+    userId?: string | null,
   ): Promise<Annotation> {
-    const shareLink = await this.shareLinkRepository.findOne({
-      where: { token, is_active: true },
-    });
+    const shareLink = await this.findShareLinkByTokenOrShortCode(token);
 
     if (!shareLink || !shareLink.video_id) {
       throw new Error('分享链接不存在或已失效');
@@ -182,14 +240,232 @@ export class SharesService {
       throw new Error('此分享链接不支持批注功能');
     }
 
+    // 确定用户类型和团队信息
+    let userType = AnnotatorUserType.GUEST;
+    let teamName: string | null = null;
+    let annotatorName = '访客';
+
+    if (userId) {
+      // 如果是登录用户，查询用户和团队信息
+      const user = await this.annotationRepository.manager.findOne(User, { 
+        where: { id: userId },
+        relations: ['team'],
+      });
+      
+      if (user) {
+        annotatorName = user.name || '已登录用户';
+        
+        if (user.team_id && user.team) {
+          // 用户属于某个团队
+          userType = AnnotatorUserType.TEAM_USER;
+          teamName = user.team.name || null;
+        } else {
+          // 用户是个人用户（没有团队）
+          userType = AnnotatorUserType.PERSONAL_USER;
+        }
+      }
+    } else if (data.clientName) {
+      annotatorName = data.clientName;
+    }
+
+    // 创建批注，包含用户类型和团队信息
     const annotation = this.annotationRepository.create({
       video_id: shareLink.video_id,
-      user_id: null, // 分享链接创建的批注没有用户ID
+      user_id: userId || null,
       timecode: data.timecode,
       content: data.content,
+      client_name: userId ? null : (data.clientName || null),
+      user_type: userType,
+      team_name: teamName,
     });
 
-    return this.annotationRepository.save(annotation);
+    const savedAnnotation = await this.annotationRepository.save(annotation);
+
+    // 更新视频状态为已批注
+    const video = await this.videoRepository.findOne({
+      where: { id: shareLink.video_id },
+    });
+
+    if (video) {
+      // 更新批注计数
+      const annotationCount = await this.annotationRepository.count({
+        where: { video_id: video.id },
+      });
+      
+      video.annotation_count = annotationCount;
+      
+      // 如果视频状态是初始状态，更新为已批注
+      if (video.status === VideoStatus.INITIAL) {
+        video.status = VideoStatus.ANNOTATED;
+      }
+      
+      await this.videoRepository.save(video);
+
+      // 发送通知给分享链接创建者
+      if (shareLink.created_by) {
+        const notification = this.notificationRepository.create({
+          user_id: shareLink.created_by,
+          type: NotificationType.INFO,
+          title: '收到新的视频批注',
+          message: `${annotatorName} 在视频「${video.name}」的 ${data.timecode} 处添加了批注：${data.content.substring(0, 50)}${data.content.length > 50 ? '...' : ''}`,
+          related_type: 'annotation',
+          related_id: savedAnnotation.id,
+        });
+        await this.notificationRepository.save(notification);
+      }
+    }
+
+    return savedAnnotation;
+  }
+
+  /**
+   * 通过分享token导出批注PDF（公开接口）
+   */
+  async exportPdfByShareToken(token: string): Promise<{ url: string; filename: string }> {
+    const shareLink = await this.findShareLinkByTokenOrShortCode(token);
+
+    if (!shareLink || !shareLink.video_id) {
+      throw new Error('分享链接不存在或已失效');
+    }
+
+    // 检查是否过期
+    if (shareLink.expires_at && new Date(shareLink.expires_at) < new Date()) {
+      throw new Error('分享链接已过期');
+    }
+
+    // 只允许审阅类型的分享链接导出
+    if (shareLink.type !== ShareLinkType.VIDEO_REVIEW) {
+      throw new Error('此分享链接不支持导出功能');
+    }
+
+    // 获取视频信息
+    const video = await this.videoRepository.findOne({
+      where: { id: shareLink.video_id },
+      relations: ['project'],
+    });
+
+    if (!video) {
+      throw new Error('视频不存在');
+    }
+
+    // 获取批注列表
+    const annotations = await this.getAnnotationsByShareToken(token);
+
+    // 创建导出目录
+    const exportDir = path.join(process.cwd(), 'uploads', 'exports');
+    if (!fs.existsSync(exportDir)) {
+      fs.mkdirSync(exportDir, { recursive: true });
+    }
+
+    // 生成文件名
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `审阅报告_${video.name}_${timestamp}.pdf`;
+    const filepath = path.join(exportDir, filename);
+
+    // 创建 PDF 文档
+    const doc = new PDFDocument({
+      size: 'A4',
+      margin: 50,
+      info: {
+        Title: `审阅报告 - ${video.name}`,
+        Author: 'Vioflow',
+        Subject: '视频批注审阅报告',
+      },
+    });
+
+    // 写入文件
+    const writeStream = fs.createWriteStream(filepath);
+    doc.pipe(writeStream);
+
+    // 标题页
+    doc.fontSize(24).text('Video Review Report', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(16).text('视频审阅报告', { align: 'center' });
+    doc.moveDown(2);
+
+    // 视频信息
+    doc.fontSize(14).text(`Video: ${video.name}`, { align: 'left' });
+    doc.fontSize(12).text(`Project: ${video.project?.name || 'Unknown'}`, { align: 'left' });
+    doc.text(`Version: v${video.version}`, { align: 'left' });
+    doc.text(`Generated: ${new Date().toLocaleString('zh-CN')}`, { align: 'left' });
+    doc.text(`Annotations: ${annotations.length}`, { align: 'left' });
+    doc.moveDown(2);
+
+    // 分隔线
+    doc.strokeColor('#cccccc').lineWidth(1);
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+    doc.moveDown(2);
+
+    // 批注列表
+    doc.fontSize(16).text('Annotation Details', { underline: true });
+    doc.moveDown(1);
+
+    if (annotations.length === 0) {
+      doc.fontSize(12).fillColor('#888888').text('No annotations', { align: 'center' });
+    } else {
+      annotations.forEach((annotation, index) => {
+        // 检查是否需要新页
+        if (doc.y > 700) {
+          doc.addPage();
+        }
+
+        // 批注序号和时间码
+        doc.fillColor('#333333').fontSize(12).text(`#${index + 1}`, { continued: true });
+        doc.fillColor('#6366f1').text(`  [${annotation.timecode}]`);
+
+        // 批注者信息
+        const authorName = annotation.user?.name || annotation.client_name || 'Guest';
+        const isGuest = !annotation.user?.name;
+        doc.fillColor('#666666').fontSize(10).text(
+          `${authorName}${isGuest ? ' (Guest)' : ''} - ${new Date(annotation.created_at).toLocaleString('zh-CN')}`
+        );
+
+        // 批注内容
+        doc.fillColor('#000000').fontSize(11).text(annotation.content, {
+          indent: 20,
+          lineGap: 4,
+        });
+
+        // 状态标记
+        if (annotation.is_completed) {
+          doc.fillColor('#10b981').fontSize(9).text('[Resolved]', { indent: 20 });
+        }
+
+        doc.moveDown(1.5);
+      });
+    }
+
+    // 页脚
+    doc.fontSize(8).fillColor('#999999');
+    doc.text('Generated by Vioflow Video Management System', 50, 780, { align: 'center' });
+
+    // 完成文档
+    doc.end();
+
+    // 等待写入完成
+    await new Promise<void>((resolve, reject) => {
+      writeStream.on('finish', resolve);
+      writeStream.on('error', reject);
+    });
+
+    // 返回下载URL
+    const downloadUrl = `/api/shares/download/${encodeURIComponent(filename)}`;
+
+    return {
+      url: downloadUrl,
+      filename: filename,
+    };
+  }
+
+  /**
+   * 获取导出文件
+   */
+  async getExportFile(filename: string): Promise<{ filepath: string; exists: boolean }> {
+    const filepath = path.join(process.cwd(), 'uploads', 'exports', filename);
+    return {
+      filepath,
+      exists: fs.existsSync(filepath),
+    };
   }
 
   /**

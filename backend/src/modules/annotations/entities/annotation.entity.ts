@@ -10,6 +10,13 @@ import {
 import { Video } from '../../videos/entities/video.entity';
 import { User } from '../../users/entities/user.entity';
 
+// 批注者用户类型
+export enum AnnotatorUserType {
+  GUEST = 'guest',           // 访客
+  TEAM_USER = 'team_user',   // 团队用户
+  PERSONAL_USER = 'personal_user', // 个人用户
+}
+
 @Entity('annotations')
 export class Annotation {
   @PrimaryGeneratedColumn('uuid')
@@ -35,6 +42,19 @@ export class Annotation {
 
   @Column({ nullable: true })
   completed_at: Date;
+
+  @Column({ length: 100, nullable: true })
+  client_name: string;
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: AnnotatorUserType.GUEST,
+  })
+  user_type: AnnotatorUserType;
+
+  @Column({ length: 100, nullable: true })
+  team_name: string;
 
   @CreateDateColumn()
   created_at: Date;

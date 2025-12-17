@@ -28,7 +28,7 @@ export class ThumbnailService {
     videoBuffer: Buffer,
     videoKey: string,
     timestamp?: number,
-  ): Promise<{ url: string; key: string } | null> {
+  ): Promise<{ url: string; key: string; duration?: number; width?: number; height?: number } | null> {
     const tempVideoPath = path.join(this.tempDir, `video-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`);
     const tempThumbnailPath = path.join(this.tempDir, `thumb-${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`);
 
@@ -103,7 +103,13 @@ export class ThumbnailService {
 
       this.logger.log(`[ThumbnailService] 缩略图上传成功: ${url}`);
 
-      return { url, key };
+      return { 
+        url, 
+        key,
+        duration: videoInfo.duration,
+        width: videoInfo.width,
+        height: videoInfo.height,
+      };
     } catch (error) {
       this.logger.error(`[ThumbnailService] 生成缩略图失败:`, error);
       return null;
@@ -115,6 +121,28 @@ export class ThumbnailService {
         }
         if (fs.existsSync(tempThumbnailPath)) {
           fs.unlinkSync(tempThumbnailPath);
+        }
+      } catch (cleanupError) {
+        this.logger.warn(`[ThumbnailService] 清理临时文件失败:`, cleanupError);
+      }
+    }
+  }
+
+  /**
+   * 获取视频信息（时长、分辨率等）- 公共方法
+   * @param videoBuffer 视频文件的 Buffer
+   * @returns 视频信息对象
+   */
+  async getVideoInfoFromBuffer(videoBuffer: Buffer): Promise<{ duration: number; width?: number; height?: number }> {
+    const tempVideoPath = path.join(this.tempDir, `video-info-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`);
+    
+    try {
+      fs.writeFileSync(tempVideoPath, videoBuffer);
+      return await this.getVideoInfo(tempVideoPath);
+    } finally {
+      try {
+        if (fs.existsSync(tempVideoPath)) {
+          fs.unlinkSync(tempVideoPath);
         }
       } catch (cleanupError) {
         this.logger.warn(`[ThumbnailService] 清理临时文件失败:`, cleanupError);

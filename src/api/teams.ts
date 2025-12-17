@@ -105,7 +105,13 @@ export const teamsApi = {
 
   // 获取用户在团队中的角色
   getUserRole: async (id: string): Promise<{ role: string }> => {
-    return apiClient.get(`/teams/${id}/role`);
+    const response = await apiClient.get(`/teams/${id}/role`);
+    // 兼容处理：如果后端直接返回字符串（如 "admin"），则包装成对象格式
+    if (typeof response === 'string' || response === null) {
+      return { role: response as string };
+    }
+    // 如果已经是对象格式 { role: "admin" }，直接返回
+    return response;
   },
 };
 

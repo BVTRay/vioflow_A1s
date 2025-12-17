@@ -208,6 +208,7 @@ export const AppWithRouter: React.FC = () => {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/share/:token" element={<SharePage />} />
+        <Route path="/s/:shortCode" element={<SharePage />} />
         <Route path="/onboarding" element={<TeamOnboarding />} />
         <Route
           path="/test-supabase"

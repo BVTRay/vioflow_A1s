@@ -78,8 +78,9 @@ export class TeamsController {
   }
 
   @Get(':id/role')
-  getUserRole(@Param('id') id: string, @Request() req) {
-    return this.teamsService.getUserRole(id, req.user.id);
+  async getUserRole(@Param('id') id: string, @Request() req) {
+    const role = await this.teamsService.getUserRole(id, req.user.id);
+    return { role };
   }
 }
 

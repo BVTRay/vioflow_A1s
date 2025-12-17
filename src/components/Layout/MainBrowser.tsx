@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Play, MoreVertical, Plus, Check, Clock, LayoutGrid, List, SlidersHorizontal, FileVideo, Film, CheckCircle2, Share2, AlertTriangle, Lock, Download, Copy, X, ArrowRight, Package, Power, Eye, ChevronRight, ChevronDown, Folder, Upload, Trash2 } from 'lucide-react';
+import { Play, MoreVertical, Plus, Check, Clock, LayoutGrid, List, SlidersHorizontal, FileVideo, Film, CheckCircle2, Share2, AlertTriangle, Lock, Download, Copy, X, ArrowRight, Package, Power, Eye, ChevronRight, ChevronDown, Folder, Upload, Trash2, Calendar, Infinity, Link2 } from 'lucide-react';
 import { useStore } from '../../App';
 import { Video, DeliveryPackage } from '../../types';
 import { PreviewPlayer } from './PreviewPlayer';
@@ -143,9 +143,12 @@ export const MainBrowser: React.FC = () => {
       allowDownload: boolean;
       hasPassword: boolean;
       password: string;
+      expiryOption: '7days' | 'permanent';
       generatedLink: string;
+      shortCode: string;
       isLoading: boolean;
       error: string;
+      copySuccess: boolean;
   }>({
       isOpen: false,
       video: null,
@@ -155,9 +158,12 @@ export const MainBrowser: React.FC = () => {
       allowDownload: false,
       hasPassword: false,
       password: '',
+      expiryOption: '7days',
       generatedLink: '',
+      shortCode: '',
       isLoading: false,
-      error: ''
+      error: '',
+      copySuccess: false
   });
 
   // Review Share Links State
@@ -514,9 +520,12 @@ export const MainBrowser: React.FC = () => {
           allowDownload: false,
           hasPassword: false,
           password: '',
+          expiryOption: '7days',
           generatedLink: '',
+          shortCode: '',
           isLoading: false,
-          error: ''
+          error: '',
+          copySuccess: false,
       });
   };
 
@@ -571,35 +580,60 @@ export const MainBrowser: React.FC = () => {
       }
   };
 
+  // 案例模块：添加到购物车并打开操作台
+  const handleAddToCartAndOpenWorkbench = (videoId: string) => {
+    // 如果视频不在购物车中，添加它
+    if (!cart.includes(videoId)) {
+      dispatch({ type: 'TOGGLE_CART_ITEM', payload: videoId });
+    }
+    // 打开操作台
+    dispatch({ type: 'TOGGLE_WORKBENCH', payload: true });
+  };
+
   const handleGenerateLink = async () => {
-      if (!shareState.video || !project) return;
+      if (!shareState.video) return;
+      
+      // 使用视频自己的 projectId，而不是全局选中的项目
+      const videoProjectId = shareState.video.projectId;
+      if (!videoProjectId) {
+          setShareState(prev => ({ ...prev, error: '无法获取视频所属项目' }));
+          return;
+      }
 
       setShareState(prev => ({ ...prev, isLoading: true, error: '' }));
 
       try {
-          // 计算7天后的过期时间
-          const expiresAt = new Date();
-          expiresAt.setDate(expiresAt.getDate() + 7);
+          // 根据选项计算过期时间
+          let expiresAt: string | undefined;
+          if (shareState.expiryOption === '7days') {
+              const date = new Date();
+              date.setDate(date.getDate() + 7);
+              expiresAt = date.toISOString();
+          }
+          // 长期有效时不传 expiresAt
           
           const shareLink = await sharesApi.create({
               type: 'video_review',
               videoId: shareState.video.id,
-              projectId: project.id,
+              projectId: videoProjectId,
               allowDownload: shareState.allowDownload,
               hasPassword: shareState.hasPassword,
               password: shareState.hasPassword ? shareState.password : undefined,
-              expiresAt: expiresAt.toISOString(),
+              expiresAt,
               justification: shareState.isHistorical ? shareState.justification : undefined,
           });
 
-          // 生成分享链接 - 使用环境变量或默认域名
+          // 生成短链接格式 - 使用环境变量或默认域名
           const shareDomain = import.meta.env.VITE_SHARE_DOMAIN || window.location.origin;
-          const link = `${shareDomain}/share/${shareLink.token}`;
+          // 短链接格式：取 token 的前8位作为短码
+          const shortCode = shareLink.token.substring(0, 8);
+          const link = `${shareDomain}/s/${shortCode}`;
           
           setShareState(prev => ({ 
               ...prev, 
               step: 'success', 
               generatedLink: link,
+              shortCode: shortCode,
               isLoading: false 
           }));
       } catch (error: any) {
@@ -673,54 +707,92 @@ export const MainBrowser: React.FC = () => {
 
                       {/* STEP 2: CONFIG */}
                       {shareState.step === 'config' && (
-                          <div className="space-y-6">
-                              <div className={`flex items-center gap-3 p-3 ${theme.bg.primary} rounded border ${theme.border.primary}`}>
-                                  <FileVideo className="w-8 h-8 text-indigo-500" />
-                                  <div className="min-w-0">
-                                      <div className="text-sm text-zinc-200 truncate">{shareState.video.name}</div>
-                                      <div className="text-xs text-zinc-500">v{shareState.video.version} • {shareState.video.size}</div>
+                          <div className="space-y-5">
+                              {/* 视频信息预览 */}
+                              <div className={`flex items-center gap-3 p-3 ${theme.bg.primary} rounded-lg border ${theme.border.primary}`}>
+                                  <div className="w-12 h-12 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+                                      <FileVideo className="w-6 h-6 text-indigo-400" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                      <div className="text-sm text-zinc-200 truncate font-medium">{shareState.video.name}</div>
+                                      <div className="text-xs text-zinc-500 mt-0.5">v{shareState.video.version} • {shareState.video.size}</div>
                                   </div>
                               </div>
 
+                              {/* 分享设置选项 */}
                               <div className="space-y-4">
-                                  <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2 text-zinc-300">
+                                  {/* 允许下载 */}
+                                  <div className="flex items-center justify-between py-1">
+                                      <div className="flex items-center gap-3 text-zinc-300">
                                           <Download className="w-4 h-4 text-zinc-500" />
                                           <span className="text-sm">允许下载源文件</span>
                                       </div>
                                       <button 
                                         onClick={() => setShareState(prev => ({ ...prev, allowDownload: !prev.allowDownload }))}
-                                        className={`w-10 h-5 rounded-full transition-colors relative ${shareState.allowDownload ? 'bg-indigo-600' : theme.bg.active}`}
+                                        className={`w-11 h-6 rounded-full transition-colors relative ${shareState.allowDownload ? 'bg-indigo-600' : 'bg-zinc-700'}`}
                                       >
-                                          <span className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-transform ${shareState.allowDownload ? 'left-6' : 'left-1'}`} />
+                                          <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${shareState.allowDownload ? 'left-6' : 'left-1'}`} />
                                       </button>
                                   </div>
                                   
-                                  <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2 text-zinc-300">
+                                  {/* 密码保护 */}
+                                  <div className="flex items-center justify-between py-1">
+                                      <div className="flex items-center gap-3 text-zinc-300">
                                           <Lock className="w-4 h-4 text-zinc-500" />
                                           <span className="text-sm">密码保护</span>
                                       </div>
                                       <button 
                                         onClick={() => setShareState(prev => ({ ...prev, hasPassword: !prev.hasPassword, password: '' }))}
-                                        className={`w-10 h-5 rounded-full transition-colors relative ${shareState.hasPassword ? 'bg-indigo-600' : theme.bg.active}`}
+                                        className={`w-11 h-6 rounded-full transition-colors relative ${shareState.hasPassword ? 'bg-indigo-600' : 'bg-zinc-700'}`}
                                       >
-                                          <span className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-transform ${shareState.hasPassword ? 'left-6' : 'left-1'}`} />
+                                          <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${shareState.hasPassword ? 'left-6' : 'left-1'}`} />
                                       </button>
                                   </div>
 
+                                  {/* 密码输入框 */}
                                   {shareState.hasPassword && (
-                                      <div>
-                                          <label className="block text-xs font-bold text-zinc-500 uppercase mb-1.5">密码</label>
+                                      <div className="pl-7">
                                           <input 
-                                              type="password"
-                                              className={`w-full ${theme.bg.primary} border ${theme.border.secondary} rounded-lg p-3 text-sm ${theme.text.secondary} focus:border-indigo-500 outline-none`}
-                                              placeholder="请输入密码"
+                                              type="text"
+                                              className={`w-full ${theme.bg.primary} border ${theme.border.secondary} rounded-lg px-3 py-2.5 text-sm ${theme.text.secondary} focus:border-indigo-500 outline-none placeholder-zinc-600`}
+                                              placeholder="设置访问密码"
                                               value={shareState.password}
                                               onChange={(e) => setShareState(prev => ({ ...prev, password: e.target.value }))}
                                           />
                                       </div>
                                   )}
+
+                                  {/* 有效期选项 */}
+                                  <div className="pt-2">
+                                      <div className="flex items-center gap-3 text-zinc-300 mb-3">
+                                          <Calendar className="w-4 h-4 text-zinc-500" />
+                                          <span className="text-sm">链接有效期</span>
+                                      </div>
+                                      <div className="flex gap-2 pl-7">
+                                          <button
+                                            onClick={() => setShareState(prev => ({ ...prev, expiryOption: '7days' }))}
+                                            className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                                              shareState.expiryOption === '7days' 
+                                                ? 'bg-indigo-600 text-white' 
+                                                : `${theme.bg.primary} text-zinc-400 hover:text-zinc-200 border ${theme.border.primary}`
+                                            }`}
+                                          >
+                                              <Clock className="w-4 h-4" />
+                                              <span>7 天有效</span>
+                                          </button>
+                                          <button
+                                            onClick={() => setShareState(prev => ({ ...prev, expiryOption: 'permanent' }))}
+                                            className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                                              shareState.expiryOption === 'permanent' 
+                                                ? 'bg-indigo-600 text-white' 
+                                                : `${theme.bg.primary} text-zinc-400 hover:text-zinc-200 border ${theme.border.primary}`
+                                            }`}
+                                          >
+                                              <Infinity className="w-4 h-4" />
+                                              <span>长期有效</span>
+                                          </button>
+                                      </div>
+                                  </div>
                               </div>
 
                               {shareState.error && (
@@ -729,13 +801,15 @@ export const MainBrowser: React.FC = () => {
                                   </div>
                               )}
 
+                              {/* 生成链接按钮 */}
                               <div className="pt-2">
                                   <button 
                                     onClick={handleGenerateLink}
                                     disabled={shareState.isLoading || (shareState.hasPassword && !shareState.password.trim())}
-                                    className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white py-2.5 rounded-lg text-sm font-medium shadow-lg shadow-indigo-900/20 transition-all"
+                                    className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white py-3 rounded-lg text-sm font-medium shadow-lg shadow-indigo-900/20 transition-all flex items-center justify-center gap-2"
                                   >
-                                      {shareState.isLoading ? '创建中...' : '创建分享链接'}
+                                      <Link2 className="w-4 h-4" />
+                                      {shareState.isLoading ? '生成中...' : '生成分享链接'}
                                   </button>
                               </div>
                           </div>
@@ -743,37 +817,176 @@ export const MainBrowser: React.FC = () => {
 
                       {/* STEP 3: SUCCESS */}
                       {shareState.step === 'success' && (
-                          <div className="space-y-6 text-center py-2">
-                              <div className="w-12 h-12 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-2">
-                                  <CheckCircle2 className="w-6 h-6" />
-                              </div>
-                              <div>
-                                  <h4 className="text-lg font-semibold text-zinc-100">链接已生成</h4>
-                                  <p className="text-sm text-zinc-500 mt-1">此链接有效期为 7 天</p>
+                          <div className="space-y-5 py-2">
+                              {/* 成功图标和标题 */}
+                              <div className="text-center">
+                                  <div className="w-14 h-14 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                                      <CheckCircle2 className="w-7 h-7" />
+                                  </div>
+                                  <h4 className="text-lg font-semibold text-zinc-100">分享链接已生成</h4>
+                                  <p className="text-sm text-zinc-500 mt-1">
+                                      {shareState.expiryOption === 'permanent' ? '此链接长期有效' : '此链接有效期为 7 天'}
+                                  </p>
                               </div>
 
-                              <div className="flex items-center gap-2">
-                                  <input 
-                                    type="text" 
-                                    readOnly 
-                                    value={shareState.generatedLink}
-                                    className={`flex-1 ${theme.bg.primary} border ${theme.border.primary} rounded-lg px-3 py-2 text-sm ${theme.text.tertiary} outline-none`}
-                                  />
+                              {/* 分享链接卡片 */}
+                              <div className={`${theme.bg.primary} rounded-lg border ${shareState.copySuccess ? 'border-emerald-500/50' : theme.border.primary} p-4 transition-colors`}>
+                                  <div className="flex items-center gap-3 mb-3">
+                                      <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center">
+                                          <Link2 className="w-4 h-4 text-indigo-400" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                          <p className="text-xs text-zinc-500 mb-0.5">分享链接</p>
+                                          <p className="text-sm text-zinc-200 font-mono truncate">{shareState.generatedLink}</p>
+                                      </div>
+                                  </div>
+                                  
                                   <button 
-                                    onClick={() => navigator.clipboard.writeText(shareState.generatedLink)}
-                                    className={`p-2 ${theme.bg.tertiary} ${theme.bg.hover} ${theme.text.secondary} rounded-lg transition-colors`}
-                                    title="复制"
+                                    onClick={async () => {
+                                      try {
+                                        // 优先使用 Clipboard API
+                                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                                          await navigator.clipboard.writeText(shareState.generatedLink);
+                                        } else {
+                                          // 回退方案：使用传统的复制方法
+                                          const textArea = document.createElement('textarea');
+                                          textArea.value = shareState.generatedLink;
+                                          textArea.style.position = 'fixed';
+                                          textArea.style.left = '-9999px';
+                                          textArea.style.top = '-9999px';
+                                          document.body.appendChild(textArea);
+                                          textArea.focus();
+                                          textArea.select();
+                                          document.execCommand('copy');
+                                          document.body.removeChild(textArea);
+                                        }
+                                        setShareState(prev => ({ ...prev, copySuccess: true }));
+                                        // 2秒后重置复制状态
+                                        setTimeout(() => {
+                                          setShareState(prev => ({ ...prev, copySuccess: false }));
+                                        }, 2000);
+                                      } catch (err) {
+                                        console.error('复制失败:', err);
+                                        // 即使失败也尝试使用回退方法
+                                        try {
+                                          const textArea = document.createElement('textarea');
+                                          textArea.value = shareState.generatedLink;
+                                          textArea.style.position = 'fixed';
+                                          textArea.style.left = '-9999px';
+                                          document.body.appendChild(textArea);
+                                          textArea.focus();
+                                          textArea.select();
+                                          document.execCommand('copy');
+                                          document.body.removeChild(textArea);
+                                          setShareState(prev => ({ ...prev, copySuccess: true }));
+                                          setTimeout(() => {
+                                            setShareState(prev => ({ ...prev, copySuccess: false }));
+                                          }, 2000);
+                                        } catch (fallbackErr) {
+                                          console.error('回退复制也失败:', fallbackErr);
+                                          alert('复制失败，请手动复制链接');
+                                        }
+                                      }
+                                    }}
+                                    className={`w-full py-2.5 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                                      shareState.copySuccess 
+                                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                                        : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                                    }`}
                                   >
-                                      <Copy className="w-4 h-4" />
+                                      {shareState.copySuccess ? (
+                                        <>
+                                          <Check className="w-4 h-4" />
+                                          <span>链接已复制</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Copy className="w-4 h-4" />
+                                          <span>复制链接</span>
+                                        </>
+                                      )}
                                   </button>
                               </div>
 
-                              <button 
-                                onClick={() => setShareState(prev => ({ ...prev, isOpen: false }))}
-                                className="text-sm text-zinc-500 hover:text-zinc-300"
-                              >
-                                  关闭窗口
-                              </button>
+                              {/* 密码信息 */}
+                              {shareState.hasPassword && shareState.password && (
+                                  <div className={`${theme.bg.primary} rounded-lg border ${theme.border.primary} p-4`}>
+                                      <div className="flex items-center gap-3">
+                                          <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                              <Lock className="w-4 h-4 text-amber-400" />
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                              <p className="text-xs text-zinc-500 mb-0.5">访问密码</p>
+                                              <p className="text-sm text-zinc-200 font-mono">{shareState.password}</p>
+                                          </div>
+                                          <button
+                                            onClick={async () => {
+                                              try {
+                                                if (navigator.clipboard && navigator.clipboard.writeText) {
+                                                  await navigator.clipboard.writeText(shareState.password);
+                                                } else {
+                                                  const textArea = document.createElement('textarea');
+                                                  textArea.value = shareState.password;
+                                                  textArea.style.position = 'fixed';
+                                                  textArea.style.left = '-9999px';
+                                                  document.body.appendChild(textArea);
+                                                  textArea.focus();
+                                                  textArea.select();
+                                                  document.execCommand('copy');
+                                                  document.body.removeChild(textArea);
+                                                }
+                                                alert('密码已复制');
+                                              } catch (err) {
+                                                console.error('复制密码失败:', err);
+                                              }
+                                            }}
+                                            className="p-2 hover:bg-zinc-700 rounded-lg transition-colors text-zinc-400 hover:text-zinc-200"
+                                            title="复制密码"
+                                          >
+                                            <Copy className="w-4 h-4" />
+                                          </button>
+                                      </div>
+                                  </div>
+                              )}
+
+                              {/* 分享信息摘要 */}
+                              <div className="flex items-center justify-center gap-4 text-xs text-zinc-500">
+                                  {shareState.allowDownload && (
+                                      <span className="flex items-center gap-1">
+                                          <Download className="w-3 h-3" />
+                                          允许下载
+                                      </span>
+                                  )}
+                                  {shareState.hasPassword && (
+                                      <span className="flex items-center gap-1">
+                                          <Lock className="w-3 h-3" />
+                                          密码保护
+                                      </span>
+                                  )}
+                                  <span className="flex items-center gap-1">
+                                      {shareState.expiryOption === 'permanent' ? (
+                                          <>
+                                              <Infinity className="w-3 h-3" />
+                                              长期有效
+                                          </>
+                                      ) : (
+                                          <>
+                                              <Clock className="w-3 h-3" />
+                                              7天有效
+                                          </>
+                                      )}
+                                  </span>
+                              </div>
+
+                              {/* 关闭按钮 */}
+                              <div className="text-center pt-2">
+                                  <button 
+                                    onClick={() => setShareState(prev => ({ ...prev, isOpen: false, copySuccess: false, expiryOption: '7days' }))}
+                                    className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+                                  >
+                                      关闭窗口
+                                  </button>
+                              </div>
                           </div>
                       )}
                   </div>
@@ -918,7 +1131,7 @@ export const MainBrowser: React.FC = () => {
                     // 点击版本号，打开操作台显示历史版本
                     dispatch({ 
                       type: 'SHOW_VERSION_HISTORY', 
-                      payload: { baseName, viewMode: 'list' } 
+                      payload: { baseName, projectId: video.projectId, viewMode: 'list' } 
                     });
                   } : undefined}
                   onThumbnailClick={() => {
@@ -934,7 +1147,7 @@ export const MainBrowser: React.FC = () => {
                       dispatch({ type: 'SELECT_VIDEO', payload: video.id });
                     }
                   }}
-                  onToggleCart={() => dispatch({ type: 'TOGGLE_CART_ITEM', payload: video.id })}
+                  onToggleCart={() => activeModule === 'showcase' ? handleAddToCartAndOpenWorkbench(video.id) : dispatch({ type: 'TOGGLE_CART_ITEM', payload: video.id })}
                   onShare={() => handleShareClick(video, true)}
                   onToggleSelection={activeModule === 'delivery' && selectedProject.status === 'delivered' ? () => dispatch({ type: 'TOGGLE_DELIVERY_FILE_SELECTION', payload: video.id }) : undefined}
                   onUploadNewVersion={activeModule === 'review' ? () => handleUploadNewVersion(video) : undefined}
@@ -956,7 +1169,7 @@ export const MainBrowser: React.FC = () => {
       
       return (
         <div>
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center justify-between gap-3 mb-4">
             <button
               onClick={navigateBack}
               className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-sm transition-colors"
@@ -964,7 +1177,6 @@ export const MainBrowser: React.FC = () => {
               <ChevronRight className="w-4 h-4 rotate-180" />
               返回
             </button>
-            <h2 className="text-lg font-semibold text-zinc-200">{selectedProject.name}</h2>
             {/* 【项目目录】上传视频按钮 - 仅审阅模块 */}
             {activeModule === 'review' && (
               <button
@@ -976,7 +1188,7 @@ export const MainBrowser: React.FC = () => {
                     payload: { view: 'upload', context: { projectId: selectedProjectId, from: 'project-toolbar' } } 
                   });
                 }}
-                className="ml-auto flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
+                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 <span>上传视频</span>
@@ -1013,7 +1225,7 @@ export const MainBrowser: React.FC = () => {
                       // 点击版本号，打开操作台显示历史版本
                       dispatch({ 
                         type: 'SHOW_VERSION_HISTORY', 
-                        payload: { baseName: name, viewMode: 'grid' } 
+                        payload: { baseName: name, projectId: latestVideo.projectId, viewMode: 'grid' } 
                       });
                     } : undefined}
                     onThumbnailClick={() => {
@@ -1030,7 +1242,7 @@ export const MainBrowser: React.FC = () => {
                         dispatch({ type: 'SELECT_VIDEO', payload: latestVideo.id });
                       }
                     }}
-                    onToggleCart={() => dispatch({ type: 'TOGGLE_CART_ITEM', payload: latestVideo.id })}
+                    onToggleCart={() => activeModule === 'showcase' ? handleAddToCartAndOpenWorkbench(latestVideo.id) : dispatch({ type: 'TOGGLE_CART_ITEM', payload: latestVideo.id })}
                     onShare={() => handleShareClick(latestVideo, true)}
                     onToggleSelection={activeModule === 'delivery' && selectedProject.status === 'delivered' ? () => dispatch({ type: 'TOGGLE_DELIVERY_FILE_SELECTION', payload: latestVideo.id }) : undefined}
                     onUploadNewVersion={activeModule === 'review' ? () => handleUploadNewVersion(latestVideo) : undefined}
@@ -1700,8 +1912,7 @@ export const MainBrowser: React.FC = () => {
               <div>
                   {/* 检索模式下上传视频按钮工具栏 - 仅审阅模块 */}
                   {isRetrievalPanelVisible && activeModule === 'review' && project && (
-                      <div className="flex items-center gap-3 mb-4">
-                          <h2 className="text-lg font-semibold text-zinc-200">{project.name}</h2>
+                      <div className="flex items-center justify-end gap-3 mb-4">
                           <button
                               onClick={() => {
                                   dispatch({ 
@@ -1709,7 +1920,7 @@ export const MainBrowser: React.FC = () => {
                                     payload: { view: 'upload', context: { projectId: project?.id || null, from: 'retrieval-toolbar' } } 
                                   });
                               }}
-                              className="ml-auto flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
+                              className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
                           >
                               <Plus className="w-4 h-4" />
                               <span>上传视频</span>
@@ -1735,7 +1946,7 @@ export const MainBrowser: React.FC = () => {
                             // 点击版本号，打开操作台显示历史版本
                             dispatch({ 
                               type: 'SHOW_VERSION_HISTORY', 
-                              payload: { baseName, viewMode: 'list' } 
+                              payload: { baseName, projectId: video.projectId, viewMode: 'list' } 
                             });
                           } : undefined}
                           onThumbnailClick={() => {
@@ -1751,7 +1962,7 @@ export const MainBrowser: React.FC = () => {
                       dispatch({ type: 'SELECT_VIDEO', payload: video.id });
                     }
                   }}
-                          onToggleCart={() => dispatch({ type: 'TOGGLE_CART_ITEM', payload: video.id })}
+                          onToggleCart={() => activeModule === 'showcase' ? handleAddToCartAndOpenWorkbench(video.id) : dispatch({ type: 'TOGGLE_CART_ITEM', payload: video.id })}
                           onShare={() => handleShareClick(video, true)}
                           onToggleSelection={activeModule === 'delivery' && project && project.status === 'delivered' ? () => dispatch({ type: 'TOGGLE_DELIVERY_FILE_SELECTION', payload: video.id }) : undefined}
                           onUploadNewVersion={activeModule === 'review' ? () => handleUploadNewVersion(video) : undefined}
@@ -1768,8 +1979,7 @@ export const MainBrowser: React.FC = () => {
           <div>
               {/* 检索模式下上传视频按钮工具栏 - 仅审阅模块 */}
               {isRetrievalPanelVisible && activeModule === 'review' && project && (
-                  <div className="flex items-center gap-3 mb-4">
-                      <h2 className="text-lg font-semibold text-zinc-200">{project.name}</h2>
+                  <div className="flex items-center justify-end gap-3 mb-4">
                       <button
                           onClick={() => {
                               dispatch({ 
@@ -1777,7 +1987,7 @@ export const MainBrowser: React.FC = () => {
                                 payload: { view: 'upload', context: { projectId: project?.id || null, from: 'retrieval-toolbar-grid' } } 
                               });
                           }}
-                          className="ml-auto flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
+                          className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
                       >
                           <Plus className="w-4 h-4" />
                           <span>上传视频</span>
@@ -1814,7 +2024,7 @@ export const MainBrowser: React.FC = () => {
                               // 点击版本号，打开操作台显示历史版本
                               dispatch({ 
                                 type: 'SHOW_VERSION_HISTORY', 
-                                payload: { baseName: name, viewMode: 'grid' } 
+                                payload: { baseName: name, projectId: latestVideo.projectId, viewMode: 'grid' } 
                               });
                             } : undefined}
                             onThumbnailClick={() => {
@@ -1831,7 +2041,7 @@ export const MainBrowser: React.FC = () => {
                                 dispatch({ type: 'SELECT_VIDEO', payload: latestVideo.id });
                               }
                             }}
-                            onToggleCart={() => dispatch({ type: 'TOGGLE_CART_ITEM', payload: latestVideo.id })}
+                            onToggleCart={() => activeModule === 'showcase' ? handleAddToCartAndOpenWorkbench(latestVideo.id) : dispatch({ type: 'TOGGLE_CART_ITEM', payload: latestVideo.id })}
                             onShare={() => handleShareClick(latestVideo, true)}
                             onToggleSelection={activeModule === 'delivery' && project && project.status === 'delivered' ? () => dispatch({ type: 'TOGGLE_DELIVERY_FILE_SELECTION', payload: latestVideo.id }) : undefined}
                             onUploadNewVersion={activeModule === 'review' && isRetrievalPanelVisible ? () => handleUploadNewVersion(latestVideo) : undefined}
@@ -2470,19 +2680,19 @@ const VideoCard: React.FC<{
   }
 
   // GRID VIEW
-  // 移除固定高度，改为 flex-1 自适应，并使用 aspect-[2/3] 固定卡片比例
-  const fontSize = cardSize === 'small' ? 'text-xs' : 'text-sm';
+  // 使用 container queries 实现等比例缩放
 
   return (
     <div 
       onClick={onBodyClick}
-      className={`group relative bg-zinc-900 border rounded-lg overflow-hidden transition-all cursor-pointer shadow-sm hover:shadow-xl hover:shadow-black/50 flex flex-col w-full aspect-[2/3]
+      style={{ containerType: 'inline-size' }}
+      className={`group relative bg-zinc-900 border rounded-lg overflow-hidden transition-all cursor-pointer shadow-sm hover:shadow-xl hover:shadow-black/50 flex flex-col w-full aspect-[3/4]
         ${isInCart ? 'border-indigo-500 ring-1 ring-indigo-500/50' : ''}
         ${isSelected ? 'border-emerald-500 ring-1 ring-emerald-500/50' : ''}
         ${!isInCart && !isSelected ? 'border-zinc-800 hover:border-zinc-600' : ''}
       `}
     >
-      {/* Thumbnail - 强制 1:1 比例且不压缩 */}
+      {/* Thumbnail - 保持 1:1 正方形比例 */}
       <div className={`relative w-full aspect-square bg-zinc-800 overflow-hidden shrink-0`}>
         <div onClick={(e) => { e.stopPropagation(); onThumbnailClick(); }} className="w-full h-full relative group/thumb">
              <img 
@@ -2497,15 +2707,18 @@ const VideoCard: React.FC<{
                 }}
             />
             <div className="absolute inset-0 bg-black/20 group-hover/thumb:bg-black/40 transition-colors flex items-center justify-center">
-                <div className={`rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 scale-75 group-hover/thumb:scale-100 transition-all duration-200 hover:bg-indigo-500 hover:text-white ${cardSize === 'small' ? 'w-8 h-8' : 'w-10 h-10'}`}>
-                    <Play className={`${cardSize === 'small' ? 'w-3 h-3' : 'w-4 h-4'} fill-current pl-0.5`} />
+                <div 
+                    style={{ width: '15cqi', height: '15cqi', maxWidth: '40px', maxHeight: '40px', minWidth: '24px', minHeight: '24px' }}
+                    className="rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 scale-75 group-hover/thumb:scale-100 transition-all duration-200 hover:bg-indigo-500 hover:text-white"
+                >
+                    <Play style={{ width: '40%', height: '40%' }} className="fill-current pl-0.5" />
                 </div>
             </div>
         </div>
 
-        {/* Badges */}
-        <div className="absolute top-2 left-2 flex gap-1 z-10">
-            {/* 案例模块中，所有视频都不显示版本号 */}
+        {/* Badges - 左上角标签组 */}
+        <div style={{ top: '4cqi', left: '4cqi', gap: '1.5cqi' }} className="absolute flex z-10">
+            {/* 版本号 - 带颜色 */}
             {activeModule !== 'showcase' && (
                 <span 
                     onClick={(e) => {
@@ -2521,9 +2734,10 @@ const VideoCard: React.FC<{
                             e.stopPropagation();
                         }
                     }}
-                    className={`bg-black/70 backdrop-blur-md text-[10px] font-bold px-1.5 py-0.5 rounded text-zinc-200 border border-white/10 ${
+                    style={{ fontSize: 'clamp(9px, 3.5cqi, 12px)', padding: 'clamp(2px, 1cqi, 4px) clamp(5px, 2cqi, 8px)' }}
+                    className={`bg-indigo-600/80 backdrop-blur-md font-semibold rounded text-white whitespace-nowrap ${
                         onVersionClick && versionCount && versionCount > 1 
-                            ? 'cursor-pointer hover:bg-indigo-500/50 hover:border-indigo-400 transition-colors' 
+                            ? 'cursor-pointer hover:bg-indigo-500 transition-colors' 
                             : ''
                     }`}
                     title={versionCount && versionCount > 1 ? `点击查看 ${versionCount} 个版本` : undefined}
@@ -2531,90 +2745,131 @@ const VideoCard: React.FC<{
                     v{video.version}{versionCount && versionCount > 1 ? ` (${versionCount})` : ''}
                 </span>
             )}
+            {/* 批注状态 */}
             {video.status === 'annotated' && (
-              <span className="bg-indigo-500 text-[10px] font-bold px-1.5 py-0.5 rounded text-white">
+              <span 
+                style={{ fontSize: 'clamp(9px, 3.5cqi, 12px)', padding: 'clamp(2px, 1cqi, 4px) clamp(5px, 2cqi, 8px)' }}
+                className="bg-amber-500/90 backdrop-blur-md font-semibold rounded text-white whitespace-nowrap"
+              >
                 {video.annotationCount && video.annotationCount > 0 ? `批注*${video.annotationCount}` : '已批注'}
               </span>
             )}
-            {video.status === 'approved' && <span className="bg-emerald-500 text-[10px] font-bold px-1.5 py-0.5 rounded text-white">已通过</span>}
+            {/* 已通过状态 */}
+            {video.status === 'approved' && (
+              <span 
+                style={{ fontSize: 'clamp(9px, 3.5cqi, 12px)', padding: 'clamp(2px, 1cqi, 4px) clamp(5px, 2cqi, 8px)' }}
+                className="bg-emerald-500/90 backdrop-blur-md font-semibold rounded text-white whitespace-nowrap"
+              >
+                已通过
+              </span>
+            )}
         </div>
         
-        {/* Duration - Moved to top-right */}
-        <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-md text-[10px] font-mono px-1.5 py-0.5 rounded text-zinc-200 z-10">
+        {/* Duration - 左下角时长 */}
+        <div 
+            style={{ bottom: '4cqi', left: '4cqi', fontSize: 'clamp(9px, 3.5cqi, 12px)', padding: 'clamp(2px, 1cqi, 4px) clamp(5px, 2cqi, 8px)' }}
+            className="absolute bg-black/60 backdrop-blur-md font-mono rounded text-white/90 z-10 whitespace-nowrap"
+        >
             {video.duration}
         </div>
 
-        {/* Action Buttons - Moved to bottom-right */}
-        <div className="absolute bottom-2 right-2 flex items-center gap-1 z-10 px-2" onClick={e => e.stopPropagation()}>
-            {isDeliveryDelivered && onToggleSelection ? (
+        {/* Share Button - 右上角分享按钮 */}
+        {activeModule !== 'showcase' && (
+            <div 
+                style={{ top: '4cqi', right: '4cqi' }}
+                className="absolute z-10" 
+                onClick={e => e.stopPropagation()}
+            >
                 <button 
-                    onClick={(e) => { e.stopPropagation(); onToggleSelection(); }}
-                    className={`p-1.5 rounded transition-colors backdrop-blur-md border border-white/10 ${isSelected ? 'bg-emerald-500 text-white' : 'bg-black/60 text-zinc-300 hover:text-white hover:bg-zinc-700'}`}
+                    onClick={(e) => { e.stopPropagation(); onShare(); }}
+                    style={{ padding: 'clamp(4px, 1.5cqi, 6px)' }}
+                    className={`rounded transition-all duration-200 bg-black/60 backdrop-blur-md ${isLatest ? 'text-white/90 hover:bg-indigo-500 hover:text-white' : 'text-white/60 hover:bg-black/80 hover:text-white/90'}`}
+                    title={isLatest ? "对外分享" : "分享历史版本"}
                 >
-                    {isSelected ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                    <Share2 style={{ width: 'clamp(12px, 4cqi, 16px)', height: 'clamp(12px, 4cqi, 16px)' }} />
                 </button>
-            ) : activeModule !== 'showcase' ? (
-                <>
-                    {/* 审阅模块下，在分享按钮左侧添加上传和删除按钮（检索模式和文件模式都显示） */}
-                    {activeModule === 'review' && onUploadNewVersion && onDelete && (
-                        <>
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); onUploadNewVersion(); }}
-                                className="p-1.5 rounded transition-colors backdrop-blur-md border border-white/10 bg-black/60 text-zinc-300 hover:text-indigo-300 hover:bg-black/80"
-                                title="上传新版本"
-                            >
-                                <Upload className="w-3.5 h-3.5" />
-                            </button>
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); onDelete(); }}
-                                className="p-1.5 rounded transition-colors backdrop-blur-md border border-white/10 bg-black/60 text-zinc-300 hover:text-red-300 hover:bg-black/80"
-                                title="删除视频"
-                            >
-                                <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                        </>
-                    )}
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onShare(); }}
-                        className={`p-1.5 rounded transition-colors backdrop-blur-md border border-white/10 ${isLatest ? 'bg-black/60 text-indigo-400 hover:text-indigo-300 hover:bg-black/80' : 'bg-black/60 text-zinc-300 hover:text-zinc-200 hover:bg-black/80'}`}
-                        title={isLatest ? "对外分享" : "分享历史版本"}
-                    >
-                        <Share2 className="w-3.5 h-3.5" />
-                    </button>
-                </>
-            ) : (
-                <button 
-                    onClick={(e) => { e.stopPropagation(); onToggleCart(); }}
-                    className={`p-1.5 rounded transition-colors backdrop-blur-md border border-white/10 ${isInCart ? 'bg-indigo-500 text-white' : 'bg-black/60 text-zinc-300 hover:text-white hover:bg-black/80'}`}
-                >
-                    {isInCart ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-                </button>
-            )}
-        </div>
-      </div>
-
-      {/* Info Body - 剩余空间自适应 */}
-      <div className={`flex flex-col flex-1 min-h-0 ${cardSize === 'small' ? 'p-2' : 'p-3'}`}>
-        <div className={`mb-auto ${cardSize === 'small' ? '' : 'mb-2'}`}>
-            <h3 className={`font-medium text-zinc-200 line-clamp-2 group-hover:text-indigo-400 transition-colors ${fontSize}`} title={video.name}>{video.name}</h3>
-        </div>
-        
-        {/* Change Log Preview - 只在非 small 尺寸显示 */}
-        {cardSize !== 'small' && (
-            video.changeLog ? (
-                <p className="text-[10px] text-zinc-500 line-clamp-2 bg-zinc-950/50 p-1.5 rounded mb-2 border border-zinc-800/50">
-                    {video.changeLog}
-                </p>
-            ) : null
+            </div>
         )}
 
-        {/* 显示被命中的标签 - 只在非 small 尺寸显示 */}
-        {cardSize !== 'small' && matchedTags.length > 0 && (
-          <div className="flex items-center gap-1 flex-wrap mb-2">
+        {/* Action Buttons - 右下角操作按钮组 */}
+        {((isDeliveryDelivered && onToggleSelection) || 
+          (activeModule === 'review' && onUploadNewVersion && onDelete) || 
+          activeModule === 'showcase') && (
+            <div 
+                style={{ bottom: '4cqi', right: '4cqi' }}
+                className="absolute z-10" 
+                onClick={e => e.stopPropagation()}
+            >
+                <div 
+                    style={{ gap: 'clamp(2px, 1cqi, 4px)' }}
+                    className="flex items-center"
+                >
+                    {isDeliveryDelivered && onToggleSelection ? (
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onToggleSelection(); }}
+                            style={{ padding: 'clamp(4px, 1.5cqi, 6px)' }}
+                            className={`rounded transition-all duration-200 ${isSelected ? 'bg-emerald-500 text-white' : 'bg-black/60 backdrop-blur-md text-white/90 hover:bg-emerald-500 hover:text-white'}`}
+                        >
+                            {isSelected ? <Check style={{ width: 'clamp(12px, 4cqi, 16px)', height: 'clamp(12px, 4cqi, 16px)' }} /> : <Plus style={{ width: 'clamp(12px, 4cqi, 16px)', height: 'clamp(12px, 4cqi, 16px)' }} />}
+                        </button>
+                    ) : activeModule === 'review' && onUploadNewVersion && onDelete ? (
+                        <>
+                            {/* 上传新版本按钮 */}
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); onUploadNewVersion(); }}
+                                style={{ padding: 'clamp(4px, 1.5cqi, 6px)' }}
+                                className="rounded transition-all duration-200 bg-black/60 backdrop-blur-md text-white/90 hover:bg-indigo-500 hover:text-white"
+                                title="上传新版本"
+                            >
+                                <Upload style={{ width: 'clamp(12px, 4cqi, 16px)', height: 'clamp(12px, 4cqi, 16px)' }} />
+                            </button>
+                            {/* 删除按钮 */}
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                                style={{ padding: 'clamp(4px, 1.5cqi, 6px)' }}
+                                className="rounded transition-all duration-200 bg-black/60 backdrop-blur-md text-white/90 hover:bg-red-500 hover:text-white"
+                                title="删除视频"
+                            >
+                                <Trash2 style={{ width: 'clamp(12px, 4cqi, 16px)', height: 'clamp(12px, 4cqi, 16px)' }} />
+                            </button>
+                        </>
+                    ) : activeModule === 'showcase' ? (
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onToggleCart(); }}
+                            style={{ padding: 'clamp(4px, 1.5cqi, 6px)' }}
+                            className={`rounded transition-all duration-200 ${isInCart ? 'bg-indigo-500 text-white' : 'bg-black/60 backdrop-blur-md text-white/90 hover:bg-indigo-500 hover:text-white'}`}
+                        >
+                            {isInCart ? <Check style={{ width: 'clamp(12px, 4cqi, 16px)', height: 'clamp(12px, 4cqi, 16px)' }} /> : <Plus style={{ width: 'clamp(12px, 4cqi, 16px)', height: 'clamp(12px, 4cqi, 16px)' }} />}
+                        </button>
+                    ) : null}
+                </div>
+            </div>
+        )}
+      </div>
+
+      {/* Info Body - 使用 cqi 单位等比例缩放，填充剩余空间 */}
+      <div 
+        style={{ padding: 'clamp(6px, 3cqi, 12px)' }}
+        className="flex flex-col flex-1 min-h-0"
+      >
+        <div className="mb-0.5">
+            <h3 
+                style={{ fontSize: 'clamp(11px, 6cqi, 18px)', lineHeight: '1.3' }}
+                className="font-medium text-zinc-200 line-clamp-1 group-hover:text-indigo-400 transition-colors" 
+                title={video.name}
+            >
+                {video.name}
+            </h3>
+        </div>
+        
+        {/* 显示被命中的标签 */}
+        {matchedTags.length > 0 && (
+          <div style={{ gap: 'clamp(2px, 1cqi, 4px)', marginTop: 'clamp(2px, 1cqi, 4px)' }} className="flex items-center flex-wrap">
             {matchedTags.map(tagName => (
               <span 
                 key={tagName}
-                className="px-1.5 py-0.5 rounded text-[9px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30"
+                style={{ fontSize: 'clamp(8px, 3cqi, 11px)', padding: 'clamp(1px, 0.5cqi, 2px) clamp(3px, 1.5cqi, 6px)' }}
+                className="rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30"
               >
                 {tagName}
               </span>
@@ -2622,14 +2877,16 @@ const VideoCard: React.FC<{
           </div>
         )}
 
-        {cardSize !== 'small' && (
-            <div className={`pt-2 border-t border-zinc-800/50 flex items-center justify-between gap-2 shrink-0 mt-auto`}>
-                {/* 时间信息 - 小尺寸隐藏 */}
-                <div className="flex flex-col text-[10px] text-zinc-500 min-w-0">
-                    <span className="flex items-center gap-1 truncate"><Clock className="w-3 h-3" /> {video.uploadTime}</span>
-                </div>
-            </div>
-        )}
+        {/* 上传日期 - 固定在底部 */}
+        <div className="flex items-center text-zinc-500 mt-auto pt-1">
+             <span 
+                style={{ fontSize: 'clamp(9px, 4cqi, 12px)', gap: 'clamp(2px, 1cqi, 4px)' }} 
+                className="flex items-center truncate opacity-70"
+             >
+                <Clock style={{ width: 'clamp(10px, 4cqi, 14px)', height: 'clamp(10px, 4cqi, 14px)' }} /> 
+                {video.uploadTime}
+             </span>
+        </div>
       </div>
     </div>
   );

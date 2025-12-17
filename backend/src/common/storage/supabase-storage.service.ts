@@ -48,7 +48,14 @@ export class SupabaseStorageService {
       if (error) {
         console.error('[SupabaseStorageService] 上传失败:', error);
         const statusCode = (error as any).statusCode || (error as any).status || 'unknown';
-        throw new Error(`Failed to upload file to Supabase: ${error.message} (${statusCode})`);
+        
+        // 特殊处理文件大小超限错误 (413)
+        if (statusCode === 413 || String(statusCode) === '413' || error.message?.includes('exceeded the maximum allowed size')) {
+          const fileSizeMB = (file.length / 1024 / 1024).toFixed(2);
+          throw new Error(`文件大小超过限制：当前文件 ${fileSizeMB}MB，Supabase 免费版限制为 50MB。请压缩视频或升级 Supabase 计划。`);
+        }
+        
+        throw new Error(`上传到 Supabase 失败: ${error.message} (${statusCode})`);
       }
 
       if (!data) {

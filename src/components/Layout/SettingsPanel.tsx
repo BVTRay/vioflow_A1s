@@ -64,8 +64,32 @@ export const SettingsPanel: React.FC = () => {
   const [searchingUser, setSearchingUser] = useState(false);
   const [foundUser, setFoundUser] = useState<any>(null);
 
-  // 获取所有组别（旧方式，用于兼容）
-  const allGroups = Array.from(new Set(projects.map(p => p.group).filter(g => g && g !== '未分类')));
+  // 预设分组（存储在 localStorage 中）
+  const [presetGroups, setPresetGroups] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('preset_project_groups');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  
+  // 获取所有组别（从项目中提取 + 预设分组）
+  const projectGroupNames = Array.from(new Set(projects.map(p => p.group).filter(g => g && g !== '未分类')));
+  const allGroups = Array.from(new Set([...projectGroupNames, ...presetGroups]));
+  
+  // 计算每个分组下的项目数量
+  const groupProjectCounts = projects.reduce((acc, p) => {
+    const groupName = p.group || '未分类';
+    acc[groupName] = (acc[groupName] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  
+  // 保存预设分组到 localStorage
+  const savePresetGroups = (groups: string[]) => {
+    setPresetGroups(groups);
+    localStorage.setItem('preset_project_groups', JSON.stringify(groups));
+  };
 
   // 加载当前用户的团队信息和角色
   useEffect(() => {
@@ -74,9 +98,12 @@ export const SettingsPanel: React.FC = () => {
       setSelectedTeamId(teamContextTeam.id);
       teamsApi.getUserRole(teamContextTeam.id)
         .then(roleData => {
+          console.log('🔐 获取用户团队角色:', roleData);
           setUserTeamRole(roleData.role);
         })
-        .catch(console.error);
+        .catch(err => {
+          console.error('❌ 获取用户团队角色失败:', err);
+        });
     }
   }, [teamContextTeam]);
 
@@ -290,24 +317,96 @@ export const SettingsPanel: React.FC = () => {
     }
   };
 
-  // 项目分组管理函数
+  // 项目分组管理函数（直接操作项目的 group 字段）
   const handleCreateProjectGroup = async () => {
-    if (!selectedTeamId || !newGroupName.trim()) {
+    if (!newGroupName.trim()) {
       alert('请输入项目分组名称');
       return;
     }
+    const trimmedName = newGroupName.trim();
+    // 检查分组名称是否已存在
+    if (allGroups.includes(trimmedName)) {
+      alert('该分组名称已存在');
+      return;
+    }
+    // 添加到预设分组列表
+    savePresetGroups([...presetGroups, trimmedName]);
+    setNewGroupName('');
+    setNewGroupDescription('');
+    alert(`分组"${trimmedName}"创建成功！创建新项目时可以选择此分组。`);
+  };
+
+  const handleRenameGroup = async (oldName: string, newName: string) => {
+    if (!newName.trim()) return;
+    if (newName === oldName) {
+      setEditingGroup(null);
+      return;
+    }
+    // 检查新名称是否已存在
+    if (allGroups.includes(newName.trim())) {
+      alert('该分组名称已存在');
+      return;
+    }
+    // 批量更新所有使用该分组名称的项目
+    const projectsToUpdate = projects.filter(p => p.group === oldName);
+    if (projectsToUpdate.length === 0) {
+      setEditingGroup(null);
+      return;
+    }
     try {
-      await projectGroupsApi.create({ name: newGroupName.trim(), description: newGroupDescription }, selectedTeamId);
-      await loadProjectGroups();
+      // 批量更新项目的 group 字段
+      await Promise.all(projectsToUpdate.map(p => 
+        projectsApi.update(p.id, { group: newName.trim() })
+      ));
+      // 刷新项目列表
+      if (selectedTeamId) {
+        const updatedProjects = await projectsApi.getAll({ teamId: selectedTeamId });
+        dispatch({ type: 'SET_PROJECTS', payload: updatedProjects });
+      }
+      setEditingGroup(null);
       setNewGroupName('');
-      setNewGroupDescription('');
-      alert('项目分组创建成功');
+      alert(`已将 ${projectsToUpdate.length} 个项目的分组从"${oldName}"重命名为"${newName.trim()}"`);
     } catch (error) {
-      console.error('Failed to create project group:', error);
-      alert('创建项目分组失败');
+      console.error('Failed to rename group:', error);
+      alert('重命名分组失败');
     }
   };
 
+  const handleDeleteGroup = async (groupName: string) => {
+    const projectsInGroup = projects.filter(p => p.group === groupName);
+    
+    // 如果是预设分组（没有项目），直接从预设列表中删除
+    if (projectsInGroup.length === 0) {
+      if (presetGroups.includes(groupName)) {
+        savePresetGroups(presetGroups.filter(g => g !== groupName));
+        alert(`分组"${groupName}"已删除`);
+      }
+      return;
+    }
+    
+    if (!window.confirm(`确认删除分组"${groupName}"？该分组下的 ${projectsInGroup.length} 个项目将被移动到"未分类"。`)) return;
+    try {
+      // 批量将该分组下的项目移动到"未分类"
+      await Promise.all(projectsInGroup.map(p => 
+        projectsApi.update(p.id, { group: '未分类' })
+      ));
+      // 如果是预设分组，也从预设列表中删除
+      if (presetGroups.includes(groupName)) {
+        savePresetGroups(presetGroups.filter(g => g !== groupName));
+      }
+      // 刷新项目列表
+      if (selectedTeamId) {
+        const updatedProjects = await projectsApi.getAll({ teamId: selectedTeamId });
+        dispatch({ type: 'SET_PROJECTS', payload: updatedProjects });
+      }
+      alert(`已将 ${projectsInGroup.length} 个项目移动到"未分类"`);
+    } catch (error) {
+      console.error('Failed to delete group:', error);
+      alert('删除分组失败');
+    }
+  };
+
+  // 保留旧函数以兼容 project_groups 表（如果需要）
   const handleUpdateProjectGroupName = async (groupId: string, newName: string) => {
     if (!selectedTeamId || !newName.trim()) return;
     try {
@@ -409,6 +508,9 @@ export const SettingsPanel: React.FC = () => {
   // 权限检查
   const canManageTeam = userTeamRole === 'super_admin' || userTeamRole === 'admin';
   const canManageProjectGroups = canManageTeam;
+  
+  // 调试日志
+  console.log('🔐 权限检查:', { userTeamRole, canManageTeam, canManageProjectGroups });
 
   if (!isAdmin && !currentUser?.team_id) {
     return (
@@ -841,33 +943,19 @@ export const SettingsPanel: React.FC = () => {
             <div className="space-y-4 max-w-4xl">
               <div>
                 <h3 className={`text-sm font-semibold ${theme.text.muted} mb-4`}>项目分组管理</h3>
-                {!selectedTeamId && (
-                  <div className={`mb-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-yellow-400 text-xs`}>
-                    请先选择一个团队
-                  </div>
-                )}
-                {!canManageProjectGroups && (
-                  <div className={`mb-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-yellow-400 text-xs`}>
-                    您没有权限管理项目分组
-                  </div>
-                )}
+                <p className={`text-xs ${theme.text.muted} mb-4`}>
+                  管理项目分组。分组来源于项目的分组属性，修改分组会更新该分组下所有项目。
+                </p>
                 
-                {/* 创建项目分组 */}
-                {canManageProjectGroups && selectedTeamId && (
+                {/* 创建项目分组提示 */}
+                {canManageProjectGroups && (
                   <div className={`mb-4 p-4 ${theme.bg.secondary} border ${theme.border.primary} rounded-lg`}>
                     <div className="space-y-3">
                       <input
                         type="text"
                         value={newGroupName}
                         onChange={(e) => setNewGroupName(e.target.value)}
-                        placeholder="项目分组名称"
-                        className={`w-full ${theme.bg.tertiary} border ${theme.border.secondary} rounded px-3 py-2 text-sm ${theme.text.primary} outline-none focus:border-indigo-500`}
-                      />
-                      <textarea
-                        value={newGroupDescription}
-                        onChange={(e) => setNewGroupDescription(e.target.value)}
-                        placeholder="项目分组描述（可选）"
-                        rows={2}
+                        placeholder="新分组名称（创建项目时可选择）"
                         className={`w-full ${theme.bg.tertiary} border ${theme.border.secondary} rounded px-3 py-2 text-sm ${theme.text.primary} outline-none focus:border-indigo-500`}
                       />
                       <button
@@ -875,92 +963,104 @@ export const SettingsPanel: React.FC = () => {
                         className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-sm flex items-center gap-2"
                       >
                         <PlusSquare className="w-4 h-4" />
-                        创建项目分组
+                        预设分组
                       </button>
                     </div>
                   </div>
                 )}
 
-                {/* 项目分组列表 */}
-                {loadingProjectGroups ? (
-                  <div className={`text-center py-12 ${theme.text.muted} text-sm`}>加载中...</div>
-                ) : projectGroupsError ? (
-                  <div className={`p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm text-center`}>
-                    {projectGroupsError}
-                  </div>
-                ) : (
-                  <div className="space-y-2 max-h-[600px] overflow-y-auto">
-                    {projectGroups.length === 0 ? (
-                      <p className={`text-sm ${theme.text.muted} text-center py-8`}>暂无项目分组</p>
-                    ) : (
-                      projectGroups.map(group => (
-                        <div key={group.id} className={`flex items-center gap-3 p-3 ${theme.bg.secondary} border ${theme.border.primary} rounded-lg`}>
-                          {editingGroup === group.id ? (
-                            <>
-                              <input
-                                type="text"
-                                value={newGroupName}
-                                onChange={(e) => setNewGroupName(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    handleUpdateProjectGroupName(group.id, newGroupName);
-                                  } else if (e.key === 'Escape') {
-                                    setEditingGroup(null);
-                                    setNewGroupName('');
-                                  }
-                                }}
-                                autoFocus
-                                className={`flex-1 ${theme.bg.tertiary} border border-indigo-500 rounded px-3 py-2 text-sm ${theme.text.primary} outline-none`}
-                              />
-                              <button
-                                onClick={() => handleUpdateProjectGroupName(group.id, newGroupName)}
-                                className="p-2 text-indigo-400 hover:text-indigo-300"
-                              >
-                                <Save className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => {
+                {/* 项目分组列表（从项目中提取） */}
+                <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                  {allGroups.length === 0 ? (
+                    <div className={`text-center py-8`}>
+                      <p className={`text-sm ${theme.text.muted}`}>暂无项目分组</p>
+                      <p className={`text-xs ${theme.text.muted} mt-2`}>创建项目时选择分组，分组将自动显示在这里</p>
+                    </div>
+                  ) : (
+                    allGroups.map(groupName => (
+                      <div key={groupName} className={`flex items-center gap-3 p-3 ${theme.bg.secondary} border ${theme.border.primary} rounded-lg`}>
+                        {editingGroup === groupName ? (
+                          <>
+                            <input
+                              type="text"
+                              value={newGroupName}
+                              onChange={(e) => setNewGroupName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleRenameGroup(groupName, newGroupName);
+                                } else if (e.key === 'Escape') {
                                   setEditingGroup(null);
                                   setNewGroupName('');
-                                }}
-                                className={`p-2 ${theme.text.muted} ${theme.text.hover}`}
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <FolderOpen className={`w-5 h-5 ${theme.text.muted}`} />
-                              <div className="flex-1">
-                                <div className={`text-sm ${theme.text.secondary}`}>{group.name}</div>
-                                {group.description && (
-                                  <div className={`text-xs ${theme.text.muted} mt-1`}>{group.description}</div>
-                                )}
+                                }
+                              }}
+                              autoFocus
+                              className={`flex-1 ${theme.bg.tertiary} border border-indigo-500 rounded px-3 py-2 text-sm ${theme.text.primary} outline-none`}
+                            />
+                            <button
+                              onClick={() => handleRenameGroup(groupName, newGroupName)}
+                              className="p-2 text-indigo-400 hover:text-indigo-300"
+                            >
+                              <Save className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingGroup(null);
+                                setNewGroupName('');
+                              }}
+                              className={`p-2 ${theme.text.muted} ${theme.text.hover}`}
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <FolderOpen className={`w-5 h-5 text-indigo-400`} />
+                            <div className="flex-1">
+                              <div className={`text-sm ${theme.text.secondary}`}>{groupName}</div>
+                              <div className={`text-xs ${theme.text.muted} mt-1`}>
+                                {groupProjectCounts[groupName] || 0} 个项目
                               </div>
-                              {canManageProjectGroups && (
-                                <>
-                                  <button
-                                    onClick={() => {
-                                      setEditingGroup(group.id);
-                                      setNewGroupName(group.name);
-                                    }}
-                                    className={`p-2 ${theme.text.muted} hover:text-indigo-400`}
-                                  >
-                                    <Edit2 className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteProjectGroup(group.id)}
-                                    className={`p-2 ${theme.text.muted} hover:text-red-400`}
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </>
-                              )}
-                            </>
-                          )}
+                            </div>
+                            {canManageProjectGroups && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setEditingGroup(groupName);
+                                    setNewGroupName(groupName);
+                                  }}
+                                  className={`p-2 ${theme.text.muted} hover:text-indigo-400`}
+                                  title="重命名分组"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteGroup(groupName)}
+                                  className={`p-2 ${theme.text.muted} hover:text-red-400`}
+                                  title="删除分组（项目移至未分类）"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+                
+                {/* 未分类项目统计 */}
+                {groupProjectCounts['未分类'] > 0 && (
+                  <div className={`mt-4 p-3 ${theme.bg.tertiary} border ${theme.border.secondary} rounded-lg`}>
+                    <div className="flex items-center gap-3">
+                      <FolderOpen className={`w-5 h-5 ${theme.text.muted}`} />
+                      <div className="flex-1">
+                        <div className={`text-sm ${theme.text.muted}`}>未分类</div>
+                        <div className={`text-xs ${theme.text.muted} mt-1`}>
+                          {groupProjectCounts['未分类']} 个项目
                         </div>
-                      ))
-                    )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

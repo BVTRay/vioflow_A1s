@@ -10,6 +10,7 @@ import { useTheme, Theme } from '../../contexts/ThemeContext';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
 import { Modal } from '../UI/Modal';
 import { isDevMode } from '../../utils/devMode';
+import { useStore } from '../../App';
 
 interface HeaderProps {
   onToggleDrawer: (drawer: AppState['activeDrawer']) => void;
@@ -17,12 +18,16 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onToggleDrawer, activeDrawer }) => {
+  const { state } = useStore();
   const { user, logout, isAuthenticated } = useAuth();
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showUserSettings, setShowUserSettings] = useState(false);
   const [showThemeMenu, setShowThemeMenu] = useState(false);
+  
+  // 检查是否有正在上传的任务
+  const hasActiveUploads = state.uploadQueue.length > 0;
   const [userFormData, setUserFormData] = useState({
     name: '',
     email: '',
@@ -193,10 +198,32 @@ export const Header: React.FC<HeaderProps> = ({ onToggleDrawer, activeDrawer }) 
         <div className="flex items-center gap-2">
         <button 
           onClick={() => onToggleDrawer(activeDrawer === 'transfer' ? 'none' : 'transfer')}
-          className={`p-2 rounded-md transition-colors relative ${activeDrawer === 'transfer' ? `${themeClasses.bg.tertiary} ${themeClasses.text.primary}` : `${themeClasses.text.muted} ${themeClasses.text.hover} ${themeClasses.bg.hover}`}`}
+          className={`p-2 rounded-md transition-all duration-300 relative ${
+            hasActiveUploads 
+              ? 'text-indigo-400' 
+              : activeDrawer === 'transfer' 
+                ? `${themeClasses.bg.tertiary} ${themeClasses.text.primary}` 
+                : `${themeClasses.text.muted} ${themeClasses.text.hover} ${themeClasses.bg.hover}`
+          }`}
+          title={hasActiveUploads ? `${state.uploadQueue.length} 个视频正在上传` : '传输队列'}
         >
-          <ArrowRightLeft className="w-5 h-5" />
-          <span className={`absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-500 rounded-full border-2 ${themeClasses.bg.primary}`}></span>
+          <ArrowRightLeft 
+            className="w-5 h-5" 
+            style={hasActiveUploads ? { 
+              animation: 'icon-breathe 1.5s ease-in-out infinite',
+            } : {}}
+          />
+          {hasActiveUploads && (
+            <span 
+              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-indigo-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
+              style={{ animation: 'pulse-glow 1.5s ease-in-out infinite' }}
+            >
+              {state.uploadQueue.length}
+            </span>
+          )}
+          {!hasActiveUploads && (
+            <span className={`absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-500 rounded-full border-2 ${themeClasses.bg.primary}`}></span>
+          )}
         </button>
         
         <button 

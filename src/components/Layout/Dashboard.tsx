@@ -10,7 +10,7 @@ export const Dashboard: React.FC = () => {
   const { state, dispatch } = useStore();
   const theme = useThemeClasses();
   const { user } = useAuth();
-  const { projects, videos, deliveries } = state;
+  const { projects, videos, deliveries, isRetrievalPanelVisible } = state;
   const { currentTeam } = useTeam();
 
   // 调试：检查数据格式
@@ -207,6 +207,39 @@ export const Dashboard: React.FC = () => {
     dispatch({ type: 'TOGGLE_WORKBENCH', payload: true });
   };
 
+  // 进入审阅页面（进行中项目）
+  const handleGoToReview = () => {
+    dispatch({ type: 'SET_MODULE', payload: 'review' });
+  };
+
+  // 进入交付页面（待交付项目）
+  const handleGoToDelivery = () => {
+    dispatch({ type: 'SET_MODULE', payload: 'delivery' });
+  };
+
+  // 进入案例页面（已交付项目）
+  const handleGoToShowcase = () => {
+    dispatch({ type: 'SET_MODULE', payload: 'showcase' });
+  };
+
+  // 点击预览图进入项目
+  const handleEnterProject = (projectId: string, type: 'active' | 'finalized' | 'delivered') => {
+    // 确保检索面板可见
+    if (!isRetrievalPanelVisible) {
+      dispatch({ type: 'TOGGLE_RETRIEVAL_PANEL' });
+    }
+    // 先根据项目类型进入对应模块（SET_MODULE 会重置 selectedProjectId）
+    if (type === 'active') {
+      dispatch({ type: 'SET_MODULE', payload: 'review' });
+    } else if (type === 'finalized') {
+      dispatch({ type: 'SET_MODULE', payload: 'delivery' });
+    } else {
+      dispatch({ type: 'SET_MODULE', payload: 'showcase' });
+    }
+    // 然后选中项目（在 SET_MODULE 之后，确保项目选中状态不被重置）
+    dispatch({ type: 'SELECT_PROJECT', payload: projectId });
+  };
+
   // 生成人性化问候语
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -268,35 +301,41 @@ export const Dashboard: React.FC = () => {
     const config = statusConfig[type];
 
     return (
-      <div className={`${theme.bg.secondary}/50 border ${config.cardBorder} rounded-lg overflow-hidden hover:border-opacity-50 ${theme.bg.hover} transition-all duration-200 shadow-sm`}>
-        {/* 预览图 */}
-        <div className={`w-full aspect-[16/9] ${theme.bg.tertiary} overflow-hidden`}>
+      <div className={`${theme.bg.secondary}/50 border ${config.cardBorder} rounded-md overflow-hidden hover:border-opacity-50 ${theme.bg.hover} transition-all duration-200 shadow-sm`}>
+        {/* 预览图 - 可点击进入项目 */}
+        <div 
+          className={`w-full aspect-[16/9] ${theme.bg.tertiary} overflow-hidden cursor-pointer relative group`}
+          onClick={() => handleEnterProject(project.id, type)}
+        >
           <img 
             src={thumbnailUrl} 
             alt={project.name}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-200 flex items-center justify-center">
+            <Eye className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+          </div>
         </div>
         
-        <div className="p-2">
+        <div className="p-1.5">
           {/* 头部：项目名称和状态 */}
-          <div className="flex items-start justify-between mb-2">
+          <div className="flex items-start justify-between mb-1">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1 mb-1">
-                <h3 className="text-[10px] font-semibold text-zinc-100 truncate">
+              <div className="flex items-center gap-1 mb-0.5">
+                <h3 className="text-[9px] font-semibold text-zinc-100 truncate">
                   {project.name}
                 </h3>
-                <span className={`px-1 py-0.5 h-3.5 rounded text-[8px] font-medium ${config.bg} ${config.border} ${config.text} border whitespace-nowrap flex items-center`}>
+                <span className={`px-0.5 py-0.5 h-3 rounded text-[7px] font-medium ${config.bg} ${config.border} ${config.text} border whitespace-nowrap flex items-center`}>
                   {config.label}
                 </span>
               </div>
-              <div className="flex items-center gap-2 text-[9px] text-zinc-500">
+              <div className="flex items-center gap-1.5 text-[8px] text-zinc-500">
                 <span className="flex items-center gap-0.5">
-                  <Users className="w-2.5 h-2.5" />
+                  <Users className="w-2 h-2" />
                   {project.client}
                 </span>
                 <span className="flex items-center gap-0.5">
-                  <Clock className="w-2.5 h-2.5" />
+                  <Clock className="w-2 h-2" />
                   {project.createdDate}
                 </span>
               </div>
@@ -304,21 +343,21 @@ export const Dashboard: React.FC = () => {
           </div>
 
         {/* 项目统计 */}
-        <div className="mb-2 pb-2 border-b border-zinc-800/50">
-          <div className="flex items-center gap-2 text-[9px]">
+        <div className="mb-1 pb-1 border-b border-zinc-800/50">
+          <div className="flex items-center gap-1.5 text-[8px]">
             <div className="flex items-center gap-0.5 text-zinc-400 whitespace-nowrap">
-              <FileVideo className="w-2.5 h-2.5" />
+              <FileVideo className="w-2 h-2" />
               <span>{totalVideos} 个视频</span>
             </div>
             {annotatedCount > 0 && (
               <div className="flex items-center gap-0.5 text-zinc-400 whitespace-nowrap">
-                <MessageSquare className="w-2.5 h-2.5" />
+                <MessageSquare className="w-2 h-2" />
                 <span>{annotatedCount} 条批注</span>
               </div>
             )}
             {recentUploads > 0 && (
               <div className="flex items-center gap-0.5 text-zinc-400 whitespace-nowrap">
-                <TrendingUp className="w-2.5 h-2.5" />
+                <TrendingUp className="w-2 h-2" />
                 <span>{recentUploads} 个新上传</span>
               </div>
             )}
@@ -326,34 +365,26 @@ export const Dashboard: React.FC = () => {
         </div>
 
           {/* 快捷操作 */}
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-0.5">
             {type === 'active' && (
               <>
                 {annotatedCount > 0 && (
                   <button
                     onClick={() => handleViewAnnotations(project.id)}
-                    className="px-1.5 py-0.5 xl:px-2 xl:py-1 h-5 xl:h-6 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded text-[9px] transition-all flex items-center gap-0.5 xl:gap-1 font-medium whitespace-nowrap"
+                    className="px-1 py-0.5 h-4 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded text-[8px] transition-all flex items-center gap-0.5 font-medium whitespace-nowrap"
                     title="查看批注"
                   >
-                    <MessageSquare className="w-2.5 h-2.5 xl:w-3 xl:h-3" />
+                    <MessageSquare className="w-2 h-2" />
                     <span className="hidden xl:inline">查看批注</span>
                   </button>
                 )}
                 <button
                   onClick={() => handleQuickUpload(project.id)}
-                  className="px-1.5 py-0.5 xl:px-2 xl:py-1 h-5 xl:h-6 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded text-[9px] transition-all flex items-center gap-0.5 xl:gap-1 font-medium whitespace-nowrap"
+                  className="px-1 py-0.5 h-4 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded text-[8px] transition-all flex items-center gap-0.5 font-medium whitespace-nowrap"
                   title="快速上传"
                 >
-                  <Upload className="w-2.5 h-2.5 xl:w-3 xl:h-3" />
+                  <Upload className="w-2 h-2" />
                   <span className="hidden xl:inline">快速上传</span>
-                </button>
-                <button
-                  onClick={() => handleFinalize(project.id)}
-                  className="px-1.5 py-0.5 xl:px-2 xl:py-1 h-5 xl:h-6 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-[9px] transition-all flex items-center gap-0.5 xl:gap-1 font-medium whitespace-nowrap"
-                  title="确认定版"
-                >
-                  <CheckCircle2 className="w-2.5 h-2.5 xl:w-3 xl:h-3" />
-                  <span className="hidden xl:inline">确认定版</span>
                 </button>
               </>
             )}
@@ -361,26 +392,26 @@ export const Dashboard: React.FC = () => {
               <>
                 <button
                   onClick={() => handleUploadVariant(project.id)}
-                  className="px-1.5 py-0.5 xl:px-2 xl:py-1 h-5 xl:h-6 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded text-[9px] transition-all flex items-center gap-0.5 xl:gap-1 font-medium whitespace-nowrap"
+                  className="px-1 py-0.5 h-4 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded text-[8px] transition-all flex items-center gap-0.5 font-medium whitespace-nowrap"
                   title="上传变体"
                 >
-                  <Upload className="w-2.5 h-2.5 xl:w-3 xl:h-3" />
+                  <Upload className="w-2 h-2" />
                   <span className="hidden xl:inline">上传变体</span>
                 </button>
                 <button
                   onClick={() => handleAddTags(project.id)}
-                  className="px-1.5 py-0.5 xl:px-2 xl:py-1 h-5 xl:h-6 bg-zinc-700/30 hover:bg-zinc-700/50 text-zinc-300 border border-zinc-600/40 rounded text-[9px] transition-all flex items-center gap-0.5 xl:gap-1 font-medium whitespace-nowrap"
+                  className="px-1 py-0.5 h-4 bg-zinc-700/30 hover:bg-zinc-700/50 text-zinc-300 border border-zinc-600/40 rounded text-[8px] transition-all flex items-center gap-0.5 font-medium whitespace-nowrap"
                   title="添加标签"
                 >
-                  <Tag className="w-2.5 h-2.5 xl:w-3 xl:h-3" />
+                  <Tag className="w-2 h-2" />
                   <span className="hidden xl:inline">添加标签</span>
                 </button>
                 <button
                   onClick={() => handleCompleteCopyright(project.id)}
-                  className="px-1.5 py-0.5 xl:px-2 xl:py-1 h-5 xl:h-6 bg-zinc-700/30 hover:bg-zinc-700/50 text-zinc-300 border border-zinc-600/40 rounded text-[9px] transition-all flex items-center gap-0.5 xl:gap-1 font-medium whitespace-nowrap"
+                  className="px-1 py-0.5 h-4 bg-zinc-700/30 hover:bg-zinc-700/50 text-zinc-300 border border-zinc-600/40 rounded text-[8px] transition-all flex items-center gap-0.5 font-medium whitespace-nowrap"
                   title="完善版权"
                 >
-                  <Copyright className="w-2.5 h-2.5 xl:w-3 xl:h-3" />
+                  <Copyright className="w-2 h-2" />
                   <span className="hidden xl:inline">完善版权</span>
                 </button>
               </>
@@ -389,26 +420,26 @@ export const Dashboard: React.FC = () => {
               <>
                 <button
                   onClick={() => handlePreview(project.id)}
-                  className="px-1.5 py-0.5 xl:px-2 xl:py-1 h-5 xl:h-6 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded text-[9px] transition-all flex items-center gap-0.5 xl:gap-1 font-medium whitespace-nowrap"
+                  className="px-1 py-0.5 h-4 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded text-[8px] transition-all flex items-center gap-0.5 font-medium whitespace-nowrap"
                   title="预览"
                 >
-                  <Eye className="w-2.5 h-2.5 xl:w-3 xl:h-3" />
+                  <Eye className="w-2 h-2" />
                   <span className="hidden xl:inline">预览</span>
                 </button>
                 <button
                   onClick={() => handleAddTags(project.id)}
-                  className="px-1.5 py-0.5 xl:px-2 xl:py-1 h-5 xl:h-6 bg-zinc-700/30 hover:bg-zinc-700/50 text-zinc-300 border border-zinc-600/40 rounded text-[9px] transition-all flex items-center gap-0.5 xl:gap-1 font-medium whitespace-nowrap"
+                  className="px-1 py-0.5 h-4 bg-zinc-700/30 hover:bg-zinc-700/50 text-zinc-300 border border-zinc-600/40 rounded text-[8px] transition-all flex items-center gap-0.5 font-medium whitespace-nowrap"
                   title="添加标签"
                 >
-                  <Tag className="w-2.5 h-2.5 xl:w-3 xl:h-3" />
+                  <Tag className="w-2 h-2" />
                   <span className="hidden xl:inline">添加标签</span>
                 </button>
                 <button
                   onClick={() => handlePackageShowcase(project.id)}
-                  className="px-1.5 py-0.5 xl:px-2 xl:py-1 h-5 xl:h-6 bg-zinc-700/30 hover:bg-zinc-700/50 text-zinc-300 border border-zinc-600/40 rounded text-[9px] transition-all flex items-center gap-0.5 xl:gap-1 font-medium whitespace-nowrap"
+                  className="px-1 py-0.5 h-4 bg-zinc-700/30 hover:bg-zinc-700/50 text-zinc-300 border border-zinc-600/40 rounded text-[8px] transition-all flex items-center gap-0.5 font-medium whitespace-nowrap"
                   title="案例打包"
                 >
-                  <Package className="w-2.5 h-2.5 xl:w-3 xl:h-3" />
+                  <Package className="w-2 h-2" />
                   <span className="hidden xl:inline">案例打包</span>
                 </button>
               </>
@@ -444,47 +475,48 @@ export const Dashboard: React.FC = () => {
                 <span className="text-[10px] font-medium text-zinc-300 whitespace-nowrap">新建项目</span>
               </button>
               
-              <button
-                onClick={handleOpenQuickUpload}
-                className={`${theme.bg.secondary}/30 border ${theme.border.secondary}/50 rounded-xl p-2.5 ${theme.border.hover} ${theme.bg.hover} transition-all flex flex-col items-center justify-center gap-1.5 h-[80px] w-[120px]`}
-              >
-                <Upload className="w-4 h-4 text-indigo-400" />
-                <span className="text-[10px] font-medium text-zinc-300 whitespace-nowrap">快速上传</span>
-              </button>
-              
               <div className="flex gap-2">
-                <div className="bg-gradient-to-br from-indigo-500/10 to-indigo-600/5 rounded-xl p-2.5 flex flex-col h-[80px] w-[120px]">
+                <button
+                  onClick={handleGoToReview}
+                  className="bg-gradient-to-br from-indigo-500/10 to-indigo-600/5 rounded-xl p-2.5 flex flex-col h-[80px] w-[120px] hover:from-indigo-500/20 hover:to-indigo-600/10 transition-all cursor-pointer border border-transparent hover:border-indigo-500/30"
+                >
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap">进行中</span>
                     <FolderOpen className="w-3.5 h-3.5 text-indigo-400" />
                   </div>
                   <div className="flex items-baseline gap-1">
-                    <div className="text-3xl font-bold text-indigo-300 whitespace-nowrap">{stats.activeProjects}</div>
+                    <div className="text-3xl font-semibold text-indigo-300 whitespace-nowrap">{stats.activeProjects}</div>
                     <div className="text-[9px] text-zinc-500 whitespace-nowrap">个项目</div>
                   </div>
-                </div>
+                </button>
                 
-                <div className="bg-gradient-to-br from-amber-500/10 to-amber-600/5 rounded-xl p-2.5 flex flex-col h-[80px] w-[120px]">
+                <button
+                  onClick={handleGoToDelivery}
+                  className="bg-gradient-to-br from-amber-500/10 to-amber-600/5 rounded-xl p-2.5 flex flex-col h-[80px] w-[120px] hover:from-amber-500/20 hover:to-amber-600/10 transition-all cursor-pointer border border-transparent hover:border-amber-500/30"
+                >
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap">待交付</span>
                     <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
                   </div>
                   <div className="flex items-baseline gap-1">
-                    <div className="text-3xl font-bold text-amber-300 whitespace-nowrap">{stats.finalizedProjects}</div>
+                    <div className="text-3xl font-semibold text-amber-300 whitespace-nowrap">{stats.finalizedProjects}</div>
                     <div className="text-[9px] text-zinc-500 whitespace-nowrap">个项目</div>
                   </div>
-                </div>
+                </button>
                 
-                <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 rounded-xl p-2.5 flex flex-col h-[80px] w-[120px]">
+                <button
+                  onClick={handleGoToShowcase}
+                  className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 rounded-xl p-2.5 flex flex-col h-[80px] w-[120px] hover:from-emerald-500/20 hover:to-emerald-600/10 transition-all cursor-pointer border border-transparent hover:border-emerald-500/30"
+                >
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap">已交付</span>
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                   </div>
                   <div className="flex items-baseline gap-1">
-                    <div className="text-3xl font-bold text-emerald-300 whitespace-nowrap">{stats.deliveredProjects}</div>
+                    <div className="text-3xl font-semibold text-emerald-300 whitespace-nowrap">{stats.deliveredProjects}</div>
                     <div className="text-[9px] text-zinc-500 whitespace-nowrap">个项目</div>
                   </div>
-                </div>
+                </button>
                 
                 <div className="bg-gradient-to-br from-zinc-800/50 to-zinc-900/30 rounded-xl p-2.5 flex flex-col h-[80px] w-[120px]">
                   <div className="flex items-center justify-between mb-1.5">
@@ -492,7 +524,7 @@ export const Dashboard: React.FC = () => {
                     <FileVideo className="w-3.5 h-3.5 text-zinc-400" />
                   </div>
                   <div className="flex items-baseline gap-1">
-                    <div className="text-3xl font-bold text-zinc-300 whitespace-nowrap">{stats.totalVideos}</div>
+                    <div className="text-3xl font-semibold text-zinc-300 whitespace-nowrap">{stats.totalVideos}</div>
                     <div className="text-[9px] text-zinc-500 whitespace-nowrap">个文件</div>
                   </div>
                 </div>
@@ -519,8 +551,8 @@ export const Dashboard: React.FC = () => {
                   <p className="text-xs text-zinc-600 mt-1">点击上方"新建项目"按钮开始</p>
                 </div>
               ) : (
-                <div className="overflow-y-auto custom-scrollbar" style={{ maxHeight: '520px' }}>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 pr-2">
+                <div className="overflow-y-auto custom-scrollbar" style={{ maxHeight: '400px' }}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-2 pr-2">
                     {inProgressProjects.map(project => (
                       <ProjectCard key={project.id} project={project} type="active" />
                     ))}
@@ -548,8 +580,8 @@ export const Dashboard: React.FC = () => {
                   <p>暂无定版待交付的项目</p>
                 </div>
               ) : (
-                <div className="overflow-y-auto custom-scrollbar" style={{ maxHeight: '520px' }}>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 pr-2">
+                <div className="overflow-y-auto custom-scrollbar" style={{ maxHeight: '400px' }}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-2 pr-2">
                     {finalizedProjects.map(project => (
                       <ProjectCard key={project.id} project={project} type="finalized" />
                     ))}
@@ -577,8 +609,8 @@ export const Dashboard: React.FC = () => {
                   <p>暂无完成交付的项目</p>
                 </div>
               ) : (
-                <div className="overflow-y-auto custom-scrollbar" style={{ maxHeight: '520px' }}>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 pr-2">
+                <div className="overflow-y-auto custom-scrollbar" style={{ maxHeight: '400px' }}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-2 pr-2">
                     {deliveredProjects.map(project => (
                       <ProjectCard key={project.id} project={project} type="delivered" />
                     ))}

@@ -246,6 +246,8 @@ export type Action =
   | { type: 'ADD_TAG'; payload: Tag } // 添加标签
   | { type: 'UPDATE_VIDEO_ASPECT_RATIO'; payload: { videoId: string; aspectRatio: AspectRatio } } // 更新视频横竖屏
   | { type: 'TOGGLE_CART_ITEM'; payload: string } // Showcase Cart
+  | { type: 'SET_CART'; payload: string[] } // 设置购物车内容
+  | { type: 'CLEAR_CART' } // 清空购物车
   | { type: 'SET_SEARCH'; payload: string }
   | { type: 'SET_TAG'; payload: string }
   | { type: 'TOGGLE_TAG_PANEL' } // 切换标签面板展开/收起
@@ -288,6 +290,6 @@ export type Action =
   | { type: 'TOGGLE_SHARE_MULTI_SELECT_MODE' } // 切换分享模块多选模式
   | { type: 'SELECT_SHARE_PROJECT'; payload: string | null } // 选择分享模块中的项目（单选模式）
   | { type: 'SET_SETTINGS_TAB'; payload: 'teams' | 'groups' | 'projects' | 'tags' }
-  | { type: 'SHOW_VERSION_HISTORY'; payload: { baseName: string; viewMode?: 'grid' | 'list' } } // 显示历史版本
+  | { type: 'SHOW_VERSION_HISTORY'; payload: { baseName: string; projectId: string; viewMode?: 'grid' | 'list' } } // 显示历史版本
   | { type: 'HIDE_VERSION_HISTORY' } // 隐藏历史版本
   | { type: 'SET_VERSION_HISTORY_VIEW_MODE'; payload: 'grid' | 'list' }; // 设置历史版本视图模式 // 设置设置模块的激活标签页

@@ -1,10 +1,11 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, MessageSquare, Mic, SkipBack, Play, Pause, SkipForward, Settings2, Download, CheckCircle, Send, FileText, Loader2, Trash2, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { ArrowLeft, MessageSquare, Mic, SkipBack, Play, Pause, SkipForward, Settings2, Download, CheckCircle, Send, FileText, Loader2, Trash2, AlertTriangle, Share2, X, Lock, Calendar, Infinity, Copy, Check, CheckCircle2 } from 'lucide-react';
 import { useStore } from '../../App';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
 import { annotationsApi, Annotation } from '../../api/annotations';
 import { videosApi } from '../../api/videos';
+import { sharesApi } from '../../api/shares';
 import { ConfirmModal } from '../UI/ConfirmModal';
 import { useApiData } from '../../hooks/useApiData';
 import { Video } from '../../types';
@@ -43,6 +44,19 @@ export const ReviewOverlay: React.FC<ReviewOverlayProps> = ({ isOpen, onClose })
   const [deleteType, setDeleteType] = useState<'version' | 'all'>('version');
   const [isDeleting, setIsDeleting] = useState(false);
   const [versionCount, setVersionCount] = useState(1);
+
+  // 分享相关状态
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareStep, setShareStep] = useState<'warning' | 'config' | 'success'>('config');
+  const [shareAllowDownload, setShareAllowDownload] = useState(false);
+  const [shareHasPassword, setShareHasPassword] = useState(false);
+  const [sharePassword, setSharePassword] = useState('');
+  const [shareExpiryOption, setShareExpiryOption] = useState<'7days' | 'permanent'>('7days');
+  const [shareJustification, setShareJustification] = useState('');
+  const [shareGeneratedLink, setShareGeneratedLink] = useState('');
+  const [shareIsLoading, setShareIsLoading] = useState(false);
+  const [shareError, setShareError] = useState('');
+  const [shareCopySuccess, setShareCopySuccess] = useState(false);
 
   // 加载批注和视频URL
   useEffect(() => {
@@ -222,6 +236,47 @@ export const ReviewOverlay: React.FC<ReviewOverlayProps> = ({ isOpen, onClose })
     }
   };
 
+  // 将时间码字符串转换为秒数
+  const timecodeToSeconds = (timecode: string): number => {
+    const parts = timecode.split(':').map(Number);
+    if (parts.length === 3) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    } else if (parts.length === 2) {
+      return parts[0] * 60 + parts[1];
+    }
+    return parts[0] || 0;
+  };
+
+  // 批注者颜色映射 - 为每个不同的批注者分配一个固定颜色
+  const annotatorColors = useMemo(() => {
+    const colors = [
+      '#6366f1', // indigo
+      '#8b5cf6', // violet
+      '#ec4899', // pink
+      '#f97316', // orange
+      '#14b8a6', // teal
+      '#22c55e', // green
+      '#eab308', // yellow
+      '#06b6d4', // cyan
+      '#f43f5e', // rose
+      '#a855f7', // purple
+    ];
+    
+    const colorMap: Record<string, string> = {};
+    const annotators = new Set<string>();
+    
+    annotations.forEach(a => {
+      // 兼容 clientName 和 client_name 两种格式
+      const name = a.user?.name || a.clientName || a.client_name || '访客';
+      annotators.add(name);
+    });
+    
+    Array.from(annotators).forEach((name, index) => {
+      colorMap[name] = colors[index % colors.length];
+    });
+    
+    return colorMap;
+  }, [annotations]);
 
   // 导出PDF
   const handleExportPDF = async () => {
@@ -255,6 +310,97 @@ export const ReviewOverlay: React.FC<ReviewOverlayProps> = ({ isOpen, onClose })
   };
 
   // 处理删除
+  // 检查当前视频是否是最新版本
+  const isLatestVersion = () => {
+    if (!video) return true;
+    const baseName = video.baseName || video.name.replace(/^v\d+_/, '');
+    const versions = videos.filter(v => 
+      v.projectId === video.projectId && 
+      (v.baseName || v.name.replace(/^v\d+_/, '')) === baseName
+    );
+    const maxVersion = Math.max(...versions.map(v => v.version));
+    return video.version === maxVersion;
+  };
+
+  // 打开分享弹窗
+  const handleShareClick = () => {
+    const isLatest = isLatestVersion();
+    setShareStep(isLatest ? 'config' : 'warning');
+    setShareAllowDownload(false);
+    setShareHasPassword(false);
+    setSharePassword('');
+    setShareExpiryOption('7days');
+    setShareJustification('');
+    setShareGeneratedLink('');
+    setShareError('');
+    setShareCopySuccess(false);
+    setShareModalOpen(true);
+  };
+
+  // 生成分享链接
+  const handleGenerateShareLink = async () => {
+    if (!video) return;
+
+    setShareIsLoading(true);
+    setShareError('');
+
+    try {
+      let expiresAt: string | undefined;
+      if (shareExpiryOption === '7days') {
+        const date = new Date();
+        date.setDate(date.getDate() + 7);
+        expiresAt = date.toISOString();
+      }
+
+      const shareLink = await sharesApi.create({
+        type: 'video_review',
+        videoId: video.id,
+        projectId: video.projectId,
+        allowDownload: shareAllowDownload,
+        hasPassword: shareHasPassword,
+        password: shareHasPassword ? sharePassword : undefined,
+        expiresAt,
+        justification: !isLatestVersion() ? shareJustification : undefined,
+      });
+
+      const shareDomain = import.meta.env.VITE_SHARE_DOMAIN || window.location.origin;
+      const shortCode = shareLink.token.substring(0, 8);
+      const link = `${shareDomain}/s/${shortCode}`;
+
+      setShareGeneratedLink(link);
+      setShareStep('success');
+    } catch (error: any) {
+      console.error('Create share link error:', error);
+      setShareError(error.response?.data?.message || error.message || '创建分享链接失败');
+    } finally {
+      setShareIsLoading(false);
+    }
+  };
+
+  // 复制分享链接
+  const handleCopyShareLink = async () => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(shareGeneratedLink);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = shareGeneratedLink;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-9999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+      setShareCopySuccess(true);
+      setTimeout(() => setShareCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('复制失败:', err);
+      alert('复制失败，请手动复制链接');
+    }
+  };
+
   const handleDeleteClick = () => {
     setShowDeleteConfirm(true);
   };
@@ -303,14 +449,24 @@ export const ReviewOverlay: React.FC<ReviewOverlayProps> = ({ isOpen, onClose })
                 <span className="text-sm font-medium">退出审阅</span>
             </button>
             <div className="text-sm font-mono text-zinc-400">{video.name || '未选择视频'}</div>
-            <button
-                onClick={handleDeleteClick}
-                className={`flex items-center gap-2 ${theme.text.tertiary} ${theme.text.hoverPrimary} ${theme.bg.secondary}/50 ${theme.bg.hover}/80 px-4 py-2 rounded-full backdrop-blur-md transition-all border border-white/5 hover:border-red-500/50 hover:text-red-400`}
-                title="删除视频"
-            >
-                <Trash2 className="w-4 h-4" />
-                <span className="text-sm font-medium">删除</span>
-            </button>
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={handleShareClick}
+                    className={`flex items-center gap-2 ${theme.text.tertiary} ${theme.text.hoverPrimary} ${theme.bg.secondary}/50 ${theme.bg.hover}/80 px-4 py-2 rounded-full backdrop-blur-md transition-all border border-white/5 hover:border-indigo-500/50 hover:text-indigo-400`}
+                    title="对外分享"
+                >
+                    <Share2 className="w-4 h-4" />
+                    <span className="text-sm font-medium">分享</span>
+                </button>
+                <button
+                    onClick={handleDeleteClick}
+                    className={`flex items-center gap-2 ${theme.text.tertiary} ${theme.text.hoverPrimary} ${theme.bg.secondary}/50 ${theme.bg.hover}/80 px-4 py-2 rounded-full backdrop-blur-md transition-all border border-white/5 hover:border-red-500/50 hover:text-red-400`}
+                    title="删除视频"
+                >
+                    <Trash2 className="w-4 h-4" />
+                    <span className="text-sm font-medium">删除</span>
+                </button>
+            </div>
         </div>
 
         {/* Video Player */}
@@ -387,6 +543,57 @@ export const ReviewOverlay: React.FC<ReviewOverlayProps> = ({ isOpen, onClose })
                     className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
                     style={{ left: `calc(${progress}% - 6px)` }}
                  ></div>
+                 
+                 {/* 批注时间点标记 - 关键帧样式 */}
+                 {duration > 0 && annotations.map((annotation) => {
+                   // 兼容 clientName 和 client_name 两种格式
+                   const annotatorName = annotation.user?.name || annotation.clientName || annotation.client_name || '访客';
+                   const color = annotatorColors[annotatorName] || '#6366f1';
+                   const timeInSeconds = timecodeToSeconds(annotation.timecode);
+                   const position = (timeInSeconds / duration) * 100;
+                   
+                   return (
+                     <div
+                       key={annotation.id}
+                       className="absolute top-1/2 -translate-y-1/2 z-20 cursor-pointer group/marker"
+                       style={{ left: `${position}%` }}
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         handleJumpToTimecode(annotation.timecode);
+                       }}
+                       title={`${annotatorName}: ${annotation.content.substring(0, 50)}${annotation.content.length > 50 ? '...' : ''}`}
+                     >
+                       {/* 关键帧标记 - 菱形样式 */}
+                       <div 
+                         className="w-4 h-4 -ml-2 rotate-45 shadow-lg transition-all duration-200 group-hover/marker:scale-125 border-2"
+                         style={{ 
+                           backgroundColor: color,
+                           borderColor: 'rgba(255,255,255,0.8)',
+                           boxShadow: `0 0 8px ${color}, 0 2px 4px rgba(0,0,0,0.3)`,
+                         }}
+                       />
+                       {/* 底部小三角指示器 */}
+                       <div 
+                         className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[4px] border-r-[4px] border-t-[6px] border-l-transparent border-r-transparent opacity-80"
+                         style={{ borderTopColor: color }}
+                       />
+                       {/* 悬停提示 */}
+                       <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 hidden group-hover/marker:block z-30 pointer-events-none">
+                         <div 
+                           className="px-3 py-1.5 rounded-lg text-xs text-white whitespace-nowrap max-w-[220px] truncate shadow-xl"
+                           style={{ backgroundColor: color }}
+                         >
+                           <span className="font-semibold">{annotatorName}</span>
+                           <span className="opacity-80 ml-1.5 font-mono">({annotation.timecode})</span>
+                         </div>
+                         <div 
+                           className="w-2.5 h-2.5 rotate-45 mx-auto -mt-1.5"
+                           style={{ backgroundColor: color }}
+                         />
+                       </div>
+                     </div>
+                   );
+                 })}
              </div>
              
              <div className="flex items-center justify-between">
@@ -541,6 +748,175 @@ export const ReviewOverlay: React.FC<ReviewOverlayProps> = ({ isOpen, onClose })
           </div>
         </div>
       </ConfirmModal>
+
+      {/* Share Modal */}
+      {shareModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-zinc-900 rounded-xl w-full max-w-md shadow-2xl border border-zinc-800 animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-zinc-800 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
+                <Share2 className="w-5 h-5 text-indigo-500" />
+                创建对外分享
+              </h3>
+              <button onClick={() => setShareModalOpen(false)}>
+                <X className="w-5 h-5 text-zinc-500 hover:text-zinc-200" />
+              </button>
+            </div>
+
+            <div className="p-5">
+              {/* Warning Step - 历史版本警告 */}
+              {shareStep === 'warning' && (
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                    <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-amber-200">
+                      <p className="font-bold mb-1">您正在分享历史版本 (v{video?.version})</p>
+                      <p className="opacity-80 text-xs">该视频不是最新版本。为了避免客户审阅错误的文件，强制分享需要填写说明。</p>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-1.5">分享原因 / 说明</label>
+                    <textarea
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-sm text-zinc-200 focus:border-indigo-500 outline-none resize-none h-24 placeholder-zinc-600"
+                      placeholder="请说明为什么需要分享旧版本..."
+                      value={shareJustification}
+                      onChange={(e) => setShareJustification(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      disabled={!shareJustification.trim()}
+                      onClick={() => setShareStep('config')}
+                      className="bg-zinc-100 hover:bg-white disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-900 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      下一步
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Config Step - 配置分享选项 */}
+              {shareStep === 'config' && (
+                <div className="space-y-5">
+                  <div className="space-y-4">
+                    {/* 允许下载 */}
+                    <div className="flex items-center justify-between py-1">
+                      <span className="text-sm text-zinc-300">允许下载</span>
+                      <button
+                        onClick={() => setShareAllowDownload(!shareAllowDownload)}
+                        className={`w-10 h-6 rounded-full transition-colors ${shareAllowDownload ? 'bg-indigo-600' : 'bg-zinc-700'}`}
+                      >
+                        <div className={`w-4 h-4 rounded-full bg-white transition-transform mx-1 ${shareAllowDownload ? 'translate-x-4' : ''}`} />
+                      </button>
+                    </div>
+
+                    {/* 密码保护 */}
+                    <div className="flex items-center justify-between py-1">
+                      <span className="text-sm text-zinc-300 flex items-center gap-2">
+                        <Lock className="w-4 h-4" /> 密码保护
+                      </span>
+                      <button
+                        onClick={() => { setShareHasPassword(!shareHasPassword); setSharePassword(''); }}
+                        className={`w-10 h-6 rounded-full transition-colors ${shareHasPassword ? 'bg-indigo-600' : 'bg-zinc-700'}`}
+                      >
+                        <div className={`w-4 h-4 rounded-full bg-white transition-transform mx-1 ${shareHasPassword ? 'translate-x-4' : ''}`} />
+                      </button>
+                    </div>
+
+                    {shareHasPassword && (
+                      <div className="ml-6">
+                        <input
+                          type="text"
+                          placeholder="设置访问密码"
+                          className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:border-indigo-500 outline-none"
+                          value={sharePassword}
+                          onChange={(e) => setSharePassword(e.target.value)}
+                        />
+                      </div>
+                    )}
+
+                    {/* 链接有效期 */}
+                    <div>
+                      <label className="block text-sm text-zinc-400 mb-2">链接有效期</label>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setShareExpiryOption('7days')}
+                          className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                            shareExpiryOption === '7days' ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                          }`}
+                        >
+                          <Calendar className="w-4 h-4" /> 7 天有效
+                        </button>
+                        <button
+                          onClick={() => setShareExpiryOption('permanent')}
+                          className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                            shareExpiryOption === 'permanent' ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                          }`}
+                        >
+                          <Infinity className="w-4 h-4" /> 长期有效
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {shareError && (
+                    <p className="text-sm text-red-400 text-center">{shareError}</p>
+                  )}
+
+                  <button
+                    onClick={handleGenerateShareLink}
+                    disabled={shareIsLoading || (shareHasPassword && !sharePassword.trim())}
+                    className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    {shareIsLoading ? '生成中...' : '生成分享链接'}
+                  </button>
+                </div>
+              )}
+
+              {/* Success Step - 链接生成成功 */}
+              {shareStep === 'success' && (
+                <div className="space-y-5 text-center py-2">
+                  <div className="w-12 h-12 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-semibold text-zinc-100">分享链接已生成</h4>
+                    <p className="text-sm text-zinc-500 mt-1">
+                      此链接{shareExpiryOption === '7days' ? '有效期为 7 天' : '长期有效'}
+                    </p>
+                  </div>
+
+                  <div className="bg-zinc-800 rounded-lg p-3">
+                    <p className="text-sm text-zinc-200 font-mono truncate">{shareGeneratedLink}</p>
+                  </div>
+
+                  <button
+                    onClick={handleCopyShareLink}
+                    className={`w-full py-2.5 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                      shareCopySuccess
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                    }`}
+                  >
+                    {shareCopySuccess ? (
+                      <><Check className="w-4 h-4" /> 链接已复制</>
+                    ) : (
+                      <><Copy className="w-4 h-4" /> 复制链接</>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => setShareModalOpen(false)}
+                    className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+                  >
+                    关闭窗口
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

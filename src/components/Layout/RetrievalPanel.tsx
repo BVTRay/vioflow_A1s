@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Plus, Folder, MoreHorizontal, Check, Archive, Calendar, LayoutGrid, Clapperboard, X, ChevronDown, User, Users, PlayCircle, Settings, Trash2, Lock, PlusCircle, Share2, ChevronLeft, ChevronRight, CheckSquare, Square, Tag, XCircle, Shield, FolderOpen, FileVideo, Loader2 } from 'lucide-react';
+import { Search, Plus, Folder, MoreHorizontal, Check, Archive, Calendar, LayoutGrid, Clapperboard, X, ChevronDown, User, Users, PlayCircle, Settings, Trash2, Lock, PlusCircle, Share2, ChevronLeft, ChevronRight, CheckSquare, Square, Tag, XCircle, Shield, FolderOpen, FileVideo, Loader2, Send } from 'lucide-react';
 import { useStore } from '../../App';
 import { Project } from '../../types';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
@@ -50,6 +50,22 @@ export const RetrievalPanel: React.FC = () => {
 
   // View Mode State
   const [viewMode, setViewMode] = useState<'month' | 'group'>('month');
+
+  // 分组视图折叠状态：记录哪些组是折叠的
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+  // 切换组的折叠状态
+  const toggleGroupCollapse = (groupName: string) => {
+    setCollapsedGroups(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(groupName)) {
+        newSet.delete(groupName);
+      } else {
+        newSet.add(groupName);
+      }
+      return newSet;
+    });
+  };
 
   // Split View Resizing Logic
   const [splitRatio, setSplitRatio] = useState(66); // Percentage
@@ -126,12 +142,14 @@ export const RetrievalPanel: React.FC = () => {
     // YYMM Format: 2405 (May 2024)
     const prefix = `${date.getFullYear().toString().slice(-2)}${(date.getMonth() + 1).toString().padStart(2, '0')}_`;
     
+    // 使用第一个可用分组作为默认值
+    const defaultGroup = existingGroups[0] || '未分类';
     setFormData({ 
         name: prefix, 
         client: '', 
         lead: '',
         postLead: '',
-        group: '广告片',
+        group: defaultGroup,
         isNewGroup: false,
         team: [],
         newMemberInput: ''
@@ -197,18 +215,24 @@ export const RetrievalPanel: React.FC = () => {
     if (!formData.name) return;
 
     if (modalConfig.mode === 'create') {
-        setIsCreatingProject(true);
-        const loadingToastId = toast.info('正在创建项目...', { duration: 0 });
+        // 保存表单数据用于后台创建
+        const formDataToSubmit = { ...formData };
+        
+        // 立即关闭模态框
+        setModalConfig({ ...modalConfig, isOpen: false });
+        
+        // 显示创建中的 toast
+        const loadingToastId = toast.info(`正在创建项目「${formDataToSubmit.name}」...`, { duration: 0 });
         
         try {
           // 调用 API 创建项目（自动使用当前团队的 teamId）
           const { projectsApi } = await import('../../api/projects');
           const newProject = await projectsApi.create({
-            name: formData.name,
-            client: formData.client || '客户',
-            lead: formData.lead || '待定',
-            postLead: formData.postLead || '待定',
-            group: formData.group || '未分类',
+            name: formDataToSubmit.name,
+            client: formDataToSubmit.client || '客户',
+            lead: formDataToSubmit.lead || '待定',
+            postLead: formDataToSubmit.postLead || '待定',
+            group: formDataToSubmit.group || '未分类',
           }).catch((error) => {
             console.error('创建项目失败:', error);
             console.error('错误详情:', error.response?.data || error.message);
@@ -224,30 +248,25 @@ export const RetrievalPanel: React.FC = () => {
             payload: {
               id: newProject.id,
               name: newProject.name,
-              client: newProject.client || formData.client || '客户',
-              lead: newProject.lead || formData.lead || '待定',
-              postLead: newProject.postLead || formData.postLead || '待定',
-              group: newProject.group || formData.group || '未分类',
+              client: newProject.client || formDataToSubmit.client || '客户',
+              lead: newProject.lead || formDataToSubmit.lead || '待定',
+              postLead: newProject.postLead || formDataToSubmit.postLead || '待定',
+              group: newProject.group || formDataToSubmit.group || '未分类',
               status: newProject.status || 'active',
               createdDate: newProject.created_date || new Date().toISOString().split('T')[0],
-              team: formData.team
+              team: formDataToSubmit.team
             }
           });
           
           // 显示成功提示
-          toast.success('项目创建成功');
-          // 关闭模态框
-          setModalConfig({ ...modalConfig, isOpen: false });
+          toast.success(`项目「${formDataToSubmit.name}」创建成功！`);
         } catch (error: any) {
           // 关闭加载提示
           if (loadingToastId) toast.close(loadingToastId);
           console.error('Failed to create project:', error);
           const errorMessage = error?.response?.data?.message || error?.message || '创建项目失败，请重试';
           console.error('错误详情:', error?.response?.data || error);
-          toast.error(`创建项目失败: ${errorMessage}`);
-          return;
-        } finally {
-          setIsCreatingProject(false);
+          toast.error(`项目「${formDataToSubmit.name}」创建失败: ${errorMessage}`);
         }
     } else if (modalConfig.mode === 'edit' && modalConfig.editingProjectId) {
         setIsUpdatingProject(true);
@@ -303,8 +322,62 @@ export const RetrievalPanel: React.FC = () => {
       });
   };
 
-  // Get unique existing groups for dropdown
-  const existingGroups = Array.from(new Set(projects.map(p => p.group).filter(g => g && g !== '未分类')));
+  // Get unique existing groups for dropdown (包含预设分组)
+  const getPresetGroups = (): string[] => {
+    try {
+      const saved = localStorage.getItem('preset_project_groups');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  };
+  const projectGroupNames = projects.map(p => p.group).filter(g => g && g !== '未分类');
+  const existingGroups = Array.from(new Set([...projectGroupNames, ...getPresetGroups()]));
+
+  // 【排序辅助函数】
+  // 从项目名称中提取月份序号（例如 "2405_xxx" -> 2405）
+  const getMonthSequence = (projectName: string): number => {
+    const match = projectName.match(/^(\d{4})_/);
+    return match ? parseInt(match[1], 10) : 0;
+  };
+
+  // 项目排序函数：按月份序号倒序，同月份按创建时间倒序
+  const sortProjectsByMonthAndCreatedDate = (projectList: Project[]): Project[] => {
+    return [...projectList].sort((a, b) => {
+      // 首先按月份序号排序（最新的在前）
+      const monthA = getMonthSequence(a.name);
+      const monthB = getMonthSequence(b.name);
+      if (monthB !== monthA) {
+        return monthB - monthA;
+      }
+      // 月份序号相同时，按创建时间排序（最新创建的在前）
+      const dateA = new Date(a.createdDate).getTime();
+      const dateB = new Date(b.createdDate).getTime();
+      return dateB - dateA;
+    });
+  };
+
+  // 分组视图排序函数：进行中的项目排在最上面，然后按月份序号和创建时间排序
+  const sortProjectsForGroupView = (projectList: Project[]): Project[] => {
+    return [...projectList].sort((a, b) => {
+      // 首先按状态排序：active 的排在最前面
+      const statusA = a.status === 'active' ? 0 : 1;
+      const statusB = b.status === 'active' ? 0 : 1;
+      if (statusA !== statusB) {
+        return statusA - statusB;
+      }
+      // 状态相同时，按月份序号排序（最新的在前）
+      const monthA = getMonthSequence(a.name);
+      const monthB = getMonthSequence(b.name);
+      if (monthB !== monthA) {
+        return monthB - monthA;
+      }
+      // 月份序号也相同时，按创建时间排序（最新创建的在前）
+      const dateA = new Date(a.createdDate).getTime();
+      const dateB = new Date(b.createdDate).getTime();
+      return dateB - dateA;
+    });
+  };
 
   // Get all system tags for tag filtering
   const systemTags = tags || [];
@@ -487,6 +560,20 @@ export const RetrievalPanel: React.FC = () => {
                   {project.status === 'finalized' ? <Lock className="w-3.5 h-3.5" /> : <Settings className="w-3.5 h-3.5" />}
                </button>
            )}
+           {/* 交付模块：待交付项目显示发起交付按钮 */}
+           {activeModule === 'delivery' && project.status === 'finalized' && (
+               <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    dispatch({ type: 'SELECT_PROJECT', payload: project.id });
+                    dispatch({ type: 'TOGGLE_WORKBENCH', payload: true });
+                  }}
+                  className="p-1.5 bg-indigo-600 hover:bg-indigo-500 rounded text-white shadow-sm shadow-indigo-900/30 transition-all hover:scale-105"
+                  title="发起交付"
+               >
+                  <Send className="w-3 h-3" />
+               </button>
+           )}
         </div>
       </div>
     );
@@ -541,7 +628,8 @@ export const RetrievalPanel: React.FC = () => {
                         <span className={`ml-auto ${theme.bg.secondary} ${theme.text.muted} px-1.5 rounded-full text-[9px]`}>{monthProjects.length}</span>
                       </div>
                       <div className="space-y-0.5">
-                        {monthProjects.map(p => renderProjectItem(p, null))}
+                        {/* 月份内按序号和创建时间排序 */}
+                        {sortProjectsByMonthAndCreatedDate(monthProjects).map(p => renderProjectItem(p, null))}
                       </div>
                     </div>
                   ))
@@ -578,7 +666,8 @@ export const RetrievalPanel: React.FC = () => {
                         <span className={`ml-auto ${theme.bg.secondary} ${theme.text.muted} px-1.5 rounded-full text-[9px]`}>{monthProjects.length}</span>
                       </div>
                       <div className="space-y-0.5">
-                        {monthProjects.map(p => renderProjectItem(p, null))}
+                        {/* 月份内按序号和创建时间排序 */}
+                        {sortProjectsByMonthAndCreatedDate(monthProjects).map(p => renderProjectItem(p, null))}
                       </div>
                     </div>
                   ))
@@ -602,18 +691,36 @@ export const RetrievalPanel: React.FC = () => {
             {Object.keys(groups).length === 0 && (
                 <div className="text-xs text-zinc-600 italic px-2">未找到项目</div>
             )}
-            {Object.entries(groups).map(([groupName, groupProjects]) => (
-                <div key={groupName} className="mb-6">
-                    <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2 sticky top-0 bg-zinc-950 py-1 z-10">
-                        <Folder className="w-3 h-3" />
-                        {groupName}
-                        <span className="ml-auto bg-zinc-800 text-zinc-400 px-1.5 rounded-full text-[9px]">{groupProjects.length}</span>
+            {Object.entries(groups).map(([groupName, groupProjects]) => {
+                const isCollapsed = collapsedGroups.has(groupName);
+                return (
+                    <div key={groupName} className="mb-3">
+                        <div 
+                            onClick={() => toggleGroupCollapse(groupName)}
+                            className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider mb-1 sticky top-0 py-2 px-2 -mx-2 z-10 cursor-pointer select-none rounded-md transition-all duration-200 ${
+                                isCollapsed 
+                                    ? 'text-zinc-500 bg-zinc-950 hover:bg-zinc-900 hover:text-zinc-300' 
+                                    : 'text-zinc-300 bg-zinc-900/50 hover:bg-zinc-800/50'
+                            }`}
+                        >
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
+                            <Folder className={`w-3.5 h-3.5 transition-colors duration-200 ${isCollapsed ? 'text-zinc-500' : 'text-indigo-400'}`} />
+                            <span className="flex-1">{groupName}</span>
+                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] transition-colors duration-200 ${
+                                isCollapsed 
+                                    ? 'bg-zinc-800 text-zinc-500' 
+                                    : 'bg-indigo-500/20 text-indigo-400'
+                            }`}>{groupProjects.length}</span>
+                        </div>
+                        <div className={`overflow-hidden transition-all duration-200 ${isCollapsed ? 'max-h-0 opacity-0' : 'max-h-[2000px] opacity-100'}`}>
+                            <div className="space-y-0.5 pl-2 pt-1">
+                                {/* 分组内排序：进行中项目在前，然后按月份序号和创建时间排序 */}
+                                {sortProjectsForGroupView(groupProjects).map(p => renderProjectItem(p, null))}
+                            </div>
+                        </div>
                     </div>
-                    <div className="space-y-0.5">
-                        {groupProjects.map(p => renderProjectItem(p, null))}
-                    </div>
-                </div>
-            ))}
+                );
+            })}
         </div>
     );
   };
@@ -664,7 +771,8 @@ export const RetrievalPanel: React.FC = () => {
                         <span className={`ml-auto ${theme.bg.secondary} ${theme.text.muted} px-1.5 rounded-full text-[9px]`}>{monthProjects.length}</span>
                       </div>
                       <div className="space-y-0.5">
-                        {monthProjects.map(p => renderProjectItem(p, <Archive className="w-3.5 h-3.5" />))}
+                        {/* 月份内按序号和创建时间排序 */}
+                        {sortProjectsByMonthAndCreatedDate(monthProjects).map(p => renderProjectItem(p, <Archive className="w-3.5 h-3.5" />))}
                       </div>
                     </div>
                   ))
@@ -699,7 +807,8 @@ export const RetrievalPanel: React.FC = () => {
                         <span className={`ml-auto ${theme.bg.secondary} ${theme.text.muted} px-1.5 rounded-full text-[9px]`}>{monthProjects.length}</span>
                       </div>
                       <div className="space-y-0.5">
-                        {monthProjects.map(p => renderProjectItem(p, <Check className="w-3.5 h-3.5 text-emerald-500" />))}
+                        {/* 月份内按序号和创建时间排序 */}
+                        {sortProjectsByMonthAndCreatedDate(monthProjects).map(p => renderProjectItem(p, <Check className="w-3.5 h-3.5 text-emerald-500" />))}
                       </div>
                     </div>
                   ))
@@ -742,7 +851,8 @@ export const RetrievalPanel: React.FC = () => {
                 <span className={`ml-auto ${theme.bg.secondary} ${theme.text.muted} px-1.5 rounded-full text-[9px]`}>{monthProjects.length}</span>
               </div>
               <div className="space-y-0.5">
-                {monthProjects.map(p => renderProjectItem(p, null))}
+                {/* 月份内按序号和创建时间排序 */}
+                {sortProjectsByMonthAndCreatedDate(monthProjects).map(p => renderProjectItem(p, null))}
               </div>
             </div>
           ))
@@ -1338,7 +1448,31 @@ export const RetrievalPanel: React.FC = () => {
                                         className={`flex-1 ${theme.bg.primary} border border-indigo-500 rounded-lg px-3 py-2 text-sm ${theme.text.primary} outline-none disabled:opacity-50 disabled:cursor-not-allowed`}
                                     />
                                     <button 
-                                        onClick={() => setFormData({...formData, isNewGroup: false, group: '广告片'})}
+                                        onClick={() => {
+                                            const newGroupName = formData.group.trim();
+                                            if (!newGroupName) {
+                                                alert('请输入分组名称');
+                                                return;
+                                            }
+                                            if (existingGroups.includes(newGroupName)) {
+                                                alert('该分组名称已存在');
+                                                return;
+                                            }
+                                            // 保存到预设分组
+                                            const currentPresets = getPresetGroups();
+                                            if (!currentPresets.includes(newGroupName)) {
+                                                localStorage.setItem('preset_project_groups', JSON.stringify([...currentPresets, newGroupName]));
+                                            }
+                                            // 切换回下拉模式并选中新分组
+                                            setFormData({...formData, isNewGroup: false, group: newGroupName});
+                                        }}
+                                        disabled={isCreatingProject || isUpdatingProject}
+                                        className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        确认
+                                    </button>
+                                    <button 
+                                        onClick={() => setFormData({...formData, isNewGroup: false, group: existingGroups[0] || '未分类'})}
                                         disabled={isCreatingProject || isUpdatingProject}
                                         className={`px-3 py-2 ${theme.bg.tertiary} ${theme.bg.hover} ${theme.text.tertiary} rounded-lg text-xs disabled:opacity-50 disabled:cursor-not-allowed`}
                                     >

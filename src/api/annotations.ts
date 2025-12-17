@@ -1,5 +1,8 @@
 import apiClient from './client';
 
+// 批注者用户类型
+export type AnnotatorUserType = 'guest' | 'team_user' | 'personal_user';
+
 export interface Annotation {
   id: string;
   videoId?: string;
@@ -18,6 +21,12 @@ export interface Annotation {
   created_at: string; // 保持向后兼容
   updatedAt?: string;
   updated_at?: string; // 兼容旧格式
+  client_name?: string; // 访客名称 (snake_case)
+  clientName?: string; // 访客名称 (camelCase)
+  userType?: AnnotatorUserType; // 用户类型 (camelCase)
+  user_type?: AnnotatorUserType; // 用户类型 (snake_case)
+  teamName?: string; // 团队名称 (camelCase)
+  team_name?: string; // 团队名称 (snake_case)
   user?: {
     id: string;
     name: string;
@@ -77,7 +86,7 @@ export const annotationsApi = {
     return response.json();
   },
 
-  // 通过分享token创建批注（公开接口）
+  // 通过分享token创建批注（公开接口，支持登录用户）
   createByShareToken: async (
     token: string,
     data: { timecode: string; content: string; clientName?: string },
@@ -101,11 +110,21 @@ export const annotationsApi = {
         apiBaseUrl = `http://${serverIp}:${port}/api`;
       }
     }
+    
+    // 构建请求头，如果有登录 token 则传递
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    // 从 localStorage 获取登录 token
+    const authToken = localStorage.getItem('token') || localStorage.getItem('access_token');
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+    
     const response = await fetch(`${apiBaseUrl}/shares/${token}/annotations`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(data),
     });
     return response.json();

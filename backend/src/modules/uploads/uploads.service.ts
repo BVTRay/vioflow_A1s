@@ -166,10 +166,14 @@ export class UploadsService {
         }
       }
 
-      // 3. 如果是视频文件，生成缩略图
+      // 3. 如果是视频文件，生成缩略图并获取视频信息
       let thumbnailUrl: string | undefined = undefined;
+      let duration: number | undefined = undefined;
+      let resolution: string | undefined = undefined;
+      let aspectRatio: AspectRatio | undefined = undefined;
+
       if (videoType === VideoType.VIDEO && file.buffer) {
-        console.log(`[UploadsService] 开始生成缩略图...`);
+        console.log(`[UploadsService] 开始生成缩略图并获取视频信息...`);
         try {
           const thumbnailResult = await this.thumbnailService.generateThumbnail(
             file.buffer,
@@ -177,13 +181,50 @@ export class UploadsService {
           );
           if (thumbnailResult) {
             thumbnailUrl = thumbnailResult.url;
-            console.log(`[UploadsService] 缩略图生成成功: ${thumbnailUrl}`);
+            duration = thumbnailResult.duration;
+            
+            // 计算分辨率和宽高比
+            if (thumbnailResult.width && thumbnailResult.height) {
+              resolution = `${thumbnailResult.width}x${thumbnailResult.height}`;
+              aspectRatio = thumbnailResult.width >= thumbnailResult.height 
+                ? AspectRatio.LANDSCAPE 
+                : AspectRatio.PORTRAIT;
+            }
+            
+            console.log(`[UploadsService] 缩略图生成成功: ${thumbnailUrl}, 时长: ${duration}s, 分辨率: ${resolution}`);
           } else {
-            console.warn(`[UploadsService] 缩略图生成失败，继续创建视频记录`);
+            console.warn(`[UploadsService] 缩略图生成失败，尝试单独获取视频信息...`);
+            // 缩略图生成失败，尝试单独获取视频信息
+            try {
+              const videoInfo = await this.thumbnailService.getVideoInfoFromBuffer(file.buffer);
+              duration = videoInfo.duration;
+              if (videoInfo.width && videoInfo.height) {
+                resolution = `${videoInfo.width}x${videoInfo.height}`;
+                aspectRatio = videoInfo.width >= videoInfo.height 
+                  ? AspectRatio.LANDSCAPE 
+                  : AspectRatio.PORTRAIT;
+              }
+              console.log(`[UploadsService] 视频信息获取成功: 时长: ${duration}s, 分辨率: ${resolution}`);
+            } catch (infoError) {
+              console.error(`[UploadsService] 获取视频信息失败:`, infoError);
+            }
           }
         } catch (thumbnailError) {
           console.error(`[UploadsService] 缩略图生成异常:`, thumbnailError);
-          // 缩略图生成失败不影响视频上传
+          // 缩略图生成失败不影响视频上传，尝试单独获取视频信息
+          try {
+            const videoInfo = await this.thumbnailService.getVideoInfoFromBuffer(file.buffer);
+            duration = videoInfo.duration;
+            if (videoInfo.width && videoInfo.height) {
+              resolution = `${videoInfo.width}x${videoInfo.height}`;
+              aspectRatio = videoInfo.width >= videoInfo.height 
+                ? AspectRatio.LANDSCAPE 
+                : AspectRatio.PORTRAIT;
+            }
+            console.log(`[UploadsService] 视频信息获取成功: 时长: ${duration}s, 分辨率: ${resolution}`);
+          } catch (infoError) {
+            console.error(`[UploadsService] 获取视频信息失败:`, infoError);
+          }
         }
       }
 
@@ -203,6 +244,9 @@ export class UploadsService {
         uploaderId: userId,
         changeLog: changeLog || '上传新文件',
         thumbnailUrl,
+        duration,
+        resolution,
+        aspectRatio,
       });
 
       console.log(`[UploadsService] 视频记录创建成功: ${video.id}`);

@@ -15,6 +15,10 @@ export interface UploadVideoResponse {
   size: string;
   status: 'initial' | 'annotated' | 'approved';
   changeLog?: string;
+  duration?: string;
+  resolution?: string;
+  aspectRatio?: 'landscape' | 'portrait';
+  thumbnailUrl?: string;
 }
 
 const getApiBaseUrl = () => {
