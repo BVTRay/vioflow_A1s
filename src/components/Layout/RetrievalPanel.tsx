@@ -461,6 +461,39 @@ export const RetrievalPanel: React.FC = () => {
     return matchedTags;
   };
 
+  // 获取当前筛选后的案例视频列表
+  const getFilteredCaseVideos = (): typeof videos => {
+    if (activeModule !== 'showcase') return [];
+    
+    let caseVideos = videos.filter(v => v.isCaseFile);
+    
+    // 根据系统标签筛选案例文件
+    const tagsToFilter = isTagMultiSelectMode && selectedGroupTags.length > 0 
+      ? selectedGroupTags 
+      : selectedGroupTag 
+        ? [selectedGroupTag] 
+        : [];
+    
+    if (tagsToFilter.length > 0) {
+      caseVideos = caseVideos.filter(v => {
+        // Check if video has any of the selected tags (OR logic)
+        return tagsToFilter.some(tagName => {
+          const tag = tags.find(t => t.name === tagName);
+          return v.tags?.includes(tagName) || (tag && v.tagIds?.includes(tag.id));
+        });
+      });
+    }
+    
+    // 根据搜索关键词过滤案例文件
+    if (searchTerm.trim()) {
+      caseVideos = caseVideos.filter(v => 
+        v.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    return caseVideos;
+  };
+
   // Renderers
   const renderProjectItem = (project: Project, icon: React.ReactNode) => {
     // 分享模块
@@ -1232,82 +1265,103 @@ export const RetrievalPanel: React.FC = () => {
         </div>
 
         {/* Search Input - 设置模块不显示搜索框 */}
-        {activeModule !== 'settings' && (
-        <div className="border-b border-zinc-800 shrink-0">
-            <div className="p-3">
-                <div className="flex items-center gap-2">
-                    <div className="relative group flex-1">
-                        <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-zinc-500 group-focus-within:text-zinc-300 transition-colors" />
-                        <input 
-                            type="text" 
-                            placeholder={activeModule === 'showcase' ? "搜索案例视频..." : activeModule === 'share' ? "搜索项目名称或客户..." : "筛选项目..."}
-                            value={searchTerm}
-                            onChange={(e) => dispatch({ type: 'SET_SEARCH', payload: e.target.value })}
-                            className={`w-full ${theme.bg.secondary} border ${theme.border.primary} rounded-lg pl-9 pr-3 py-2 text-sm ${theme.text.secondary} placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all`}
-                        />
-                    </div>
-                    {/* 多选按钮 - 仅在分享模块显示 */}
-                    {activeModule === 'share' && (
-                        <button
-                            onClick={() => dispatch({ type: 'TOGGLE_SHARE_MULTI_SELECT_MODE' })}
-                            className={`p-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 border shrink-0 ${
-                                shareMultiSelectMode
-                                    ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/30'
-                                    : `${theme.bg.secondary} ${theme.text.disabled} ${theme.border.primary} ${theme.text.hover}`
-                            }`}
-                            title={shareMultiSelectMode ? '关闭多选模式' : '启用多选模式'}
-                        >
-                            {shareMultiSelectMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
-                        </button>
-                    )}
-                    {/* 标签按钮 - 在审阅、交付、案例模块显示 */}
-                    {(activeModule === 'review' || activeModule === 'delivery' || activeModule === 'showcase') && (
-                        <button
-                            onClick={() => dispatch({ type: 'TOGGLE_TAG_PANEL' })}
-                            className={`p-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 border shrink-0 ${
-                                isTagPanelExpanded || selectedGroupTag || (selectedGroupTags.length > 0)
-                                    ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/30'
-                                    : `${theme.bg.secondary} ${theme.text.disabled} ${theme.border.primary} ${theme.text.hover}`
-                            }`}
-                            title={isTagPanelExpanded ? '收起标签' : '展开标签'}
-                        >
-                            <Tag className="w-4 h-4" />
-                        </button>
-                    )}
-                </div>
-            </div>
-            {/* 标签面板 - 在审阅、交付、案例模块显示 */}
-            {isTagPanelExpanded && (activeModule === 'review' || activeModule === 'delivery' || activeModule === 'showcase') && (
-                <div className="px-3 pb-3 border-t border-zinc-800">
-                    <div className="flex flex-wrap gap-2 mt-3">
-                        <button
-                            onClick={() => dispatch({ type: 'SET_GROUP_TAG', payload: null })}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-                                !selectedGroupTag
-                                    ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30'
-                                    : `${theme.bg.secondary} ${theme.text.disabled} ${theme.border.primary} ${theme.text.hover}`
-                            }`}
-                        >
-                            全部
-                        </button>
-                        {systemTags.map(tag => (
+        {activeModule !== 'settings' && (() => {
+            // 计算筛选后的案例视频（仅在案例模块）
+            const filteredCaseVideos = activeModule === 'showcase' ? getFilteredCaseVideos() : [];
+            const hasFilter = activeModule === 'showcase' && ((isTagMultiSelectMode && selectedGroupTags.length > 0) || selectedGroupTag || searchTerm.trim());
+            const shouldShowAddAllButton = activeModule === 'showcase' && hasFilter && filteredCaseVideos.length > 0;
+            
+            return (
+            <div className="border-b border-zinc-800 shrink-0">
+                <div className="p-3">
+                    <div className="flex items-center gap-2">
+                        <div className="relative group flex-1">
+                            <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-zinc-500 group-focus-within:text-zinc-300 transition-colors" />
+                            <input 
+                                type="text" 
+                                placeholder={activeModule === 'showcase' ? "搜索案例视频..." : activeModule === 'share' ? "搜索项目名称或客户..." : "筛选项目..."}
+                                value={searchTerm}
+                                onChange={(e) => dispatch({ type: 'SET_SEARCH', payload: e.target.value })}
+                                className={`w-full ${theme.bg.secondary} border ${theme.border.primary} rounded-lg pl-9 pr-3 py-2 text-sm ${theme.text.secondary} placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all`}
+                            />
+                        </div>
+                        {/* 多选按钮 - 仅在分享模块显示 */}
+                        {activeModule === 'share' && (
                             <button
-                                key={tag.id}
-                                onClick={() => dispatch({ type: 'SET_GROUP_TAG', payload: tag.name })}
+                                onClick={() => dispatch({ type: 'TOGGLE_SHARE_MULTI_SELECT_MODE' })}
+                                className={`p-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 border shrink-0 ${
+                                    shareMultiSelectMode
+                                        ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/30'
+                                        : `${theme.bg.secondary} ${theme.text.disabled} ${theme.border.primary} ${theme.text.hover}`
+                                }`}
+                                title={shareMultiSelectMode ? '关闭多选模式' : '启用多选模式'}
+                            >
+                                {shareMultiSelectMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                            </button>
+                        )}
+                        {/* 案例模块：全部添加按钮 - 在标签按钮左侧 */}
+                        {shouldShowAddAllButton && (
+                            <button
+                                onClick={() => {
+                                    const videoIds = filteredCaseVideos.map(v => v.id);
+                                    dispatch({ type: 'ADD_MULTIPLE_TO_SHOWCASE_BROWSER', payload: videoIds });
+                                }}
+                                className="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors border bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-500 flex items-center gap-1.5 shrink-0"
+                                title={`批量添加 ${filteredCaseVideos.length} 个筛选后的案例`}
+                            >
+                                <PlusCircle className="w-3 h-3" />
+                                全部添加 ({filteredCaseVideos.length})
+                            </button>
+                        )}
+                        {/* 标签按钮 - 在审阅、交付、案例模块显示 */}
+                        {(activeModule === 'review' || activeModule === 'delivery' || activeModule === 'showcase') && (
+                            <button
+                                onClick={() => dispatch({ type: 'TOGGLE_TAG_PANEL' })}
+                                className={`p-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 border shrink-0 ${
+                                    isTagPanelExpanded || selectedGroupTag || (selectedGroupTags.length > 0)
+                                        ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/30'
+                                        : `${theme.bg.secondary} ${theme.text.disabled} ${theme.border.primary} ${theme.text.hover}`
+                                }`}
+                                title={isTagPanelExpanded ? '收起标签' : '展开标签'}
+                            >
+                                <Tag className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                </div>
+                {/* 标签面板 - 在审阅、交付、案例模块显示 */}
+                {isTagPanelExpanded && (activeModule === 'review' || activeModule === 'delivery' || activeModule === 'showcase') && (
+                    <div className="px-3 pb-3 border-t border-zinc-800">
+                        <div className="flex flex-wrap gap-2 mt-3 items-center">
+                            <button
+                                onClick={() => dispatch({ type: 'SET_GROUP_TAG', payload: null })}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-                                    selectedGroupTag === tag.name
+                                    !selectedGroupTag
                                         ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30'
                                         : `${theme.bg.secondary} ${theme.text.disabled} ${theme.border.primary} ${theme.text.hover}`
                                 }`}
                             >
-                                {tag.name}
+                                全部
                             </button>
-                        ))}
+                            {systemTags.map(tag => (
+                                <button
+                                    key={tag.id}
+                                    onClick={() => dispatch({ type: 'SET_GROUP_TAG', payload: tag.name })}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                                        selectedGroupTag === tag.name
+                                            ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30'
+                                            : `${theme.bg.secondary} ${theme.text.disabled} ${theme.border.primary} ${theme.text.hover}`
+                                    }`}
+                                >
+                                    {tag.name}
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                </div>
-            )}
-        </div>
-        )}
+                )}
+            </div>
+            );
+        })()}
 
         {/* Content Switching Logic */}
         {activeModule === 'review' && (viewMode === 'month' ? renderReviewTree() : renderGroupTree(filteredProjects))}

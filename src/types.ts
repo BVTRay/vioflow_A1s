@@ -237,6 +237,8 @@ export type Action =
   | { type: 'SET_SHOWCASE_VIEW_MODE'; payload: 'files' | 'packages' }
   | { type: 'SET_FILTERED_SHOWCASE_VIDEOS'; payload: string[] }
   | { type: 'ADD_TO_SHOWCASE_BROWSER'; payload: string }
+  | { type: 'ADD_MULTIPLE_TO_SHOWCASE_BROWSER'; payload: string[] }
+  | { type: 'REMOVE_FROM_SHOWCASE_BROWSER'; payload: string }
   | { type: 'CLEAR_SHOWCASE_BROWSER' }
   | { type: 'GENERATE_SHOWCASE_PACKAGE'; payload: { title: string; description: string; mode: 'quick_player' | 'pitch_page'; clientName?: string } }
   | { type: 'TOGGLE_SHOWCASE_PACKAGE'; payload: { packageId: string; isActive: boolean } }

@@ -275,6 +275,17 @@ function appReducer(state: AppState, action: Action): AppState {
           ? state.filteredShowcaseVideos
           : [...state.filteredShowcaseVideos, action.payload]
       };
+    case 'ADD_MULTIPLE_TO_SHOWCASE_BROWSER':
+      const newVideoIds = action.payload.filter(id => !state.filteredShowcaseVideos.includes(id));
+      return {
+        ...state,
+        filteredShowcaseVideos: [...state.filteredShowcaseVideos, ...newVideoIds]
+      };
+    case 'REMOVE_FROM_SHOWCASE_BROWSER':
+      return {
+        ...state,
+        filteredShowcaseVideos: state.filteredShowcaseVideos.filter(id => id !== action.payload)
+      };
     case 'CLEAR_SHOWCASE_BROWSER':
       return { ...state, filteredShowcaseVideos: [] };
     case 'GENERATE_SHOWCASE_PACKAGE': {

@@ -244,16 +244,15 @@ export const MainBrowser: React.FC = () => {
   let displayVideos: Video[] = [];
   
   if (activeModule === 'showcase') {
-      // Showcase: 临时浏览区优先 filteredShowcaseVideos，否则全部案例文件
+      // Showcase: 仅显示已添加到浏览区的案例文件（filteredShowcaseVideos），否则显示全部案例文件
+      // 注意：检索面板的搜索和筛选不影响主浏览区，只有点击"全部添加"后才显示
       const caseFiles = videos.filter(v => v.isCaseFile);
       if (state.filteredShowcaseVideos.length > 0) {
           displayVideos = caseFiles.filter(v => state.filteredShowcaseVideos.includes(v.id));
       } else {
           displayVideos = caseFiles;
       }
-      if (searchTerm) {
-          displayVideos = displayVideos.filter(v => v.name.toLowerCase().includes(searchTerm.toLowerCase()));
-      }
+      // 移除对 searchTerm 的过滤，确保检索面板的搜索不影响主浏览区
   } else if (selectedProjectId) {
       // Review/Delivery: Show videos for specific project
       displayVideos = videos.filter(v => v.projectId === selectedProjectId);
@@ -1172,6 +1171,7 @@ export const MainBrowser: React.FC = () => {
                   onToggleSelection={activeModule === 'delivery' && selectedProject.status === 'delivered' ? () => dispatch({ type: 'TOGGLE_DELIVERY_FILE_SELECTION', payload: video.id }) : undefined}
                   onUploadNewVersion={activeModule === 'review' ? () => handleUploadNewVersion(video) : undefined}
                   onDelete={activeModule === 'review' ? () => handleDeleteVideo(video) : undefined}
+                  onRemove={activeModule === 'showcase' && state.filteredShowcaseVideos.length > 0 ? () => dispatch({ type: 'REMOVE_FROM_SHOWCASE_BROWSER', payload: video.id }) : undefined}
                 />
               ))}
             </div>
@@ -1286,6 +1286,7 @@ export const MainBrowser: React.FC = () => {
                     onToggleSelection={activeModule === 'delivery' && selectedProject.status === 'delivered' ? () => dispatch({ type: 'TOGGLE_DELIVERY_FILE_SELECTION', payload: latestVideo.id }) : undefined}
                     onUploadNewVersion={activeModule === 'review' ? () => handleUploadNewVersion(latestVideo) : undefined}
                     onDelete={activeModule === 'review' ? () => handleDeleteVideo(latestVideo) : undefined}
+                    onRemove={activeModule === 'showcase' && state.filteredShowcaseVideos.length > 0 ? () => dispatch({ type: 'REMOVE_FROM_SHOWCASE_BROWSER', payload: latestVideo.id }) : undefined}
                   />
                 </div>
               );
@@ -2023,6 +2024,7 @@ export const MainBrowser: React.FC = () => {
                           onToggleSelection={activeModule === 'delivery' && project && project.status === 'delivered' ? () => dispatch({ type: 'TOGGLE_DELIVERY_FILE_SELECTION', payload: video.id }) : undefined}
                           onUploadNewVersion={activeModule === 'review' ? () => handleUploadNewVersion(video) : undefined}
                           onDelete={activeModule === 'review' ? () => handleDeleteVideo(video) : undefined}
+                          onRemove={activeModule === 'showcase' && state.filteredShowcaseVideos.length > 0 ? () => dispatch({ type: 'REMOVE_FROM_SHOWCASE_BROWSER', payload: video.id }) : undefined}
                       />
                   ))}
                   </div>
@@ -2119,6 +2121,7 @@ export const MainBrowser: React.FC = () => {
                             onToggleSelection={activeModule === 'delivery' && project && project.status === 'delivered' ? () => dispatch({ type: 'TOGGLE_DELIVERY_FILE_SELECTION', payload: latestVideo.id }) : undefined}
                             onUploadNewVersion={activeModule === 'review' && isRetrievalPanelVisible ? () => handleUploadNewVersion(latestVideo) : undefined}
                             onDelete={activeModule === 'review' && isRetrievalPanelVisible ? () => handleDeleteVideo(latestVideo) : undefined}
+                            onRemove={activeModule === 'showcase' && state.filteredShowcaseVideos.length > 0 ? () => dispatch({ type: 'REMOVE_FROM_SHOWCASE_BROWSER', payload: latestVideo.id }) : undefined}
                         />
                     </div>
                   );
@@ -2776,6 +2779,7 @@ const VideoCard: React.FC<{
     onToggleSelection?: () => void; // 交付模块选择切换
     onUploadNewVersion?: () => void; // 上传新版本
     onDelete?: () => void; // 删除视频
+    onRemove?: () => void; // 案例模块从浏览区移除
 }> = ({ 
     video, 
     viewMode, 
@@ -2795,7 +2799,8 @@ const VideoCard: React.FC<{
     onShare,
     onToggleSelection,
     onUploadNewVersion,
-    onDelete
+    onDelete,
+    onRemove
 }) => {
   
   if (viewMode === 'list') {
@@ -2914,12 +2919,24 @@ const VideoCard: React.FC<{
                         </button>
                     </>
                 ) : (
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onToggleCart(); }}
-                        className={`p-1.5 rounded transition-colors ${isInCart ? 'bg-indigo-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}
-                    >
-                        {isInCart ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-                    </button>
+                    <>
+                        {/* 案例模块：移除按钮 */}
+                        {activeModule === 'showcase' && onRemove && (
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); onRemove(); }}
+                                className="p-1.5 rounded transition-colors text-zinc-400 hover:text-red-400 hover:bg-red-500/10"
+                                title="从浏览区移除"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        )}
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onToggleCart(); }}
+                            className={`p-1.5 rounded transition-colors ${isInCart ? 'bg-indigo-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}
+                        >
+                            {isInCart ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                        </button>
+                    </>
                 )}
              </div>
         </div>
@@ -3020,13 +3037,13 @@ const VideoCard: React.FC<{
             {video.duration}
         </div>
 
-        {/* Share Button - 右上角分享按钮 */}
-        {activeModule !== 'showcase' && (
-            <div 
-                style={{ top: '4cqi', right: '4cqi' }}
-                className="absolute z-10" 
-                onClick={e => e.stopPropagation()}
-            >
+        {/* Share Button - 右上角分享按钮（非案例模块）或移除按钮（案例模块） */}
+        <div 
+            style={{ top: '4cqi', right: '4cqi' }}
+            className="absolute z-10" 
+            onClick={e => e.stopPropagation()}
+        >
+            {activeModule !== 'showcase' ? (
                 <button 
                     onClick={(e) => { e.stopPropagation(); onShare(); }}
                     style={{ padding: 'clamp(4px, 1.5cqi, 6px)' }}
@@ -3035,8 +3052,17 @@ const VideoCard: React.FC<{
                 >
                     <Share2 style={{ width: 'clamp(12px, 4cqi, 16px)', height: 'clamp(12px, 4cqi, 16px)' }} />
                 </button>
-            </div>
-        )}
+            ) : activeModule === 'showcase' && onRemove ? (
+                <button 
+                    onClick={(e) => { e.stopPropagation(); onRemove(); }}
+                    style={{ padding: 'clamp(4px, 1.5cqi, 6px)' }}
+                    className="rounded transition-all duration-200 bg-black/60 backdrop-blur-md text-white/90 hover:bg-red-500 hover:text-white"
+                    title="从浏览区移除"
+                >
+                    <X style={{ width: 'clamp(12px, 4cqi, 16px)', height: 'clamp(12px, 4cqi, 16px)' }} />
+                </button>
+            ) : null}
+        </div>
 
         {/* Action Buttons - 右下角操作按钮组 */}
         {((isDeliveryDelivered && onToggleSelection) || 
