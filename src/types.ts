@@ -189,7 +189,7 @@ export interface AppState {
   pendingProjectGroup?: string | null; // 待创建项目的组名（从主浏览区传递）
   shouldTriggerFileSelect?: boolean; // 是否应该自动触发文件选择（用于快速上传）
   quickUploadMode?: boolean; // 快速上传模式：在操作台显示项目选择界面
-  workbenchView?: 'none' | 'newProject' | 'projectSettings' | 'upload' | 'versionHistory'; // 操作台当前视图
+  workbenchView?: 'none' | 'newProject' | 'projectSettings' | 'upload' | 'versionHistory' | 'finalizeReview'; // 操作台当前视图
   workbenchContext?: {
     projectId?: string | null;
     videoId?: string | null;
@@ -274,7 +274,7 @@ export type Action =
   | { type: 'SET_WORKBENCH_ACTION_TYPE'; payload: 'review' | 'delivery' | 'showcase' | null } // 设置工作台操作类型
   | { type: 'SET_WORKBENCH_CREATE_MODE'; payload: 'group' | 'project' | null } // 设置工作台创建模式
   | { type: 'SET_WORKBENCH_EDIT_MODE'; payload: string | null } // 设置工作台编辑项目ID（在操作台中编辑项目设置）
-  | { type: 'OPEN_WORKBENCH_VIEW'; payload: { view: 'newProject' | 'projectSettings' | 'upload' | 'versionHistory'; context?: { projectId?: string | null; videoId?: string | null; baseName?: string | null; viewMode?: 'grid' | 'list'; from?: string } } } // 统一打开操作台视图
+  | { type: 'OPEN_WORKBENCH_VIEW'; payload: { view: 'newProject' | 'projectSettings' | 'upload' | 'versionHistory' | 'finalizeReview'; context?: { projectId?: string | null; videoId?: string | null; baseName?: string | null; viewMode?: 'grid' | 'list'; from?: string } } } // 统一打开操作台视图
   | { type: 'CLOSE_WORKBENCH' } // 统一关闭操作台视图
   | { type: 'SET_PENDING_PROJECT_GROUP'; payload: string | null } // 设置待创建项目的组名
   | { type: 'SET_SHOULD_TRIGGER_FILE_SELECT'; payload: boolean } // 设置是否应该自动触发文件选择

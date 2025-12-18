@@ -20,13 +20,42 @@ export class AnnotationsService {
     const query = this.annotationRepository
       .createQueryBuilder('annotation')
       .leftJoinAndSelect('annotation.user', 'user')
+      .leftJoinAndSelect('user.team', 'team')
       .orderBy('annotation.created_at', 'ASC');
     
     if (videoId) {
       query.where('annotation.video_id = :videoId', { videoId });
     }
     
-    return query.getMany();
+    const annotations = await query.getMany();
+    
+    // 为每个批注添加用户类型和团队信息
+    return annotations.map(annotation => {
+      const result: any = { ...annotation };
+      
+      if (annotation.user_id && annotation.user) {
+        // 登录用户
+        if (annotation.user.team_id && annotation.user.team) {
+          // 团队用户
+          result.userType = 'team_user';
+          result.teamName = annotation.user.team.name;
+        } else {
+          // 个人用户
+          result.userType = 'personal_user';
+          result.teamName = null;
+        }
+      } else if (annotation.client_name) {
+        // 访客
+        result.userType = 'guest';
+        result.teamName = null;
+      } else {
+        // 未知类型
+        result.userType = 'guest';
+        result.teamName = null;
+      }
+      
+      return result;
+    });
   }
 
   async create(data: { videoId: string; userId: string; timecode: string; content: string; screenshotUrl?: string }): Promise<Annotation> {

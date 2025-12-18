@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as bcrypt from 'bcrypt';
 import { ShowcasePackage, ShowcaseMode } from './entities/showcase-package.entity';
 import { ShowcasePackageVideo } from './entities/showcase-package-video.entity';
 import { SharesService } from '../shares/shares.service';
@@ -64,17 +65,107 @@ export class ShowcaseService {
     return { packageId: id, views: 0 };
   }
 
-  async generateLink(id: string): Promise<any> {
+  async generateLink(id: string, config?: {
+    linkExpiry?: number;
+    requirePassword?: boolean;
+    password?: string;
+  }): Promise<any> {
     const pkg = await this.findOne(id);
-    const shareLink = await this.sharesService.createShareLink({
-      type: 'showcase_package',
-      createdBy: pkg.created_by,
-    });
     
-    pkg.share_link_id = shareLink.id;
-    await this.packageRepository.save(pkg);
+    // 如果已有链接，更新它；否则创建新链接
+    let shareLink;
+    if (pkg.share_link_id) {
+      // 更新现有链接
+      const linkData: any = {};
+      if (config?.linkExpiry !== undefined) {
+        if (config.linkExpiry > 0) {
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + config.linkExpiry);
+          linkData.expiresAt = expiresAt.toISOString();
+        } else {
+          linkData.expiresAt = null;
+        }
+      }
+      if (config?.requirePassword !== undefined) {
+        linkData.hasPassword = config.requirePassword;
+        if (config.requirePassword && config.password) {
+          linkData.password = config.password;
+        } else if (!config.requirePassword) {
+          linkData.password = null;
+        }
+      }
+      shareLink = await this.sharesService.update(pkg.share_link_id, linkData);
+    } else {
+      // 创建新链接
+      const expiresAt = config?.linkExpiry && config.linkExpiry > 0
+        ? (() => {
+            const date = new Date();
+            date.setDate(date.getDate() + config.linkExpiry);
+            return date.toISOString();
+          })()
+        : undefined;
+      
+      shareLink = await this.sharesService.createShareLink({
+        type: 'showcase_package',
+        createdBy: pkg.created_by,
+        hasPassword: config?.requirePassword,
+        password: config?.requirePassword ? config.password : undefined,
+        expiresAt,
+      });
+      
+      pkg.share_link_id = shareLink.id;
+      await this.packageRepository.save(pkg);
+    }
     
-    return { link: `https://vioflow.io/share/${shareLink.token}` };
+    const baseUrl = process.env.FRONTEND_URL || 'https://vioflow.io';
+    const linkId = shareLink.token.substring(0, 8);
+    const link = pkg.mode === ShowcaseMode.QUICK_PLAYER
+      ? `${baseUrl}/play/${linkId}`
+      : `${baseUrl}/pitch/${linkId}`;
+    
+    return { link, linkId };
+  }
+
+  async updateLink(id: string, config: {
+    linkExpiry?: number;
+    requirePassword?: boolean;
+    password?: string;
+  }): Promise<any> {
+    const pkg = await this.findOne(id);
+    if (!pkg.share_link_id) {
+      throw new Error('案例包尚未生成链接');
+    }
+
+    const linkData: any = {};
+    if (config.linkExpiry !== undefined) {
+      if (config.linkExpiry > 0) {
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + config.linkExpiry);
+        linkData.expires_at = expiresAt.toISOString();
+      } else {
+        linkData.expires_at = null;
+      }
+    }
+    if (config.requirePassword !== undefined) {
+      if (config.requirePassword && config.password) {
+        linkData.password_hash = await bcrypt.hash(config.password, 10);
+      } else if (!config.requirePassword) {
+        linkData.password_hash = null;
+      }
+    }
+
+    const shareLink = await this.sharesService.update(pkg.share_link_id, linkData);
+    return { success: true, shareLink };
+  }
+
+  async toggleLink(id: string): Promise<any> {
+    const pkg = await this.findOne(id);
+    if (!pkg.share_link_id) {
+      throw new Error('案例包尚未生成链接');
+    }
+
+    const shareLink = await this.sharesService.toggle(pkg.share_link_id);
+    return { success: true, isActive: shareLink.is_active };
   }
 }
 

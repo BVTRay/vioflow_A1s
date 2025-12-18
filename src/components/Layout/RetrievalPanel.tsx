@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Plus, Folder, MoreHorizontal, Check, Archive, Calendar, LayoutGrid, Clapperboard, X, ChevronDown, User, Users, PlayCircle, Settings, Trash2, Lock, PlusCircle, Share2, ChevronLeft, ChevronRight, CheckSquare, Square, Tag, XCircle, Shield, FolderOpen, FileVideo, Loader2, Send } from 'lucide-react';
+import { Search, Plus, Folder, MoreHorizontal, Check, Archive, Calendar, LayoutGrid, Clapperboard, X, ChevronDown, User, Users, PlayCircle, Settings, Trash2, Lock, PlusCircle, Share2, ChevronLeft, ChevronRight, CheckSquare, Square, Tag, XCircle, Shield, FolderOpen, FileVideo, Loader2, Send, CheckCircle2 } from 'lucide-react';
 import { useStore } from '../../App';
 import { Project } from '../../types';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
@@ -552,13 +552,41 @@ export const RetrievalPanel: React.FC = () => {
         {/* Hover Actions */}
         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
            {activeModule === 'review' && (
-               <button 
-                  onClick={(e) => handleEditClick(e, project)}
-                  className="p-1 hover:bg-zinc-800 rounded text-zinc-500 hover:text-indigo-400"
-                  title={project.status === 'finalized' ? "解锁并编辑" : "项目设置"}
-               >
-                  {project.status === 'finalized' ? <Lock className="w-3.5 h-3.5" /> : <Settings className="w-3.5 h-3.5" />}
-               </button>
+               <>
+                  {project.status === 'active' && (() => {
+                      const projectVideos = videos.filter(v => v.projectId === project.id);
+                      const hasVideos = projectVideos.length > 0;
+                      return (
+                          <button 
+                             onClick={(e) => {
+                               if (!hasVideos) return;
+                               e.stopPropagation();
+                               dispatch({ type: 'SELECT_PROJECT', payload: project.id });
+                               dispatch({ 
+                                 type: 'OPEN_WORKBENCH_VIEW', 
+                                 payload: { view: 'finalizeReview', context: { projectId: project.id } } 
+                               });
+                             }}
+                             disabled={!hasVideos}
+                             className={`p-1.5 rounded text-white shadow-sm transition-all ${
+                                 hasVideos 
+                                   ? 'bg-orange-600 hover:bg-orange-500 shadow-orange-900/30 hover:scale-105 cursor-pointer' 
+                                   : 'bg-zinc-700 text-zinc-500 cursor-not-allowed opacity-50'
+                             }`}
+                             title={hasVideos ? "审阅定版" : "项目内暂无视频，无法定版"}
+                          >
+                             <CheckCircle2 className="w-3.5 h-3.5" />
+                          </button>
+                      );
+                  })()}
+                  <button 
+                     onClick={(e) => handleEditClick(e, project)}
+                     className="p-1 hover:bg-zinc-800 rounded text-zinc-500 hover:text-indigo-400"
+                     title={project.status === 'finalized' ? "解锁并编辑" : "项目设置"}
+                  >
+                     {project.status === 'finalized' ? <Lock className="w-3.5 h-3.5" /> : <Settings className="w-3.5 h-3.5" />}
+                  </button>
+               </>
            )}
            {/* 交付模块：待交付项目显示发起交付按钮 */}
            {activeModule === 'delivery' && project.status === 'finalized' && (
@@ -1133,22 +1161,21 @@ export const RetrievalPanel: React.FC = () => {
                 {activeModule === 'settings' && '系统设置'}
             </span>
             <div className="flex items-center gap-2">
-                {/* 隐藏按钮 - 设置模块不显示 */}
-                {activeModule !== 'settings' && (
-                <button
-                    onClick={() => dispatch({ type: 'TOGGLE_RETRIEVAL_PANEL' })}
-                    className={`p-1.5 rounded hover:bg-zinc-800 transition-colors ${theme.text.muted} hover:text-zinc-200`}
-                    title="隐藏面板"
-                >
-                    <ChevronLeft className="w-4 h-4" />
-                </button>
+                {/* New Project Button - Prominent */}
+                {activeModule === 'review' && (
+                    <button 
+                        onClick={handleOpenCreateModal}
+                        className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded shadow-sm shadow-indigo-900/20 transition-all hover:scale-105"
+                    >
+                        <Plus className="w-4 h-4" />
+                    </button>
                 )}
                 {/* 视图切换按钮 - 设置模块不显示 */}
                 {activeModule !== 'settings' && (
                 <div className={`flex items-center gap-1 rounded-lg p-1 ${theme.bg.secondary} border ${theme.border.primary}`}>
                     <button 
                         onClick={() => setViewMode('month')}
-                        className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 text-xs font-medium ${
+                        className={`px-2 py-1.5 rounded-md transition-all flex items-center gap-1 text-xs font-medium ${
                             viewMode === 'month' 
                                 ? `${theme.text.indigo} bg-indigo-500/20` 
                                 : `${theme.text.disabled} ${theme.text.hover}`
@@ -1160,7 +1187,7 @@ export const RetrievalPanel: React.FC = () => {
                     </button>
                     <button 
                         onClick={() => setViewMode('group')}
-                        className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 text-xs font-medium ${
+                        className={`px-2 py-1.5 rounded-md transition-all flex items-center gap-1 text-xs font-medium ${
                             viewMode === 'group' 
                                 ? `${theme.text.indigo} bg-indigo-500/20` 
                                 : `${theme.text.disabled} ${theme.text.hover}`
@@ -1172,15 +1199,15 @@ export const RetrievalPanel: React.FC = () => {
                     </button>
                 </div>
                 )}
-                
-                {/* New Project Button - Prominent */}
-                {activeModule === 'review' && (
-                    <button 
-                        onClick={handleOpenCreateModal}
-                        className="ml-1 p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded shadow-sm shadow-indigo-900/20 transition-all hover:scale-105"
-                    >
-                        <Plus className="w-4 h-4" />
-                    </button>
+                {/* 隐藏按钮 - 设置模块不显示 */}
+                {activeModule !== 'settings' && (
+                <button
+                    onClick={() => dispatch({ type: 'TOGGLE_RETRIEVAL_PANEL' })}
+                    className={`p-1.5 rounded hover:bg-zinc-800 transition-colors ${theme.text.muted} hover:text-zinc-200`}
+                    title="隐藏面板"
+                >
+                    <ChevronLeft className="w-4 h-4" />
+                </button>
                 )}
                 {/* Clear Selection Button - Share Module */}
                 {activeModule === 'share' && shareMultiSelectMode && selectedShareProjects.length > 0 && (

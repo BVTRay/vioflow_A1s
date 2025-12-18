@@ -63,8 +63,11 @@ export const SharePage: React.FC = () => {
     annotations.forEach(a => {
       // API 返回 camelCase (clientName)，但也兼容 snake_case (client_name)
       const rawA = a as any;
-      const name = a.user?.name || rawA.clientName || a.client_name || '访客';
-      annotators.add(name);
+      const displayName = a.user?.name || rawA.clientName || a.client_name || '访客';
+      const userType = rawA.userType || a.userType || (a.user?.name ? 'personal_user' : 'guest');
+      const teamName = rawA.teamName || a.teamName;
+      // 使用显示名称作为唯一标识，但显示时会加上用户类型标签
+      annotators.add(displayName);
     });
     
     Array.from(annotators).forEach((name, index) => {
@@ -596,7 +599,14 @@ export const SharePage: React.FC = () => {
                       {duration > 0 && annotations.map((annotation) => {
                         // API 返回 camelCase (clientName)，但也兼容 snake_case (client_name)
                         const rawAnnotation = annotation as any;
-                        const annotatorName = annotation.user?.name || rawAnnotation.clientName || annotation.client_name || '访客';
+                        const displayName = annotation.user?.name || rawAnnotation.clientName || annotation.client_name || '访客';
+                        const userType = rawAnnotation.userType || annotation.userType || (annotation.user?.name ? 'personal_user' : 'guest');
+                        const teamName = rawAnnotation.teamName || annotation.teamName;
+                        const annotatorName = userType === 'team_user' && teamName 
+                          ? `${displayName} (${teamName})`
+                          : userType === 'personal_user'
+                            ? `${displayName} (个人用户)`
+                            : `${displayName} (访客)`;
                         const color = annotatorColors[annotatorName] || '#6366f1';
                         const timeInSeconds = timecodeToSeconds(annotation.timecode);
                         const position = (timeInSeconds / duration) * 100;
@@ -730,14 +740,14 @@ export const SharePage: React.FC = () => {
               ) : (
                 annotations.map((annotation) => {
                   // 获取显示名称：优先使用用户名，其次是访客名称
-                  // API 返回 camelCase，但也兼容 snake_case
+                  // API 返回 camelCase (clientName)，但也兼容 snake_case (client_name)
                   const rawAnnotation = annotation as any;
                   const displayName = annotation.user?.name || rawAnnotation.clientName || annotation.client_name || '访客';
                   const initial = displayName.charAt(0).toUpperCase();
                   
-                  // 获取用户类型
-                  const userType = rawAnnotation.userType || annotation.user_type || 'guest';
-                  const teamName = rawAnnotation.teamName || annotation.team_name;
+                  // 获取用户类型和团队名称
+                  const userType = rawAnnotation.userType || annotation.userType || (annotation.user?.name ? 'personal_user' : 'guest');
+                  const teamName = rawAnnotation.teamName || annotation.teamName;
                   
                   // 根据用户类型确定标签和样式
                   const isGuest = userType === 'guest';

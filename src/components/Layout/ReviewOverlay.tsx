@@ -267,8 +267,10 @@ export const ReviewOverlay: React.FC<ReviewOverlayProps> = ({ isOpen, onClose })
     
     annotations.forEach(a => {
       // 兼容 clientName 和 client_name 两种格式
-      const name = a.user?.name || a.clientName || a.client_name || '访客';
-      annotators.add(name);
+      const rawA = a as any;
+      const displayName = a.user?.name || rawA.clientName || a.client_name || '访客';
+      // 使用显示名称作为唯一标识
+      annotators.add(displayName);
     });
     
     Array.from(annotators).forEach((name, index) => {
@@ -547,7 +549,15 @@ export const ReviewOverlay: React.FC<ReviewOverlayProps> = ({ isOpen, onClose })
                  {/* 批注时间点标记 - 关键帧样式 */}
                  {duration > 0 && annotations.map((annotation) => {
                    // 兼容 clientName 和 client_name 两种格式
-                   const annotatorName = annotation.user?.name || annotation.clientName || annotation.client_name || '访客';
+                   const rawAnnotation = annotation as any;
+                   const displayName = annotation.user?.name || rawAnnotation.clientName || annotation.client_name || '访客';
+                   const userType = rawAnnotation.userType || annotation.userType || (annotation.user?.name ? 'personal_user' : 'guest');
+                   const teamName = rawAnnotation.teamName || annotation.teamName;
+                   const annotatorName = userType === 'team_user' && teamName 
+                     ? `${displayName} (${teamName})`
+                     : userType === 'personal_user'
+                       ? `${displayName} (个人用户)`
+                       : `${displayName} (访客)`;
                    const color = annotatorColors[annotatorName] || '#6366f1';
                    const timeInSeconds = timecodeToSeconds(annotation.timecode);
                    const position = (timeInSeconds / duration) * 100;
@@ -929,9 +939,39 @@ interface CommentProps {
 
 const Comment: React.FC<CommentProps> = ({ annotation, annotationIndex, onJumpToTimecode }) => {
   const theme = useThemeClasses();
-  const userName = annotation.user?.name || annotation.user?.email || '匿名用户';
-  const userInitial = userName.charAt(0).toUpperCase();
+  const rawAnnotation = annotation as any;
+  const displayName = annotation.user?.name || annotation.user?.email || rawAnnotation.clientName || annotation.client_name || '匿名用户';
+  const userInitial = displayName.charAt(0).toUpperCase();
   const isActive = !(annotation.is_completed ?? annotation.isCompleted ?? false);
+  
+  // 获取用户类型和团队名称
+  const userType = rawAnnotation.userType || annotation.userType || (annotation.user?.name ? 'personal_user' : 'guest');
+  const teamName = rawAnnotation.teamName || annotation.teamName;
+  
+  // 根据用户类型确定标签和样式
+  const isGuest = userType === 'guest';
+  const isTeamUser = userType === 'team_user';
+  const isPersonalUser = userType === 'personal_user';
+  
+  // 用户类型标签文本
+  const userTypeLabel = isGuest 
+    ? '访客' 
+    : isTeamUser 
+      ? teamName || '团队用户'
+      : '个人用户';
+  
+  // 用户类型样式
+  const avatarBgClass = isGuest 
+    ? 'bg-amber-900/50 border-amber-500/30 text-amber-300'
+    : isTeamUser
+      ? 'bg-indigo-900/50 border-indigo-500/30 text-indigo-300'
+      : 'bg-emerald-900/50 border-emerald-500/30 text-emerald-300';
+  
+  const labelClass = isGuest
+    ? 'text-amber-500/70'
+    : isTeamUser
+      ? 'text-indigo-500/70'
+      : 'text-emerald-500/70';
   
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -943,16 +983,12 @@ const Comment: React.FC<CommentProps> = ({ annotation, annotationIndex, onJumpTo
     });
   };
 
-  // 根据索引确定颜色方案
-  // 第一个（索引0）：蓝色（indigo）
-  // 第二个及以后：灰色（zinc）
-  const isFirst = annotationIndex === 0;
-  const avatarBgClass = isFirst 
-    ? 'bg-indigo-900/50 border-indigo-500/30 text-indigo-300'
-    : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-400';
-  const contentBgClass = isFirst
-    ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-100'
-    : `${theme.bg.tertiary}/50 ${theme.border.primary} ${theme.text.muted} opacity-70`;
+  // 根据用户类型确定内容背景色
+  const contentBgClass = isGuest
+    ? 'bg-amber-500/10 border-amber-500/30 text-amber-100'
+    : isTeamUser
+      ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-100'
+      : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-100';
 
   return (
     <div className={`flex gap-3 group ${isActive ? 'opacity-100' : 'opacity-70 hover:opacity-100'}`}>
@@ -961,7 +997,14 @@ const Comment: React.FC<CommentProps> = ({ annotation, annotationIndex, onJumpTo
         </div>
         <div className="flex-1">
             <div className="flex items-baseline justify-between mb-1">
-                <span className={`text-sm font-semibold ${isFirst ? 'text-indigo-300' : 'text-zinc-400'}`}>{userName}</span>
+                <span className={`text-sm font-semibold flex items-center gap-1.5 ${
+                  isGuest ? 'text-amber-300' : isTeamUser ? 'text-indigo-300' : 'text-emerald-300'
+                }`}>
+                  {displayName}
+                  <span className={`text-[10px] font-normal ${labelClass}`}>
+                    ({userTypeLabel})
+                  </span>
+                </span>
                 <span className="text-[10px] text-zinc-500">{formatDateTime(annotation.created_at || annotation.createdAt || '')}</span>
             </div>
             <div className={`p-3 rounded-lg border text-sm leading-relaxed ${contentBgClass}`}>
@@ -971,7 +1014,7 @@ const Comment: React.FC<CommentProps> = ({ annotation, annotationIndex, onJumpTo
                 <button
                   onClick={() => onJumpToTimecode(annotation.timecode)}
                   className={`text-[10px] font-mono px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
-                    isFirst 
+                    annotationIndex === 0 
                       ? 'text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20'
                       : 'text-zinc-500 bg-zinc-800/50 hover:bg-zinc-700/50'
                   }`}

@@ -1,8 +1,5 @@
 import apiClient from './client';
 
-// 批注者用户类型
-export type AnnotatorUserType = 'guest' | 'team_user' | 'personal_user';
-
 export interface Annotation {
   id: string;
   videoId?: string;
@@ -23,15 +20,18 @@ export interface Annotation {
   updated_at?: string; // 兼容旧格式
   client_name?: string; // 访客名称 (snake_case)
   clientName?: string; // 访客名称 (camelCase)
-  userType?: AnnotatorUserType; // 用户类型 (camelCase)
-  user_type?: AnnotatorUserType; // 用户类型 (snake_case)
-  teamName?: string; // 团队名称 (camelCase)
-  team_name?: string; // 团队名称 (snake_case)
   user?: {
     id: string;
     name: string;
     email: string;
+    team_id?: string;
+    team?: {
+      id: string;
+      name: string;
+    };
   };
+  userType?: 'guest' | 'team_user' | 'personal_user'; // 用户类型
+  teamName?: string | null; // 团队名称（仅团队用户有值）
 }
 
 export const annotationsApi = {

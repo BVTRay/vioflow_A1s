@@ -1,10 +1,11 @@
 
 import React, { useState } from 'react';
-import { Play, MoreVertical, Plus, Check, Clock, LayoutGrid, List, SlidersHorizontal, FileVideo, Film, CheckCircle2, Share2, AlertTriangle, Lock, Download, Copy, X, ArrowRight, Package, Power, Eye, ChevronRight, ChevronDown, Folder, Upload, Trash2, Calendar, Infinity, Link2 } from 'lucide-react';
+import { Play, MoreVertical, Plus, Check, Clock, LayoutGrid, List, SlidersHorizontal, FileVideo, Film, CheckCircle2, Share2, AlertTriangle, Lock, Download, Copy, X, ArrowRight, Package, Power, Eye, ChevronRight, ChevronDown, Folder, Upload, Trash2, Calendar, Infinity, Link2, Settings } from 'lucide-react';
 import { useStore } from '../../App';
 import { Video, DeliveryPackage } from '../../types';
 import { PreviewPlayer } from './PreviewPlayer';
 import { sharesApi } from '../../api/shares';
+import { showcaseApi } from '../../api/showcase';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
 import { useTeam } from '../../contexts/TeamContext';
 
@@ -98,7 +99,7 @@ export const MainBrowser: React.FC = () => {
   const { state, dispatch } = useStore();
   const theme = useThemeClasses();
   const { currentTeam } = useTeam();
-  const { activeModule, showWorkbench, projects, selectedProjectId, selectedVideoId, videos, cart, searchTerm, browserViewMode, browserCardSize, reviewViewMode, deliveryViewMode, deliveries, selectedDeliveryFiles, isRetrievalPanelVisible, selectedGroupTag, selectedGroupTags, isTagMultiSelectMode, tags } = state;
+  const { activeModule, showWorkbench, projects, selectedProjectId, selectedVideoId, videos, cart, searchTerm, browserViewMode, browserCardSize, reviewViewMode, deliveryViewMode, showcaseViewMode, deliveries, selectedDeliveryFiles, isRetrievalPanelVisible, selectedGroupTag, selectedGroupTags, isTagMultiSelectMode, tags } = state;
   const project = projects.find(p => p.id === selectedProjectId);
   const selectedVideo = videos.find(v => v.id === selectedVideoId);
   const delivery = deliveries.find(d => d.projectId === selectedProjectId);
@@ -1094,22 +1095,41 @@ export const MainBrowser: React.FC = () => {
                 <ChevronRight className="w-4 h-4 rotate-180" />
                 返回
               </button>
-              {/* 【项目目录】上传视频按钮 - 仅审阅模块 */}
+              {/* 【项目目录】上传视频和审阅定版按钮 - 仅审阅模块 */}
               {activeModule === 'review' && (
-                <button
-                  onClick={() => {
-                    // 【文件模式】在项目目录下，点击上传视频按钮，打开操作台上传视频
-                    dispatch({ type: 'SELECT_PROJECT', payload: selectedProjectId });
-                    dispatch({ 
-                      type: 'OPEN_WORKBENCH_VIEW', 
-                      payload: { view: 'upload', context: { projectId: selectedProjectId, from: 'project-toolbar' } } 
-                    });
-                  }}
-                  className="ml-auto flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>上传视频</span>
-                </button>
+                <div className="ml-auto flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      // 【文件模式】在项目目录下，点击上传视频按钮，打开操作台上传视频
+                      dispatch({ type: 'SELECT_PROJECT', payload: selectedProjectId });
+                      dispatch({ 
+                        type: 'OPEN_WORKBENCH_VIEW', 
+                        payload: { view: 'upload', context: { projectId: selectedProjectId, from: 'project-toolbar' } } 
+                      });
+                    }}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>上传视频</span>
+                  </button>
+                  {/* 审阅定版按钮 - 只在项目有视频且状态为 active 时显示 */}
+                  {latestVideos.length > 0 && selectedProject.status === 'active' && (
+                    <button
+                      onClick={() => {
+                        dispatch({ type: 'SELECT_PROJECT', payload: selectedProjectId });
+                        dispatch({ 
+                          type: 'OPEN_WORKBENCH_VIEW', 
+                          payload: { view: 'finalizeReview', context: { projectId: selectedProjectId } } 
+                        });
+                      }}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm transition-colors"
+                      title="审阅定版"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>审阅定版</span>
+                    </button>
+                  )}
+                </div>
               )}
             </div>
             <div className={`flex flex-col ${gapClass}`}>
@@ -1177,22 +1197,41 @@ export const MainBrowser: React.FC = () => {
               <ChevronRight className="w-4 h-4 rotate-180" />
               返回
             </button>
-            {/* 【项目目录】上传视频按钮 - 仅审阅模块 */}
+            {/* 【项目目录】上传视频和审阅定版按钮 - 仅审阅模块 */}
             {activeModule === 'review' && (
-              <button
-                onClick={() => {
-                  // 【文件模式】在项目目录下，点击上传视频按钮，打开操作台上传视频
-                  dispatch({ type: 'SELECT_PROJECT', payload: selectedProjectId });
-                  dispatch({ 
-                    type: 'OPEN_WORKBENCH_VIEW', 
-                    payload: { view: 'upload', context: { projectId: selectedProjectId, from: 'project-toolbar' } } 
-                  });
-                }}
-                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                <span>上传视频</span>
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    // 【文件模式】在项目目录下，点击上传视频按钮，打开操作台上传视频
+                    dispatch({ type: 'SELECT_PROJECT', payload: selectedProjectId });
+                    dispatch({ 
+                      type: 'OPEN_WORKBENCH_VIEW', 
+                      payload: { view: 'upload', context: { projectId: selectedProjectId, from: 'project-toolbar' } } 
+                    });
+                  }}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>上传视频</span>
+                </button>
+                {/* 审阅定版按钮 - 只在项目有视频且状态为 active 时显示 */}
+                {seriesNames.length > 0 && selectedProject.status === 'active' && (
+                  <button
+                    onClick={() => {
+                      dispatch({ type: 'SELECT_PROJECT', payload: selectedProjectId });
+                      dispatch({ 
+                        type: 'OPEN_WORKBENCH_VIEW', 
+                        payload: { view: 'finalizeReview', context: { projectId: selectedProjectId } } 
+                      });
+                    }}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm transition-colors"
+                    title="审阅定版"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>审阅定版</span>
+                  </button>
+                )}
+              </div>
             )}
           </div>
           <div className={`grid ${
@@ -1925,6 +1964,23 @@ export const MainBrowser: React.FC = () => {
                               <Plus className="w-4 h-4" />
                               <span>上传视频</span>
                           </button>
+                          {/* 审阅定版按钮 - 只在项目有视频且状态为 active 时显示 */}
+                          {displayVideos.length > 0 && project.status === 'active' && (
+                              <button
+                                  onClick={() => {
+                                      dispatch({ type: 'SELECT_PROJECT', payload: project.id });
+                                      dispatch({ 
+                                          type: 'OPEN_WORKBENCH_VIEW', 
+                                          payload: { view: 'finalizeReview', context: { projectId: project.id } } 
+                                      });
+                                  }}
+                                  className="flex items-center gap-2 px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm transition-colors"
+                                  title="审阅定版"
+                              >
+                                  <CheckCircle2 className="w-4 h-4" />
+                                  <span>审阅定版</span>
+                              </button>
+                          )}
                       </div>
                   )}
                   <div className={`flex flex-col ${gapClass}`}>
@@ -1992,6 +2048,23 @@ export const MainBrowser: React.FC = () => {
                           <Plus className="w-4 h-4" />
                           <span>上传视频</span>
                       </button>
+                      {/* 审阅定版按钮 - 只在项目有视频且状态为 active 时显示 */}
+                      {displayVideos.length > 0 && project.status === 'active' && (
+                          <button
+                              onClick={() => {
+                                  dispatch({ type: 'SELECT_PROJECT', payload: project.id });
+                                  dispatch({ 
+                                      type: 'OPEN_WORKBENCH_VIEW', 
+                                      payload: { view: 'finalizeReview', context: { projectId: project.id } } 
+                                  });
+                              }}
+                              className="flex items-center gap-2 px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm transition-colors"
+                              title="审阅定版"
+                          >
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>审阅定版</span>
+                          </button>
+                      )}
                   </div>
               )}
               <div className={`grid ${
@@ -2069,6 +2142,35 @@ export const MainBrowser: React.FC = () => {
                 </div>
             )}
 
+            {/* 案例模块模式切换按钮 */}
+            {activeModule === 'showcase' && (
+                <div className={`flex items-center gap-1 rounded-lg p-1 ${theme.bg.secondary} border ${theme.border.primary}`}>
+                    <button 
+                        onClick={() => dispatch({ type: 'SET_SHOWCASE_VIEW_MODE', payload: 'files' })}
+                        className={`${showButtonText ? 'px-3' : 'px-2'} py-1.5 rounded-md transition-all flex items-center ${showButtonText ? 'gap-1.5' : 'gap-0'} text-xs font-medium ${
+                            showcaseViewMode === 'files' 
+                                ? `${theme.text.indigo} bg-indigo-500/20` 
+                                : `${theme.text.disabled} ${theme.text.hover}`
+                        }`}
+                        title="文件视图"
+                    >
+                        <FileVideo className={`w-4 h-4 ${showcaseViewMode === 'files' ? 'drop-shadow-[0_0_8px_rgba(129,140,248,0.8)]' : ''}`} />
+                        {showButtonText && <span>文件</span>}
+                    </button>
+                    <button 
+                        onClick={() => dispatch({ type: 'SET_SHOWCASE_VIEW_MODE', payload: 'packages' })}
+                        className={`${showButtonText ? 'px-3' : 'px-2'} py-1.5 rounded-md transition-all flex items-center ${showButtonText ? 'gap-1.5' : 'gap-0'} text-xs font-medium ${
+                            showcaseViewMode === 'packages' 
+                                ? `${theme.text.indigo} bg-indigo-500/20` 
+                                : `${theme.text.disabled} ${theme.text.hover}`
+                        }`}
+                        title="分享管理"
+                    >
+                        <Share2 className={`w-4 h-4 ${showcaseViewMode === 'packages' ? 'drop-shadow-[0_0_8px_rgba(129,140,248,0.8)]' : ''}`} />
+                        {showButtonText && <span>分享</span>}
+                    </button>
+                </div>
+            )}
 
             {/* View Toggles */}
             <div className={`flex items-center gap-1 rounded-lg p-1 ${theme.bg.secondary} border ${theme.border.primary}`}>
@@ -2417,7 +2519,70 @@ export const MainBrowser: React.FC = () => {
 
   // 渲染案例包记录
   function renderShowcasePackages() {
-    const packages = state.showcasePackages || [];
+    const [packages, setPackages] = React.useState<any[]>([]);
+    const [loading, setLoading] = React.useState(true);
+    const [editingPackageId, setEditingPackageId] = React.useState<string | null>(null);
+    const [editConfig, setEditConfig] = React.useState<{
+      linkExpiry: number;
+      requirePassword: boolean;
+      password: string;
+    } | null>(null);
+
+    React.useEffect(() => {
+      loadPackages();
+    }, []);
+
+    const loadPackages = async () => {
+      try {
+        setLoading(true);
+        const data = await showcaseApi.getAll();
+        setPackages(data);
+      } catch (error) {
+        console.error('加载案例包失败:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const handleToggleLink = async (pkgId: string, currentStatus: boolean) => {
+      try {
+        await showcaseApi.toggleLink(pkgId);
+        setPackages(packages.map(p => p.id === pkgId ? { ...p, isActive: !currentStatus } : p));
+      } catch (error) {
+        console.error('切换链接状态失败:', error);
+      }
+    };
+
+    const handleEditLink = (pkg: any) => {
+      setEditingPackageId(pkg.id);
+      setEditConfig({
+        linkExpiry: pkg.linkExpiry || 0,
+        requirePassword: pkg.requirePassword || false,
+        password: ''
+      });
+    };
+
+    const handleSaveLinkConfig = async (pkgId: string) => {
+      if (!editConfig) return;
+      try {
+        await showcaseApi.updateLink(pkgId, editConfig);
+        setPackages(packages.map(p => p.id === pkgId ? { ...p, ...editConfig } : p));
+        setEditingPackageId(null);
+        setEditConfig(null);
+      } catch (error) {
+        console.error('更新链接配置失败:', error);
+      }
+    };
+
+    if (loading) {
+      return (
+        <div className="flex flex-col items-center justify-center py-20 text-zinc-600">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mb-4"></div>
+          <p>加载中...</p>
+        </div>
+      );
+    }
+
     if (packages.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center py-20 text-zinc-600">
@@ -2429,81 +2594,163 @@ export const MainBrowser: React.FC = () => {
 
     return (
       <div className="space-y-4">
-        {packages.map(pkg => (
-          <div key={pkg.id} className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 hover:border-zinc-700 transition-colors">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className="text-lg font-semibold text-zinc-200">{pkg.title}</h3>
-                  <span className={`px-2 py-0.5 rounded text-xs ${
-                    pkg.mode === 'quick_player' 
-                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
-                      : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                  }`}>
-                    {pkg.mode === 'quick_player' ? '快速分享' : '提案微站'}
-                  </span>
-                  <span className={`px-2 py-0.5 rounded text-xs ${
-                    pkg.isActive 
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                      : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
-                  }`}>
-                    {pkg.isActive ? '已启用' : '已停用'}
-                  </span>
+        {packages.map(pkg => {
+          const isEditing = editingPackageId === pkg.id;
+          const linkUrl = pkg.link || (pkg.share_link_id ? `${window.location.origin}/share/${pkg.share_link_id}` : '');
+          
+          return (
+            <div key={pkg.id} className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 hover:border-zinc-700 transition-colors">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="text-lg font-semibold text-zinc-200">{pkg.name || pkg.title}</h3>
+                    <span className={`px-2 py-0.5 rounded text-xs ${
+                      pkg.mode === 'quick_player' 
+                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
+                        : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                    }`}>
+                      {pkg.mode === 'quick_player' ? '快速分享' : '提案微站'}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-xs ${
+                      pkg.isActive !== false
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                        : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
+                    }`}>
+                      {pkg.isActive !== false ? '已启用' : '已停用'}
+                    </span>
+                  </div>
+                  <p className="text-sm text-zinc-400 mb-4">{pkg.description}</p>
+                  <div className="flex items-center gap-6 text-xs text-zinc-500">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>创建时间：{new Date(pkg.created_at || pkg.createdAt).toLocaleString('zh-CN')}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>查看次数：{pkg.viewCount || 0}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <FileVideo className="w-3.5 h-3.5" />
+                      <span>包含文件：{pkg.videos?.length || pkg.items?.length || 0} 个</span>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-sm text-zinc-400 mb-4">{pkg.description}</p>
-                <div className="flex items-center gap-6 text-xs text-zinc-500">
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>创建时间：{new Date(pkg.createdAt).toLocaleString('zh-CN')}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>查看次数：{pkg.viewCount}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <FileVideo className="w-3.5 h-3.5" />
-                    <span>包含文件：{pkg.items.length} 个</span>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleEditLink(pkg)}
+                    className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs transition-colors flex items-center gap-1.5"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                    配置
+                  </button>
+                  <button
+                    onClick={() => handleToggleLink(pkg.id, pkg.isActive !== false)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                      pkg.isActive !== false
+                        ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30'
+                        : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30'
+                    }`}
+                  >
+                    <Power className="w-4 h-4" />
+                    {pkg.isActive !== false ? '停用链接' : '启用链接'}
+                  </button>
                 </div>
               </div>
-              <button
-                onClick={() => dispatch({ type: 'TOGGLE_SHOWCASE_PACKAGE', payload: { packageId: pkg.id, isActive: !pkg.isActive } })}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-                  pkg.isActive
-                    ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30'
-                    : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30'
-                }`}
-              >
-                <Power className="w-4 h-4" />
-                {pkg.isActive ? '停用链接' : '启用链接'}
-              </button>
-            </div>
-            <div className="pt-4 border-t border-zinc-800">
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={pkg.link}
-                  className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-300 font-mono"
-                />
-                <button
-                  onClick={() => navigator.clipboard.writeText(pkg.link)}
-                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-sm transition-colors flex items-center gap-2"
-                >
-                  <Copy className="w-4 h-4" />
-                  复制链接
-                </button>
-                <button
-                  onClick={() => window.open(pkg.link, '_blank')}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors flex items-center gap-2"
-                >
-                  <Eye className="w-4 h-4" />
-                  查看
-                </button>
+              
+              {/* 编辑链接配置 */}
+              {isEditing && editConfig && (
+                <div className="mb-4 p-4 bg-zinc-950 border border-zinc-800 rounded-lg space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-2">链接有效期</label>
+                    <div className="flex items-center gap-2">
+                      {[0, 7, 30, 90].map(days => (
+                        <button
+                          key={days}
+                          onClick={() => setEditConfig({ ...editConfig, linkExpiry: days })}
+                          className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                            editConfig.linkExpiry === days
+                              ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30'
+                              : 'bg-zinc-900 text-zinc-400 border border-zinc-800 hover:border-zinc-700'
+                          }`}
+                        >
+                          {days === 0 ? '永久有效' : `${days}天`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-medium text-zinc-400">密码保护</label>
+                      <button
+                        onClick={() => setEditConfig({ ...editConfig, requirePassword: !editConfig.requirePassword, password: '' })}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                          editConfig.requirePassword ? 'bg-violet-600' : 'bg-zinc-700'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                            editConfig.requirePassword ? 'translate-x-5' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    {editConfig.requirePassword && (
+                      <input
+                        type="password"
+                        value={editConfig.password}
+                        onChange={(e) => setEditConfig({ ...editConfig, password: e.target.value })}
+                        placeholder="请输入新密码"
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:border-violet-500 outline-none"
+                      />
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleSaveLinkConfig(pkg.id)}
+                      className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-xs transition-colors"
+                    >
+                      保存
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingPackageId(null);
+                        setEditConfig(null);
+                      }}
+                      className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs transition-colors"
+                    >
+                      取消
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-4 border-t border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={linkUrl}
+                    className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-300 font-mono"
+                  />
+                  <button
+                    onClick={() => navigator.clipboard.writeText(linkUrl)}
+                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-sm transition-colors flex items-center gap-2"
+                  >
+                    <Copy className="w-4 h-4" />
+                    复制链接
+                  </button>
+                  <button
+                    onClick={() => window.open(linkUrl, '_blank')}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors flex items-center gap-2"
+                  >
+                    <Eye className="w-4 h-4" />
+                    查看
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   }

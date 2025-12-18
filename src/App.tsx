@@ -382,7 +382,8 @@ function appReducer(state: AppState, action: Action): AppState {
         workbenchEditProjectId: null,
         workbenchCreateMode: null,
         quickUploadMode: view === 'upload' ? state.quickUploadMode : false,
-        selectedVideoId: null // 默认清空选中的视频
+        // 如果 context 包含 videoId，保留它（用于从视频卡片上传新版本）
+        selectedVideoId: context?.videoId || null
       };
       
       // 根据不同视图类型设置特定状态

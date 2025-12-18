@@ -8,9 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ShareLink, ShareLinkType } from './entities/share-link.entity';
 import { ShareLinkAccessLog, AccessAction } from './entities/share-link-access-log.entity';
-import { Annotation, AnnotatorUserType } from '../annotations/entities/annotation.entity';
-import { User } from '../users/entities/user.entity';
-import { Team } from '../teams/entities/team.entity';
+import { Annotation } from '../annotations/entities/annotation.entity';
 import { Video, VideoStatus } from '../videos/entities/video.entity';
 import { Notification, NotificationType } from '../notifications/entities/notification.entity';
 import { TeamsService } from '../teams/teams.service';
@@ -211,10 +209,38 @@ export class SharesService {
       return [];
     }
 
-    return this.annotationRepository.find({
+    const annotations = await this.annotationRepository.find({
       where: { video_id: shareLink.video_id },
-      relations: ['user'],
+      relations: ['user', 'user.team'],
       order: { created_at: 'ASC' },
+    });
+
+    // 为每个批注添加用户类型和团队信息
+    return annotations.map(annotation => {
+      const result: any = { ...annotation };
+      
+      if (annotation.user_id && annotation.user) {
+        // 登录用户
+        if (annotation.user.team_id && annotation.user.team) {
+          // 团队用户
+          result.userType = 'team_user';
+          result.teamName = annotation.user.team.name;
+        } else {
+          // 个人用户
+          result.userType = 'personal_user';
+          result.teamName = null;
+        }
+      } else if (annotation.client_name) {
+        // 访客
+        result.userType = 'guest';
+        result.teamName = null;
+      } else {
+        // 未知类型
+        result.userType = 'guest';
+        result.teamName = null;
+      }
+      
+      return result;
     });
   }
 
@@ -240,43 +266,13 @@ export class SharesService {
       throw new Error('此分享链接不支持批注功能');
     }
 
-    // 确定用户类型和团队信息
-    let userType = AnnotatorUserType.GUEST;
-    let teamName: string | null = null;
-    let annotatorName = '访客';
-
-    if (userId) {
-      // 如果是登录用户，查询用户和团队信息
-      const user = await this.annotationRepository.manager.findOne(User, { 
-        where: { id: userId },
-        relations: ['team'],
-      });
-      
-      if (user) {
-        annotatorName = user.name || '已登录用户';
-        
-        if (user.team_id && user.team) {
-          // 用户属于某个团队
-          userType = AnnotatorUserType.TEAM_USER;
-          teamName = user.team.name || null;
-        } else {
-          // 用户是个人用户（没有团队）
-          userType = AnnotatorUserType.PERSONAL_USER;
-        }
-      }
-    } else if (data.clientName) {
-      annotatorName = data.clientName;
-    }
-
-    // 创建批注，包含用户类型和团队信息
+    // 如果有登录用户，使用 user_id；否则使用 client_name
     const annotation = this.annotationRepository.create({
       video_id: shareLink.video_id,
-      user_id: userId || null,
+      user_id: userId || null, // 登录用户使用 user_id
       timecode: data.timecode,
       content: data.content,
-      client_name: userId ? null : (data.clientName || null),
-      user_type: userType,
-      team_name: teamName,
+      client_name: userId ? null : (data.clientName || null), // 登录用户不需要 client_name
     });
 
     const savedAnnotation = await this.annotationRepository.save(annotation);
@@ -303,6 +299,16 @@ export class SharesService {
 
       // 发送通知给分享链接创建者
       if (shareLink.created_by) {
+        // 获取批注者名称：优先使用登录用户名，其次是访客名称
+        let annotatorName = '访客';
+        if (userId) {
+          // 如果是登录用户，获取用户名称
+          const user = await this.annotationRepository.manager.findOne('User', { where: { id: userId } });
+          annotatorName = (user as any)?.name || '已登录用户';
+        } else if (data.clientName) {
+          annotatorName = data.clientName;
+        }
+        
         const notification = this.notificationRepository.create({
           user_id: shareLink.created_by,
           type: NotificationType.INFO,

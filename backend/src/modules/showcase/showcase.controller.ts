@@ -31,8 +31,26 @@ export class ShowcaseController {
   }
 
   @Post(':id/generate-link')
-  generateLink(@Param('id') id: string) {
-    return this.showcaseService.generateLink(id);
+  generateLink(@Param('id') id: string, @Body() config?: {
+    linkExpiry?: number;
+    requirePassword?: boolean;
+    password?: string;
+  }) {
+    return this.showcaseService.generateLink(id, config);
+  }
+
+  @Patch(':id/link')
+  updateLink(@Param('id') id: string, @Body() config: {
+    linkExpiry?: number;
+    requirePassword?: boolean;
+    password?: string;
+  }) {
+    return this.showcaseService.updateLink(id, config);
+  }
+
+  @Post(':id/link/toggle')
+  toggleLink(@Param('id') id: string) {
+    return this.showcaseService.toggleLink(id);
   }
 }
 

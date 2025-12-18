@@ -12,6 +12,7 @@ import {
   Shield, UserPlus, Search, Copy, CheckCircle, XCircle, Settings as SettingsIcon, Check, AlertTriangle
 } from 'lucide-react';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
+import { useToast } from '../../hooks/useToast';
 
 type SettingsTab = 'teams' | 'groups' | 'projects' | 'tags';
 
@@ -20,6 +21,7 @@ export const SettingsPanel: React.FC = () => {
   const theme = useThemeClasses();
   const { projects, tags } = state;
   const { user: currentUser } = useAuth();
+  const toast = useToast();
   const { currentTeam: teamContextTeam, refreshTeams } = useTeam();
   
   // 检查权限：需要是管理员或超级管理员
@@ -486,10 +488,10 @@ export const SettingsPanel: React.FC = () => {
         dispatch({ type: 'SELECT_PROJECT', payload: null });
       }
       setShowDeleteProjectConfirm(null);
-      alert('项目已删除');
+      toast.success('项目已删除');
     } catch (error) {
       console.error('Failed to delete project:', error);
-      alert('删除项目失败');
+      toast.error('删除项目失败');
       setShowDeleteProjectConfirm(null);
     }
   };
