@@ -40,11 +40,23 @@ export class ProjectsController {
     @Query('month') month?: string,
     @Query('teamId') teamId?: string,
     @Query('groupId') groupId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
     @Headers('x-team-id') headerTeamId?: string,
   ) {
     // 优先使用查询参数，其次使用请求头
     const finalTeamId = teamId || headerTeamId;
-    return this.projectsService.findAll({ status, group, month, teamId: finalTeamId, groupId } as any);
+    return this.projectsService.findAll({
+      status: status as any,
+      group,
+      month,
+      teamId: finalTeamId,
+      groupId,
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      search,
+    });
   }
 
   @Get('active')

@@ -4,6 +4,7 @@ import { LoginPage } from './components/Auth/LoginPage';
 import { SharePage } from './components/Share/SharePage';
 import { TeamOnboarding } from './components/Onboarding/TeamOnboarding';
 import { DevAdminPanel } from './components/Admin/DevAdminPanel';
+import { DevVideoPanel } from './components/Admin/DevVideoPanel';
 import { TestSupabase } from './pages/TestSupabase';
 import App from './App';
 import apiClient from './api/client';
@@ -38,49 +39,18 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
       }
 
       try {
-        // 动态获取 API 地址（与 client.ts 保持一致）
-        const getApiBaseUrl = () => {
-          if (import.meta.env.VITE_API_BASE_URL) {
-            return import.meta.env.VITE_API_BASE_URL;
-          }
-          if (import.meta.env.PROD) {
-            return import.meta.env.VITE_API_BASE_URL || 'https://api.vioflow.cc/api';
-          }
-          const hostname = window.location.hostname;
-          const port = '3002';
-          const serverIp = '192.168.110.112';
-          if (hostname === 'localhost' || hostname === '127.0.0.1') {
-            return `http://${serverIp}:${port}/api`;
-          }
-          if (hostname.match(/^(192\.168\.|172\.|10\.)/)) {
-            return `http://${hostname}:${port}/api`;
-          }
-          return `http://${serverIp}:${port}/api`;
-        };
-        const apiBaseUrl = getApiBaseUrl();
-        const response = await fetch(`${apiBaseUrl}/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
+        // 使用 authApi.getMe() 替代直接的 fetch 调用，这样可以复用 apiClient 的配置和拦截器
+        await authApi.getMe();
+        setIsAuthenticated(true);
         
-        if (response.ok) {
-          setIsAuthenticated(true);
-          
-          // 检查用户是否有团队
-          try {
-            const teams = await teamsApi.findAll();
-            setHasTeam(teams.length > 0);
-          } catch (error) {
-            console.error('Failed to check teams:', error);
-            // 如果检查团队失败，假设有团队（避免无限循环）
-            setHasTeam(true);
-          }
-        } else {
-          apiClient.setToken(null);
-          setIsAuthenticated(false);
-          setHasTeam(null);
+        // 检查用户是否有团队
+        try {
+          const teams = await teamsApi.findAll();
+          setHasTeam(teams.length > 0);
+        } catch (error) {
+          console.error('Failed to check teams:', error);
+          // 如果检查团队失败，假设有团队（避免无限循环）
+          setHasTeam(true);
         }
       } catch (error) {
         apiClient.setToken(null);
@@ -223,6 +193,14 @@ export const AppWithRouter: React.FC = () => {
           element={
             <DevAdminRoute>
               <DevAdminPanel />
+            </DevAdminRoute>
+          }
+        />
+        <Route
+          path="/admin/videos"
+          element={
+            <DevAdminRoute>
+              <DevVideoPanel />
             </DevAdminRoute>
           }
         />

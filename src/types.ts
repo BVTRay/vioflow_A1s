@@ -1,5 +1,5 @@
 
-export type ModuleType = 'library' | 'review' | 'delivery' | 'showcase' | 'settings' | 'dashboard' | 'share';
+export type ModuleType = 'library' | 'review' | 'delivery' | 'showcase' | 'settings' | 'dashboard' | 'share' | 'trash';
 export type ProjectStatus = 'active' | 'finalized' | 'delivered' | 'archived';
 export type VideoStatus = 'initial' | 'annotated' | 'approved';
 export type AspectRatio = 'landscape' | 'portrait';

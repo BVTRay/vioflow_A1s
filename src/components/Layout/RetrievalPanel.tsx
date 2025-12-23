@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Plus, Folder, MoreHorizontal, Check, Archive, Calendar, LayoutGrid, Clapperboard, X, ChevronDown, User, Users, PlayCircle, Settings, Trash2, Lock, PlusCircle, Share2, ChevronLeft, ChevronRight, CheckSquare, Square, Tag, XCircle, Shield, FolderOpen, FileVideo, Loader2, Send, CheckCircle2 } from 'lucide-react';
+import { Search, Plus, Folder, MoreHorizontal, Check, Archive, Calendar, LayoutGrid, Clapperboard, X, ChevronDown, User, Users, PlayCircle, Settings, Lock, PlusCircle, Share2, ChevronLeft, ChevronRight, CheckSquare, Square, Tag, XCircle, Shield, FolderOpen, FileVideo, Loader2, Send, CheckCircle2 } from 'lucide-react';
 import { useStore } from '../../App';
 import { Project } from '../../types';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
@@ -991,7 +991,7 @@ export const RetrievalPanel: React.FC = () => {
                             {matchedTags.map(tagName => (
                               <span 
                                 key={tagName}
-                                className="px-1.5 py-0.5 rounded text-[9px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30"
+                                className="px-1.5 py-0.5 rounded text-[9px] text-indigo-400"
                               >
                                 {tagName}
                               </span>
@@ -1110,7 +1110,7 @@ export const RetrievalPanel: React.FC = () => {
                                             {matchedTags.map(tagName => (
                                               <span 
                                                 key={tagName}
-                                                className="px-1.5 py-0.5 rounded text-[9px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30"
+                                                className="px-1.5 py-0.5 rounded text-[9px] text-indigo-400"
                                               >
                                                 {tagName}
                                               </span>
@@ -1198,9 +1198,10 @@ export const RetrievalPanel: React.FC = () => {
                 {activeModule === 'review' && (
                     <button 
                         onClick={handleOpenCreateModal}
-                        className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded shadow-sm shadow-indigo-900/20 transition-all hover:scale-105"
+                        className="p-1.5 rounded transition-all hover:bg-zinc-800/50"
+                        title="新建项目"
                     >
-                        <Plus className="w-4 h-4" />
+                        <Plus className="w-5 h-5 text-indigo-400 hover:text-indigo-300 transition-colors" />
                     </button>
                 )}
                 {/* 视图切换按钮 - 设置模块不显示 */}
@@ -1232,8 +1233,8 @@ export const RetrievalPanel: React.FC = () => {
                     </button>
                 </div>
                 )}
-                {/* 隐藏按钮 - 设置模块不显示 */}
-                {activeModule !== 'settings' && (
+                {/* 隐藏按钮 - 设置模块和分享模块不显示 */}
+                {activeModule !== 'settings' && activeModule !== 'share' && (
                 <button
                     onClick={() => dispatch({ type: 'TOGGLE_RETRIEVAL_PANEL' })}
                     className={`p-1.5 rounded hover:bg-zinc-800 transition-colors ${theme.text.muted} hover:text-zinc-200`}
@@ -1621,16 +1622,6 @@ export const RetrievalPanel: React.FC = () => {
             </Modal>
         )}
         
-        {/* 显示按钮 - 当面板隐藏时显示 */}
-        {!isRetrievalPanelVisible && (
-            <button
-                onClick={() => dispatch({ type: 'TOGGLE_RETRIEVAL_PANEL' })}
-                className={`fixed left-[64px] top-1/2 -translate-y-1/2 z-30 p-2 ${theme.bg.secondary} ${theme.border.primary} border-r border-t border-b rounded-r-lg shadow-lg transition-all hover:bg-zinc-800 ${theme.text.secondary} hover:text-zinc-100`}
-                title="显示面板"
-            >
-                <ChevronRight className="w-4 h-4" />
-            </button>
-        )}
     </>
   );
 };

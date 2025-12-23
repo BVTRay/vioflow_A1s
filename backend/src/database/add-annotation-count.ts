@@ -23,7 +23,9 @@ if (databaseUrl) {
     username: decodeURIComponent(urlObj.username),
     password: decodeURIComponent(urlObj.password),
     database: urlObj.pathname.slice(1), // 移除前导斜杠
-    ssl: isSupabase ? { rejectUnauthorized: false } : undefined,
+    ssl: isSupabase ? {
+      rejectUnauthorized: process.env.NODE_ENV === 'production' && process.env.DB_ALLOW_SELF_SIGNED_CERT !== 'true',
+    } : undefined,
   };
 } else {
   // 使用单独的环境变量（本地开发，向后兼容）

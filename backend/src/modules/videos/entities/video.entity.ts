@@ -134,6 +134,9 @@ export class Video {
   @UpdateDateColumn()
   updated_at: Date;
 
+  @Column({ type: 'timestamp', nullable: true })
+  deleted_at: Date | null;
+
   @ManyToOne(() => Project, (project) => project.videos)
   @JoinColumn({ name: 'project_id' })
   project: Project;

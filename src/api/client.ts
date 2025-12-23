@@ -1,53 +1,54 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+import { logger } from '../utils/logger';
 
 // 根据环境自动选择 API 地址
-const getApiBaseUrl = () => {
+export const getApiBaseUrl = (): string => {
   // 如果设置了环境变量，优先使用
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
   }
-  // 生产环境：使用相对路径或配置的 API 地址
-  if (import.meta.env.PROD) {
-    // 生产环境应该使用完整的 API 地址，需要在 Vercel 环境变量中配置
-    // 例如：https://api.vioflow.cc/api
-    return import.meta.env.VITE_API_BASE_URL || 'https://api.vioflow.cc/api';
-  }
-  // 开发环境：根据当前访问的域名动态调整 API 地址
-  const hostname = window.location.hostname;
-  const port = '3002';
   
-  // 调试信息
-  console.log('🔍 检测到的 hostname:', hostname);
-  console.log('🔍 当前完整地址:', window.location.origin);
-  
-  // 默认使用服务器 IP 地址
-  const serverIp = '192.168.110.112';
-  
-  // 如果是 localhost 或 127.0.0.1，使用服务器 IP
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    console.log('✅ 使用服务器 IP API 地址:', `http://${serverIp}:${port}/api`);
-    return `http://${serverIp}:${port}/api`;
+  // 开发环境：如果没有配置，尝试从当前hostname推断
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    // 端口号可以通过环境变量配置，默认使用 3002
+    const port = import.meta.env.VITE_API_PORT || '3002';
+    
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      logger.warn('⚠️ 未配置 VITE_API_BASE_URL，使用默认开发地址');
+      return `http://localhost:${port}/api`;
+    }
+    
+    // 如果是内网 IP，使用相同的 IP（仅开发环境）
+    const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (ipv4Regex.test(hostname)) {
+      logger.warn('⚠️ 未配置 VITE_API_BASE_URL，使用当前IP地址');
+      return `http://${hostname}:${port}/api`;
+    }
   }
   
-  // 如果是内网 IP（192.168.x.x、172.x.x.x 或 10.x.x.x），使用相同的 IP
-  // 也检查是否是纯 IP 地址格式（IPv4）
-  const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
-  if (hostname.match(/^(192\.168\.|172\.|10\.)/) || ipv4Regex.test(hostname)) {
-    console.log('✅ 使用 IP 地址 API:', `http://${hostname}:${port}/api`);
-    return `http://${hostname}:${port}/api`;
-  }
-  
-  // 默认使用服务器 IP
-  console.warn('⚠️ 未识别的 hostname，使用默认服务器 IP API 地址');
-  return `http://${serverIp}:${port}/api`;
+  // 生产环境必须配置VITE_API_BASE_URL
+  logger.error('❌ 未配置 VITE_API_BASE_URL 环境变量');
+  logger.error('请在环境变量中设置 VITE_API_BASE_URL');
+  throw new Error('API base URL not configured. Please set VITE_API_BASE_URL environment variable.');
 };
 
-const API_BASE_URL = getApiBaseUrl();
-
-// 打印 API 地址，便于调试（生产环境也打印，方便排查问题）
-console.log('🌐 API Base URL:', API_BASE_URL);
-console.log('🌐 Environment:', import.meta.env.MODE);
-console.log('🌐 VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL || '未设置');
+let API_BASE_URL: string;
+try {
+  API_BASE_URL = getApiBaseUrl();
+  // 仅在开发环境打印详细日志
+  logger.log('🌐 API Base URL:', API_BASE_URL);
+  logger.log('🌐 Environment:', import.meta.env.MODE);
+  logger.log('🌐 VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL || '未设置');
+} catch (error) {
+  // 如果获取失败，在生产环境抛出错误，开发环境使用默认值
+  if (import.meta.env.PROD) {
+    throw error;
+  }
+  // 开发环境使用默认值
+  API_BASE_URL = 'http://localhost:3002/api';
+  logger.error('❌ 获取 API 地址失败，使用默认值:', API_BASE_URL);
+}
 
 class ApiClient {
   private client: AxiosInstance;
@@ -57,16 +58,16 @@ class ApiClient {
   constructor() {
     // 确保 API 地址正确
     if (!API_BASE_URL) {
-      console.error('❌ API 地址未配置！');
-      console.error('请在 Vercel 环境变量中设置 VITE_API_BASE_URL');
-      console.error('例如: VITE_API_BASE_URL=https://你的railway域名.railway.app/api');
+      logger.error('❌ API 地址未配置！');
+      logger.error('请在 Vercel 环境变量中设置 VITE_API_BASE_URL');
+      logger.error('例如: VITE_API_BASE_URL=https://你的railway域名.railway.app/api');
     } else if (API_BASE_URL.includes('supabase.co')) {
-      console.error('❌ 错误的 API 地址配置:', API_BASE_URL);
-      console.error('API 地址不应指向 Supabase，应该指向 Railway 后端');
-      console.error('请检查 Vercel 环境变量中的 VITE_API_BASE_URL');
+      logger.error('❌ 错误的 API 地址配置:', API_BASE_URL);
+      logger.error('API 地址不应指向 Supabase，应该指向 Railway 后端');
+      logger.error('请检查 Vercel 环境变量中的 VITE_API_BASE_URL');
     } else if (import.meta.env.PROD && API_BASE_URL === 'https://api.vioflow.cc/api') {
-      console.warn('⚠️ 使用默认 API 地址，可能不正确');
-      console.warn('建议在 Vercel 环境变量中设置 VITE_API_BASE_URL');
+      logger.warnImportant('⚠️ 使用默认 API 地址，可能不正确');
+      logger.warnImportant('建议在 Vercel 环境变量中设置 VITE_API_BASE_URL');
     }
     
     this.client = axios.create({
@@ -74,7 +75,7 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
       },
-      timeout: 30000, // 30秒超时
+      timeout: 600000, // 10分钟超时（用于大文件上传）
       withCredentials: true, // 允许携带凭证（用于 CORS）
     });
 
@@ -84,19 +85,23 @@ class ApiClient {
         if (this.token) {
           config.headers.Authorization = `Bearer ${this.token}`;
         }
-        // 添加开发者模式标记（如果处于开发者模式）
-        if (typeof window !== 'undefined' && localStorage.getItem('dev_mode') === 'true') {
+        // 仅在开发环境且明确启用时才添加开发者模式标记
+        if (typeof window !== 'undefined' && import.meta.env.DEV && localStorage.getItem('dev_mode') === 'true') {
           config.headers['X-Dev-Mode'] = 'true';
         }
         // 添加 team_id 到请求头（如果存在）
         // 登录和认证相关的请求不需要 teamId，所以不显示警告，也不添加 teamId
         const isAuthRequest = config.url?.includes('/auth/') || config.url?.includes('/login');
+        // 开发者后台接口（admin/all）不需要 teamId
+        const isAdminRequest = config.url?.includes('/admin/');
+        // 检查是否明确跳过 teamId（通过 skipTeamId 标记）
+        const skipTeamId = (config as any).skipTeamId === true;
         
-        // 只有非认证请求才添加 teamId
-        if (!isAuthRequest) {
+        // 只有非认证请求且非管理员请求且未明确跳过时才添加 teamId
+        if (!isAuthRequest && !isAdminRequest && !skipTeamId) {
           if (this.teamId) {
             config.headers['X-Team-Id'] = this.teamId;
-            console.log(`📤 API 请求 [${config.method?.toUpperCase()} ${config.url}]: 添加 teamId=${this.teamId}`);
+            logger.log(`📤 API 请求 [${config.method?.toUpperCase()} ${config.url}]: 添加 teamId=${this.teamId}`);
             // 同时添加到查询参数（某些 API 可能需要）
             // 如果已经有 params，添加到现有 params；如果没有，创建新的 params
             if (config.params) {
@@ -110,7 +115,7 @@ class ApiClient {
             }
           } else {
             // 只有非认证请求才显示警告
-            console.warn(`⚠️ API 请求 [${config.method?.toUpperCase()} ${config.url}]: 没有 teamId`);
+            logger.warn(`⚠️ API 请求 [${config.method?.toUpperCase()} ${config.url}]: 没有 teamId`);
           }
         }
         return config;
@@ -125,7 +130,7 @@ class ApiClient {
         // 详细的错误日志
         if (error.response) {
           // 服务器返回了错误响应
-          console.error('❌ API 错误响应:', {
+          logger.error('❌ API 错误响应:', {
             status: error.response.status,
             statusText: error.response.statusText,
             url: error.config?.url,
@@ -134,7 +139,7 @@ class ApiClient {
           });
         } else if (error.request) {
           // 请求已发出但没有收到响应
-          console.error('❌ API 请求失败（无响应）:', {
+          logger.error('❌ API 请求失败（无响应）:', {
             url: error.config?.url,
             method: error.config?.method,
             message: error.message,
@@ -142,17 +147,17 @@ class ApiClient {
             fullURL: error.config?.baseURL + error.config?.url,
             hostname: typeof window !== 'undefined' ? window.location.hostname : 'N/A',
           });
-          console.error('可能的原因:');
-          console.error('1. 后端服务未运行或无法访问');
-          console.error('2. API 地址配置错误 (当前:', API_BASE_URL, ')');
-          console.error('3. CORS 配置问题');
-          console.error('4. 网络连接问题');
-          console.error('5. 如果通过 IP 访问前端，请确保 API 地址也使用相同的 IP');
-          console.error('   当前前端地址:', typeof window !== 'undefined' ? window.location.origin : 'N/A');
-          console.error('   当前 API 地址:', API_BASE_URL);
+          logger.debug('可能的原因:');
+          logger.debug('1. 后端服务未运行或无法访问');
+          logger.debug('2. API 地址配置错误 (当前:', API_BASE_URL, ')');
+          logger.debug('3. CORS 配置问题');
+          logger.debug('4. 网络连接问题');
+          logger.debug('5. 如果通过 IP 访问前端，请确保 API 地址也使用相同的 IP');
+          logger.debug('   当前前端地址:', typeof window !== 'undefined' ? window.location.origin : 'N/A');
+          logger.debug('   当前 API 地址:', API_BASE_URL);
         } else {
           // 请求配置出错
-          console.error('❌ API 请求配置错误:', error.message);
+          logger.error('❌ API 请求配置错误:', error.message);
         }
         
         if (error.response?.status === 401) {
@@ -199,6 +204,10 @@ class ApiClient {
 
   getTeamId(): string | null {
     return this.teamId;
+  }
+
+  getBaseURL(): string {
+    return API_BASE_URL;
   }
 
   async request<T = any>(config: AxiosRequestConfig): Promise<T> {

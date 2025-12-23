@@ -55,10 +55,12 @@ import { StorageUsage } from '../modules/storage/entities/storage-usage.entity';
               database: urlObj.pathname.slice(1), // 移除前导斜杠
             };
             
-            // SSL 配置：Supabase 必须启用，生产环境也建议启用
+            // SSL 配置
             if (isSupabase || nodeEnv === 'production') {
+              // 生产环境启用严格SSL校验
+              const allowSelfSigned = configService.get('DB_ALLOW_SELF_SIGNED_CERT', 'false') === 'true';
               dbConfig.ssl = {
-                rejectUnauthorized: false, // 允许自签名证书
+                rejectUnauthorized: nodeEnv === 'production' && !allowSelfSigned, // 生产环境默认严格校验
               };
             }
             

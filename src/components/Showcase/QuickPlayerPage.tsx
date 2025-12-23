@@ -264,25 +264,24 @@ export const QuickPlayerPage: React.FC = () => {
                     }, 1000);
                   }
                 }}
+                onClick={handlePlayPause}
                 playsInline
                 controls={false}
               />
 
-              {/* 播放/暂停按钮覆盖层 */}
-              <div 
-                className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${isPlaying ? 'opacity-0 hover:opacity-100' : 'opacity-100'}`}
-                onClick={handlePlayPause}
-              >
-                <button
-                  className="w-20 h-20 sm:w-24 sm:h-24 bg-black/40 hover:bg-violet-500/90 backdrop-blur-sm rounded-full flex items-center justify-center transition-all group"
+              {/* 播放按钮覆盖层 - 只在暂停时显示 */}
+              {!isPlaying && (
+                <div 
+                  className="absolute inset-0 flex items-center justify-center cursor-pointer"
+                  onClick={handlePlayPause}
                 >
-                  {isPlaying ? (
-                    <Pause className="w-10 h-10 sm:w-12 sm:h-12 fill-white text-white group-hover:scale-110 transition-transform" />
-                  ) : (
+                  <button
+                    className="w-20 h-20 sm:w-24 sm:h-24 bg-black/40 hover:bg-violet-500/90 backdrop-blur-sm rounded-full flex items-center justify-center transition-all group"
+                  >
                     <Play className="w-10 h-10 sm:w-12 sm:h-12 fill-white text-white pl-1 group-hover:scale-110 transition-transform" />
-                  )}
-                </button>
-              </div>
+                  </button>
+                </div>
+              )}
 
               {/* 底部控制栏 - 仅在悬停或交互时显示 */}
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 sm:p-6 opacity-0 hover:opacity-100 transition-opacity group">

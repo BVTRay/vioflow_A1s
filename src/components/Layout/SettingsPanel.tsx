@@ -58,6 +58,8 @@ export const SettingsPanel: React.FC = () => {
   const [projectGroupMap, setProjectGroupMap] = useState<Record<string, string>>({});
   const [codeCopied, setCodeCopied] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
+
+
   
   // 添加成员相关状态
   const [showAddMember, setShowAddMember] = useState(false);
@@ -130,6 +132,7 @@ export const SettingsPanel: React.FC = () => {
       loadProjectGroups();
     }
   }, [settingsActiveTab, selectedTeamId]);
+
 
 
   const loadTeams = async () => {
@@ -1186,6 +1189,7 @@ export const SettingsPanel: React.FC = () => {
               </div>
             </div>
           )}
+
         </div>
       </div>
 

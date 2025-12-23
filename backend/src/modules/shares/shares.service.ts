@@ -31,13 +31,17 @@ export class SharesService {
     private teamsService: TeamsService,
   ) {}
 
-  async findAll(userId: string, teamId?: string): Promise<ShareLink[]> {
+  async findAll(
+    userId: string,
+    teamId?: string,
+    page?: number,
+    limit?: number,
+  ): Promise<{ data: ShareLink[]; total: number; page: number; limit: number }> {
     const query = this.shareLinkRepository.createQueryBuilder('share')
       .leftJoinAndSelect('share.video', 'video')
       .leftJoinAndSelect('share.project', 'project')
       .leftJoinAndSelect('share.delivery_package', 'delivery_package')
-      .leftJoinAndSelect('share.showcase_package', 'showcase_package')
-      .orderBy('share.created_at', 'DESC');
+      .leftJoinAndSelect('share.showcase_package', 'showcase_package');
 
     if (teamId) {
       // 如果指定了团队，查询该团队的所有分享链接
@@ -49,7 +53,25 @@ export class SharesService {
       query.where('share.created_by = :userId', { userId });
     }
 
-    return query.getMany();
+    // 获取总数
+    const total = await query.getCount();
+
+    // 分页
+    const pageNum = page || 1;
+    const limitNum = limit || 50;
+    const skip = (pageNum - 1) * limitNum;
+    
+    query.skip(skip).take(limitNum);
+    query.orderBy('share.created_at', 'DESC');
+
+    const results = await query.getMany();
+    
+    return {
+      data: results,
+      total,
+      page: pageNum,
+      limit: limitNum,
+    };
   }
 
   async createShareLink(data: {

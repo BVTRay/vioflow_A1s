@@ -54,13 +54,15 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
       nextVersion: number;
       changeLog: string;
       videoDescription?: string; // 上传新视频时的视频说明
+      assetName?: string; // 资产名称（团队内唯一，仅上传新视频时使用）
   }>({
       isOpen: false,
       file: null,
       uploadMode: 'new',
       nextVersion: 1,
       changeLog: '',
-      videoDescription: ''
+      videoDescription: '',
+      assetName: ''
   });
 
   // Custom tag input state (for delivery module)
@@ -212,13 +214,18 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
       // 情况2：为某个项目上传视频（project存在但没有selectedVideo）
       if (project && !lockedVideo) {
           // 为项目上传视频时，不打开模态框，直接在操作台显示
+          // 自动生成资产名称（基于文件名，去除扩展名和版本前缀）
+          const originalName = file.name.replace(/^v\d+_/, ''); // 去除可能存在的版本前缀
+          const autoAssetName = originalName.replace(/\.[^/.]+$/, ''); // 去除扩展名
+          
           setUploadConfig({
               isOpen: false, // 不打开模态框，所有操作在操作台内完成
               file: file,
               uploadMode: 'new', // 默认选择"上传新视频"
               nextVersion: 1,
               changeLog: '',
-              videoDescription: ''
+              videoDescription: '',
+              assetName: autoAssetName // 自动填充资产名称
           });
           return;
       }
@@ -226,16 +233,34 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
       // 情况3：快速上传模式（需要先选择项目）
       if (state.quickUploadMode && !project) {
           // 在快速上传模式下，如果没有选中项目，先提示选择项目
-          alert('请先选择项目');
+          toastManager.warning('请先选择项目');
           return;
       }
   };
 
+  // 添加上传期间的 beforeunload 警告
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // 检查是否有正在上传的任务
+      const hasUploading = state.uploads?.some(u => u.status === 'uploading');
+      if (hasUploading) {
+        e.preventDefault();
+        e.returnValue = '视频正在上传中，离开将中断传输';
+        return '视频正在上传中，离开将中断传输';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [state.uploads]);
+
   const startUpload = async () => {
       if (!uploadConfig.file || !project) return;
 
-      // 检查文件大小（Supabase 免费版限制 50MB）
-      const MAX_FILE_SIZE_MB = 50;
+      // 检查文件大小（限制 500MB）
+      const MAX_FILE_SIZE_MB = 500;
       const fileSizeMB = uploadConfig.file.size / 1024 / 1024;
       if (fileSizeMB > MAX_FILE_SIZE_MB) {
           toastManager.error(`文件太大：${fileSizeMB.toFixed(1)}MB，最大支持 ${MAX_FILE_SIZE_MB}MB。请压缩视频后重试。`);
@@ -246,18 +271,23 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
       if (uploadConfig.uploadMode === 'addVersion') {
           // 为视频上传新版本时，必须要有selectedExistingVideoId
           if (!uploadConfig.selectedExistingVideoId) {
-              alert('请选择要添加新版本的既有视频');
+              toastManager.warning('请选择要添加新版本的既有视频');
               return;
           }
           // 迭代说明是必填的
           if (!uploadConfig.changeLog?.trim()) {
-              alert('请填写迭代说明');
+              toastManager.warning('请填写迭代说明');
               return;
           }
       } else if (uploadConfig.uploadMode === 'new') {
+          // 上传新视频时，必须填写资产名称
+          if (!uploadConfig.assetName?.trim()) {
+              toastManager.warning('请填写资产名称');
+              return;
+          }
           // 上传新视频时，必须填写视频说明
           if (!uploadConfig.videoDescription?.trim()) {
-              alert('请填写视频说明');
+              toastManager.warning('请填写视频说明');
               return;
           }
       }
@@ -269,32 +299,29 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
       let finalVersion: number;
 
       if (uploadConfig.uploadMode === 'addVersion') {
-          // 添加新版本：使用既有视频的baseName
+          // 添加新版本：使用既有视频的baseName（资产名称）
           const existingVideo = videos.find(v => v.id === uploadConfig.selectedExistingVideoId);
           if (!existingVideo) {
-              alert('找不到选中的视频');
+              toastManager.error('找不到选中的视频');
               return;
           }
-          // 获取既有视频的baseName（去除版本号前缀后的文件名）
+          // 获取既有视频的baseName（资产名称）
           baseName = existingVideo.baseName || existingVideo.name.replace(/^v\d+_/, '');
-          // 如果baseName包含扩展名，保留扩展名；否则从上传的文件中获取扩展名
-          const hasExtension = baseName.includes('.');
-          const fileExtension = hasExtension 
-              ? baseName.split('.').pop() 
-              : (uploadConfig.file.name.split('.').pop() || 'mp4');
-          // 如果baseName包含扩展名，需要先去除扩展名
-          if (hasExtension) {
-              baseName = baseName.replace(/\.[^/.]+$/, '');
-          }
+          // 从上传的文件中获取扩展名
+          const fileExtension = uploadConfig.file.name.split('.').pop() || 'mp4';
           finalVersion = uploadConfig.nextVersion;
-          finalName = `v${finalVersion}_${baseName}.${fileExtension}`;
+          // 文件名格式：v{version}_{原始文件名}
+          const originalFileName = uploadConfig.file.name.replace(/^v\d+_/, ''); // 去除可能存在的版本前缀
+          finalName = `v${finalVersion}_${originalFileName}`;
       } else {
-          // 上传新视频：使用文件名（去除版本前缀）作为baseName，并添加版本号
-          const originalName = uploadConfig.file.name.replace(/^v\d+_/, ''); // 去除可能存在的版本前缀
-          const fileExtension = originalName.split('.').pop() || 'mp4';
-          baseName = originalName.replace(/\.[^/.]+$/, ''); // 去除扩展名
+          // 上传新视频：使用用户输入的资产名称作为baseName
+          baseName = uploadConfig.assetName!.trim();
+          // 从上传的文件中获取扩展名
+          const fileExtension = uploadConfig.file.name.split('.').pop() || 'mp4';
           finalVersion = 1;
-          finalName = `v1_${baseName}.${fileExtension}`;
+          // 文件名格式：v1_{原始文件名}
+          const originalFileName = uploadConfig.file.name.replace(/^v\d+_/, ''); // 去除可能存在的版本前缀
+          finalName = `v1_${originalFileName}`;
       }
 
       const uploadId = `u_${Date.now()}`;
@@ -382,9 +409,45 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
               }
           });
       } catch (error: any) {
-          console.error('上传失败:', error);
+          // 详细记录错误信息
+          const errorInfo = {
+              message: error?.message,
+              response: error?.response?.data,
+              status: error?.response?.status,
+              statusText: error?.response?.statusText,
+              code: error?.code,
+              name: error?.name,
+          };
+          console.error('[Workbench] 上传失败 - 错误信息:', errorInfo);
+          console.error('[Workbench] 完整错误对象:', error);
+          
           dispatch({ type: 'COMPLETE_UPLOAD', payload: uploadId });
-          const errorMessage = error?.response?.data?.message || error?.message || '上传失败，请重试';
+          
+          // 提取错误消息 - 按优先级尝试不同的来源
+          let errorMessage = '上传失败，请重试';
+          
+          // 1. 优先使用后端返回的 message
+          if (error?.response?.data?.message) {
+              errorMessage = String(error.response.data.message);
+          }
+          // 2. 使用错误对象的 message
+          else if (error?.message) {
+              errorMessage = String(error.message);
+          }
+          // 3. 使用 HTTP 状态文本
+          else if (error?.response?.statusText) {
+              errorMessage = `${error.response.status} ${error.response.statusText}`;
+          }
+          // 4. 使用 HTTP 状态码
+          else if (error?.response?.status) {
+              errorMessage = `HTTP ${error.response.status} 错误`;
+          }
+          // 5. 使用错误代码
+          else if (error?.code) {
+              errorMessage = `错误代码: ${error.code}`;
+          }
+          
+          console.error('[Workbench] 提取的错误消息:', errorMessage);
           
           // Toast 提示上传失败
           toastManager.error(`上传失败: ${errorMessage}`);
@@ -412,6 +475,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
           nextVersion: 1,
           changeLog: '',
           videoDescription: '',
+          assetName: '',
           selectedExistingVideoId: lockedVideo?.id
       });
       dispatch({ type: 'CLOSE_WORKBENCH' });
@@ -430,6 +494,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
         nextVersion: 1,
         changeLog: '',
         videoDescription: '',
+        assetName: '',
         selectedExistingVideoId: undefined
       });
     }
@@ -487,20 +552,29 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
         nextVersion: nextVersion,
         // 如果已有文件，保留文件，只更新模式和相关ID
         // 如果没有文件，清空其他字段
-        ...(prev.file ? {} : { file: null, changeLog: '', videoDescription: '' })
+        ...(prev.file ? {} : { file: null, changeLog: '', videoDescription: '', assetName: '' })
       }));
     } else if (project && !lockedVideo) {
       // 当为项目上传视频时（非视频卡片进入），重置为"上传新视频"模式
-      setUploadConfig(prev => ({
-        ...prev,
-        isOpen: false,
-        uploadMode: 'new',
-        nextVersion: 1,
-        selectedExistingVideoId: undefined,
-        // 如果已有文件，保留文件，只更新模式
-        // 如果没有文件，清空其他字段
-        ...(prev.file ? {} : { file: null, changeLog: '', videoDescription: '' })
-      }));
+      setUploadConfig(prev => {
+        // 如果已有文件，自动生成资产名称
+        let autoAssetName = '';
+        if (prev.file) {
+          const originalName = prev.file.name.replace(/^v\d+_/, '');
+          autoAssetName = originalName.replace(/\.[^/.]+$/, '');
+        }
+        
+        return {
+          ...prev,
+          isOpen: false,
+          uploadMode: 'new',
+          nextVersion: 1,
+          selectedExistingVideoId: undefined,
+          // 如果已有文件，保留文件并自动填充资产名称，只更新模式
+          // 如果没有文件，清空其他字段
+          ...(prev.file ? { assetName: autoAssetName || prev.assetName || '' } : { file: null, changeLog: '', videoDescription: '', assetName: '' })
+        };
+      });
     }
   }, [lockedVideo?.id, project?.id, videos, lockedVideo?.projectId]);
 
@@ -522,16 +596,23 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
         nextVersion: nextVersion
       }));
     }
-    // 若项目内没有视频且未锁定到指定视频，强制切回“上传新视频”
+    // 若项目内没有视频且未锁定到指定视频，强制切回"上传新视频"
     if (!lockedVideo && project) {
       const hasVideos = videos.some(v => v.projectId === project.id);
       if (!hasVideos && uploadConfig.uploadMode === 'addVersion') {
+        // 如果有文件，自动生成资产名称
+        let autoAssetName = '';
+        if (uploadConfig.file) {
+          const originalName = uploadConfig.file.name.replace(/^v\d+_/, '');
+          autoAssetName = originalName.replace(/\.[^/.]+$/, '');
+        }
         setUploadConfig(prev => ({
           ...prev,
           uploadMode: 'new',
           selectedExistingVideoId: undefined,
           changeLog: '',
-          videoDescription: prev.videoDescription || ''
+          videoDescription: prev.videoDescription || '',
+          assetName: autoAssetName || prev.assetName || ''
         }));
       }
     }
@@ -750,7 +831,8 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                                         uploadMode: 'new', 
                                         selectedExistingVideoId: undefined,
                                         changeLog: '',
-                                        videoDescription: uploadConfig.videoDescription || ''
+                                        videoDescription: uploadConfig.videoDescription || '',
+                                        assetName: uploadConfig.assetName || '' // 保留资产名称
                                     });
                                 }}
                                 className={`cursor-pointer p-3 rounded-lg border flex flex-col items-center gap-2 text-center transition-all ${
@@ -799,7 +881,44 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                     </div>
                 )}
 
-                {/* 3. 选择对应视频（仅在非视频卡片点击进入后"添加新版本"的情况） */}
+                {/* 3. 资产名称（仅上传新视频时显示） */}
+                {uploadConfig.uploadMode === 'new' && (
+                    <div>
+                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">
+                            <span className="text-red-400">*</span> 资产名称
+                        </label>
+                        <input
+                            type="text"
+                            className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-3 text-xs text-zinc-200 focus:border-indigo-500 outline-none placeholder-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                            placeholder="请输入资产名称（团队内唯一）"
+                            value={uploadConfig.assetName || ''}
+                            onChange={(e) => {
+                                const newAssetName = e.target.value;
+                                setUploadConfig({...uploadConfig, assetName: newAssetName});
+                            }}
+                            onBlur={async () => {
+                                // 失去焦点时检查资产名称唯一性
+                                if (uploadConfig.assetName?.trim() && project?.team_id) {
+                                    try {
+                                        const { videosApi } = await import('../../api/videos');
+                                        const result = await videosApi.checkAssetNameUnique(uploadConfig.assetName.trim(), project.team_id);
+                                        if (!result.unique) {
+                                            toastManager.warning(`资产名称 "${uploadConfig.assetName.trim()}" 已存在，请使用其他名称`);
+                                        }
+                                    } catch (error) {
+                                        console.error('检查资产名称唯一性失败:', error);
+                                    }
+                                }
+                            }}
+                            disabled={!uploadConfig.file}
+                        />
+                        <p className="text-[10px] text-zinc-600 mt-1.5">
+                            资产名称用于标识视频资产，在团队内必须唯一，可以后续修改
+                        </p>
+                    </div>
+                )}
+
+                {/* 4. 选择对应视频（仅在非视频卡片点击进入后"添加新版本"的情况） */}
                 {!isLockedToAddVersion && uploadConfig.uploadMode === 'addVersion' && (
                     <div>
                         <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">选择对应视频</label>
@@ -872,7 +991,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                     </div>
                 )}
 
-                {/* 4. 上传说明（新视频说明or迭代说明）*/}
+                {/* 5. 上传说明（新视频说明or迭代说明）*/}
                 <div>
                     {isLockedToAddVersion || uploadConfig.uploadMode === 'addVersion' ? (
                         <>
@@ -941,7 +1060,10 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                         {uploadConfig.uploadMode === 'addVersion' && uploadConfig.selectedExistingVideoId && !uploadConfig.changeLog?.trim() && (
                             <p className="text-xs text-amber-400 text-center">请填写迭代说明</p>
                         )}
-                        {uploadConfig.uploadMode === 'new' && !uploadConfig.videoDescription?.trim() && (
+                        {uploadConfig.uploadMode === 'new' && !uploadConfig.assetName?.trim() && (
+                            <p className="text-xs text-amber-400 text-center">请填写资产名称</p>
+                        )}
+                        {uploadConfig.uploadMode === 'new' && uploadConfig.assetName?.trim() && !uploadConfig.videoDescription?.trim() && (
                             <p className="text-xs text-amber-400 text-center">请填写新视频说明</p>
                         )}
                     </>
@@ -1231,6 +1353,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                     key={video.id}
                     onClick={() => {
                       dispatch({ type: 'SELECT_VIDEO', payload: video.id });
+                      dispatch({ type: 'TOGGLE_REVIEW_MODE', payload: true });
                       dispatch({ type: 'HIDE_VERSION_HISTORY' });
                     }}
                     className="flex items-center gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded-lg cursor-pointer hover:bg-zinc-800/50 transition-colors"
@@ -1270,6 +1393,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                     key={video.id}
                     onClick={() => {
                       dispatch({ type: 'SELECT_VIDEO', payload: video.id });
+                      dispatch({ type: 'TOGGLE_REVIEW_MODE', payload: true });
                       dispatch({ type: 'HIDE_VERSION_HISTORY' });
                     }}
                     className="group relative bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden cursor-pointer hover:border-indigo-500/50 transition-all flex flex-col"
@@ -1292,6 +1416,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                       </div>
                     </div>
                     <div className="p-3 flex flex-col">
+                      {/* 历史版本窗口（卡片视图）：显示版本号+文件名 */}
                       <h3 className="text-sm font-medium text-zinc-200 truncate mb-1 group-hover:text-indigo-400 transition-colors">
                         {video.name}
                       </h3>
@@ -1441,13 +1566,16 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                     }
                 });
 
-                // 先关闭操作台，避免中间状态显示上传面板
-                dispatch({ type: 'CLOSE_WORKBENCH' });
-                // 清除编辑模式（由于操作台已关闭，不会触发渲染）
+                // 关闭操作台
+                handleClose();
+                // 清除编辑模式
                 dispatch({ type: 'SET_WORKBENCH_EDIT_MODE', payload: null });
+                
+                // Toast 提示成功
+                toastManager.success('项目设置已更新');
             } catch (error) {
                 console.error('Failed to update project:', error);
-                alert('更新项目设置失败，请重试');
+                toastManager.error('更新项目设置失败，请重试');
             } finally {
                 setIsUpdatingProject(false);
             }
@@ -1494,7 +1622,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                             </div>
                             <div className="p-5 space-y-3">
                                 <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-200">
-                                    删除项目后，该项目下的所有文件都会被永久删除，且无法恢复。
+                                    删除项目后，该项目下的所有视频将被放入回收站，保留30天后自动清理。
                                 </div>
                                 <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-200">
                                     项目名称：{project?.name}
@@ -1614,11 +1742,11 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                                         onClick={() => {
                                             const newGroupName = editProjectFormData.group.trim();
                                             if (!newGroupName) {
-                                                alert('请输入分组名称');
+                                                toastManager.warning('请输入分组名称');
                                                 return;
                                             }
                                             if (existingGroups.includes(newGroupName)) {
-                                                alert('该分组名称已存在');
+                                                toastManager.warning('该分组名称已存在');
                                                 return;
                                             }
                                             // 保存到预设分组
@@ -1628,6 +1756,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                                             }
                                             // 切换回下拉模式并选中新分组
                                             setEditProjectFormData({...editProjectFormData, isNewGroup: false, group: newGroupName});
+                                            toastManager.success(`分组「${newGroupName}」已创建`);
                                         }}
                                         disabled={isUpdatingProject}
                                         className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1760,8 +1889,14 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
       const projectGroupNames = projects.map(p => p.group).filter(g => g && g !== '未分类');
       const existingGroups = Array.from(new Set([...projectGroupNames, ...getPresetGroups()]));
       
-      // 使用第一个可用分组作为默认值
-      const initialGroup = projectFormData.group || existingGroups[0] || '未分类';
+      // 优先使用待创建项目的组名（从资源管理器模式传递），否则使用第一个可用分组
+      const pendingGroup = state.pendingProjectGroup;
+      const initialGroup = projectFormData.group || pendingGroup || existingGroups[0] || '未分类';
+      
+      // 如果表单数据中的组名与待创建项目的组名不一致，更新表单数据
+      if (pendingGroup && projectFormData.group !== pendingGroup) {
+        setProjectFormData(prev => ({ ...prev, group: pendingGroup }));
+      }
 
       const handleAddTeamMember = () => {
         if (projectFormData.newMemberInput.trim()) {
@@ -1923,11 +2058,11 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                       onClick={() => {
                         const newGroupName = projectFormData.group.trim();
                         if (!newGroupName) {
-                          alert('请输入分组名称');
+                          toastManager.warning('请输入分组名称');
                           return;
                         }
                         if (existingGroups.includes(newGroupName)) {
-                          alert('该分组名称已存在');
+                          toastManager.warning('该分组名称已存在');
                           return;
                         }
                         // 保存到预设分组
@@ -1937,6 +2072,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                         }
                         // 切换回下拉模式并选中新分组
                         setProjectFormData({...projectFormData, isNewGroup: false, group: newGroupName});
+                        toastManager.success(`分组「${newGroupName}」已创建`);
                       }}
                       className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs"
                     >
@@ -2287,7 +2423,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                                     payload: { projectId: project.id, fileIds: projectVideos.map(v => v.id) } 
                                 });
                             } else {
-                                alert('请先填写交付标题');
+                                toastManager.warning('请先填写交付标题');
                             }
                         }
                     }}
@@ -3359,7 +3495,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
         setNewTagName('');
       } catch (error) {
         console.error('创建标签失败:', error);
-        alert('创建标签失败');
+        toastManager.error('创建标签失败');
       }
     };
 

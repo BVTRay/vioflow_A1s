@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PlayCircle, Settings, HardDrive, Clapperboard, LayoutDashboard, Terminal, Share2 } from 'lucide-react';
+import { PlayCircle, Settings, HardDrive, Clapperboard, LayoutDashboard, Terminal, Share2, Trash2 } from 'lucide-react';
 import { ModuleType } from '../../types';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
 import { isDevMode } from '../../utils/devMode';
@@ -15,20 +15,62 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeModule, onChangeModule }
   const theme = useThemeClasses();
   const navigate = useNavigate();
   
-  const navItems = [
-    { id: 'dashboard', icon: LayoutDashboard, label: '工作台', type: 'dashboard' as ModuleType },
+  // 第一组：工作台
+  const dashboardItem = { id: 'dashboard', icon: LayoutDashboard, label: '', type: 'dashboard' as ModuleType };
+  
+  // 第二组：三个功能区
+  const functionItems = [
     { id: 'review', icon: PlayCircle, label: '审阅', type: 'review' as ModuleType },
     { id: 'delivery', icon: HardDrive, label: '交付', type: 'delivery' as ModuleType },
     { id: 'showcase', icon: Clapperboard, label: '案例', type: 'showcase' as ModuleType },
-    { id: 'share', icon: Share2, label: '分享', type: 'share' as ModuleType },
+  ];
+  
+  // 第三组：分享和回收站
+  const shareItems = [
+    { id: 'share', icon: Share2, label: '', type: 'share' as ModuleType },
+    { id: 'trash', icon: Trash2, label: '', type: 'trash' as ModuleType },
   ];
 
   return (
-    <nav className={`fixed left-0 top-14 bottom-0 w-[64px] ${theme.bg.primary} border-r ${theme.border.primary} z-40 flex flex-col items-center py-4 gap-6`}>
+    <nav className={`fixed left-0 top-14 bottom-0 w-[64px] ${theme.bg.primary} border-r ${theme.border.primary} z-40 flex flex-col items-center py-4 gap-2`}>
       
-      {/* Main Modules */}
+      {/* 第一组：工作台 */}
       <div className="flex flex-col gap-2 w-full px-2 pt-2">
-        {navItems.map((item) => (
+        <SidebarItem 
+          key={dashboardItem.id}
+          active={activeModule === dashboardItem.type}
+          icon={dashboardItem.icon}
+          label={dashboardItem.label}
+          onClick={() => onChangeModule(dashboardItem.type)}
+        />
+      </div>
+
+      {/* 分隔线 */}
+      <div className={`w-full px-2`}>
+        <div className={`h-px ${theme.border.primary} opacity-30`}></div>
+      </div>
+
+      {/* 第二组：三个功能区 */}
+      <div className="flex flex-col gap-2 w-full px-2">
+        {functionItems.map((item) => (
+          <SidebarItem 
+            key={item.id}
+            active={activeModule === item.type}
+            icon={item.icon}
+            label={item.label}
+            onClick={() => onChangeModule(item.type)}
+          />
+        ))}
+      </div>
+
+      {/* 分隔线 */}
+      <div className={`w-full px-2`}>
+        <div className={`h-px ${theme.border.primary} opacity-30`}></div>
+      </div>
+
+      {/* 第三组：分享和回收站 */}
+      <div className="flex flex-col gap-2 w-full px-2">
+        {shareItems.map((item) => (
           <SidebarItem 
             key={item.id}
             active={activeModule === item.type}

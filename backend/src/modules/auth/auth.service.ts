@@ -63,7 +63,11 @@ export class AuthService {
 
       // 确保 role 为字符串格式（统一本地和云端）
       const role = typeof user.role === 'string' ? user.role : String(user.role);
-      const payload = { email: user.email, sub: user.id, role: role };
+      const payload = { 
+        email: user.email, 
+        sub: user.id, 
+        role: role,
+      };
       return {
         access_token: this.jwtService.sign(payload),
         user: {

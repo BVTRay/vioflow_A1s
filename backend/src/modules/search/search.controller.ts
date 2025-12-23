@@ -8,8 +8,16 @@ export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 
   @Get('global')
-  globalSearch(@Query('q') query: string) {
-    return this.searchService.globalSearch(query);
+  globalSearch(
+    @Query('q') query: string,
+    @Query('teamId') teamId?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.searchService.globalSearch(
+      query,
+      teamId,
+      limit ? parseInt(limit, 10) : 20,
+    );
   }
 }
 

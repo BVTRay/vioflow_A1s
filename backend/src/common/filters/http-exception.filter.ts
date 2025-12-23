@@ -35,12 +35,24 @@ export class HttpExceptionFilter implements ExceptionFilter {
       stack: exception instanceof Error ? exception.stack : undefined,
     });
 
+    // 提取错误消息
+    let errorMessage: string;
+    if (typeof message === 'string') {
+      errorMessage = message;
+    } else if (message && typeof message === 'object') {
+      errorMessage = (message as any).message || (message as any).error || JSON.stringify(message);
+    } else {
+      errorMessage = 'Internal server error';
+    }
+
     response.status(status).json({
       statusCode: status,
       timestamp: new Date().toISOString(),
       path: request.url,
-      message: typeof message === 'string' ? message : (message as any).message || message,
-      error: typeof message === 'object' ? message : undefined,
+      message: errorMessage,
+      ...(typeof message === 'object' && message !== null && !(message instanceof Error) 
+        ? { error: message } 
+        : {}),
     });
   }
 }

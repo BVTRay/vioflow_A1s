@@ -79,5 +79,33 @@ export const authApi = {
   getMe: async () => {
     return apiClient.get('/auth/me');
   },
+
+  register: async (data: { email: string; password: string; name: string }): Promise<LoginResponse> => {
+    try {
+      console.log('🔐 发送注册请求:', { email: data.email });
+      
+      const response = await apiClient.post<any>('/users', {
+        email: data.email,
+        password: data.password,
+        name: data.name,
+      });
+      
+      console.log('🔐 收到注册响应:', response);
+      
+      // 注册成功后自动登录
+      if (response && response.id) {
+        const loginResponse = await authApi.login({
+          username: data.email,
+          password: data.password,
+        });
+        return loginResponse;
+      }
+      
+      throw new Error('注册失败：未收到用户信息');
+    } catch (error: any) {
+      console.error('❌ 注册过程出错:', error);
+      throw new Error(error.response?.data?.message || error.message || '注册失败，请稍后再试');
+    }
+  },
 };
 

@@ -13,8 +13,18 @@ export class SharesController {
 
   @UseGuards(JwtAuthGuard)
   @Get()
-  findAll(@Request() req, @Query('teamId') teamId?: string) {
-    return this.sharesService.findAll(req.user.id, teamId);
+  findAll(
+    @Request() req,
+    @Query('teamId') teamId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.sharesService.findAll(
+      req.user.id,
+      teamId,
+      page ? parseInt(page, 10) : undefined,
+      limit ? parseInt(limit, 10) : undefined,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

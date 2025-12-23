@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
+import { Decimal } from 'decimal.js';
 import { StorageUsage } from './entities/storage-usage.entity';
 import { TeamsService } from '../teams/teams.service';
 import { TeamRole } from '../teams/entities/team-member.entity';
@@ -51,7 +52,7 @@ export class StorageService {
       throw new ForbiddenException('无权重新计算存储统计');
     }
 
-    // 计算videos表的存储
+    // 计算videos表的存储（排除已删除的文件）
     const videoStats = await this.dataSource
       .createQueryBuilder()
       .select('COALESCE(SUM(v.size), 0)', 'total_size')
@@ -67,6 +68,7 @@ export class StorageService {
       .from('videos', 'v')
       .innerJoin('projects', 'p', 'p.id = v.project_id')
       .where('p.team_id = :teamId', { teamId })
+      .andWhere('v.deleted_at IS NULL') // 排除已删除的文件
       .getRawOne();
 
     // 计算delivery_files表的存储
@@ -79,12 +81,19 @@ export class StorageService {
       .where('p.team_id = :teamId', { teamId })
       .getRawOne();
 
-    const totalSize =
-      parseInt(videoStats?.total_size || '0') + parseInt(deliveryStats?.total_size || '0');
-    const standardSize =
-      parseInt(videoStats?.standard_size || '0') + parseInt(deliveryStats?.total_size || '0');
-    const coldSize = parseInt(videoStats?.cold_size || '0');
-    const fileCount = parseInt(videoStats?.file_count || '0') + parseInt(deliveryStats?.file_count || '0');
+    // 使用 Decimal 类型进行金额计算，避免精度丢失
+    const videoTotalSize = new Decimal(videoStats?.total_size || '0');
+    const videoStandardSize = new Decimal(videoStats?.standard_size || '0');
+    const videoColdSize = new Decimal(videoStats?.cold_size || '0');
+    const videoFileCount = new Decimal(videoStats?.file_count || '0');
+    
+    const deliveryTotalSize = new Decimal(deliveryStats?.total_size || '0');
+    const deliveryFileCount = new Decimal(deliveryStats?.file_count || '0');
+    
+    const totalSize = videoTotalSize.plus(deliveryTotalSize).toNumber();
+    const standardSize = videoStandardSize.plus(deliveryTotalSize).toNumber();
+    const coldSize = videoColdSize.toNumber();
+    const fileCount = videoFileCount.plus(deliveryFileCount).toNumber();
 
     let usage = await this.storageUsageRepository.findOne({
       where: { team_id: teamId },

@@ -16,7 +16,34 @@ const localConfig = {
 };
 
 // Supabase 连接字符串
-const supabaseUrl = process.env.SUPABASE_DATABASE_URL || process.argv[2];
+// 安全获取Supabase URL：优先使用环境变量，如果使用命令行参数则进行严格验证
+const supabaseUrl = process.env.SUPABASE_DATABASE_URL || (() => {
+  if (process.argv[2]) {
+    // 验证命令行参数：必须是有效的PostgreSQL连接字符串格式
+    const url = process.argv[2];
+    if (!url.startsWith('postgresql://') && !url.startsWith('postgres://')) {
+      throw new Error('Invalid database URL format. Must start with postgresql:// or postgres://');
+    }
+    // 检查是否包含必要的组件
+    try {
+      const urlObj = new URL(url);
+      if (!urlObj.hostname || !urlObj.pathname) {
+        throw new Error('Invalid database URL: missing hostname or database name');
+      }
+    } catch (error) {
+      throw new Error(`Invalid database URL format: ${error.message}`);
+    }
+    return url;
+  }
+  return null;
+})();
+
+if (!supabaseUrl) {
+  console.error('错误: 必须设置 SUPABASE_DATABASE_URL 环境变量或通过命令行参数提供数据库URL');
+  console.error('用法: ts-node sync-to-supabase.ts <database_url>');
+  console.error('或设置环境变量: SUPABASE_DATABASE_URL=postgresql://...');
+  process.exit(1);
+}
 
 if (!supabaseUrl || supabaseUrl.includes('[YOUR-PASSWORD]')) {
   console.error('❌ 错误: 请提供 Supabase 连接字符串');

@@ -86,10 +86,3 @@ export const getThemeClasses = (theme: Theme) => {
   return themes[theme];
 };
 
-// Hook 用于在组件中方便地使用主题
-export const useThemeClasses = () => {
-  const { useTheme } = require('../contexts/ThemeContext');
-  const { theme } = useTheme();
-  return getThemeClasses(theme);
-};
-

@@ -1,5 +1,5 @@
 
-import React, { useReducer, createContext, useContext, useEffect, useRef } from 'react';
+import React, { useReducer, createContext, useContext, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Header } from './components/Layout/Header';
 import { Sidebar } from './components/Layout/Sidebar';
 import { RetrievalPanel } from './components/Layout/RetrievalPanel';
@@ -9,6 +9,7 @@ import { ReviewOverlay } from './components/Layout/ReviewOverlay';
 import { Dashboard } from './components/Layout/Dashboard';
 import { SettingsPanel } from './components/Layout/SettingsPanel';
 import { ShareModule } from './components/Layout/ShareModule';
+import { TrashPanel } from './components/Layout/TrashPanel';
 import { Drawer } from './components/UI/Drawer';
 import { AppState, Action, Project, Video, DeliveryData, Notification as AppNotification } from './types';
 import { FileUp, CheckCircle, BellRing, Loader2, X } from 'lucide-react';
@@ -20,76 +21,85 @@ import { uploadAbortControllers } from './utils/uploadManager';
 import { ToastContainer } from './components/UI/Toast';
 import { toastManager } from './hooks/useToast';
 import { Toast } from './components/UI/Toast';
+import { ErrorBoundary } from './components/UI/ErrorBoundary';
+import { logger } from './utils/logger';
 
-// --- MOCK DATA ---
-const INITIAL_PROJECTS: Project[] = [
-  { id: 'p1', name: '2412_Nike_AirMax_Holiday', client: 'Nike', lead: 'Sarah D.', postLead: 'Mike', group: '广告片', status: 'active', createdDate: '2024-12-01', team: ['Sarah D.', 'Mike', 'Alex'] },
-  { id: 'p2', name: '2501_Spotify_Wrapped_Asia', client: 'Spotify', lead: 'Alex', postLead: 'Jen', group: '社交媒体', status: 'active', createdDate: '2025-01-10', team: ['Alex', 'Jen'] },
-  { id: 'p3', name: '2411_Netflix_Docu_S1', client: 'Netflix', lead: 'Jessica', postLead: 'Tom', group: '长视频', status: 'finalized', createdDate: '2024-11-05', team: ['Jessica', 'Tom', 'Sarah D.'] },
-  { id: 'p4', name: '2410_Porsche_911_Launch', client: 'Porsche', lead: 'Tom', postLead: 'Sarah', group: '广告片', status: 'delivered', createdDate: '2024-10-20', team: ['Tom', 'Sarah'] },
-];
+// 从localStorage恢复UI状态
+const getInitialState = (): AppState => {
+  const defaultState: AppState = {
+    activeModule: 'dashboard',
+    projects: [],
+    videos: [],
+    deliveries: [],
+    tags: [],
+    cart: [],
+    uploadQueue: [],
+    notifications: [],
+    selectedProjectId: null,
+    selectedVideoId: null,
+    isReviewMode: false,
+    showWorkbench: false,
+    activeDrawer: 'none',
+    searchTerm: '',
+    activeTag: '全部',
+    isRetrievalPanelVisible: true,
+    isTagPanelExpanded: false,
+    selectedGroupTag: null,
+    selectedGroupTags: [],
+    isTagMultiSelectMode: false,
+    browserViewMode: 'grid',
+    browserCardSize: 'medium',
+    reviewViewMode: 'files',
+    deliveryViewMode: 'files',
+    selectedDeliveryFiles: [],
+    showcaseViewMode: 'files',
+    filteredShowcaseVideos: [],
+    showcasePackages: [],
+    recentOpenedProjects: [],
+    showcaseSelection: [],
+    workbenchActionType: null,
+    workbenchCreateMode: null,
+    workbenchEditProjectId: null,
+    pendingProjectGroup: null,
+    shouldTriggerFileSelect: false,
+    quickUploadMode: false,
+    workbenchView: 'none',
+    workbenchContext: {},
+    selectedShareProjects: [],
+    shareMultiSelectMode: false,
+    selectedShareProjectId: null,
+    settingsActiveTab: 'teams',
+    showVersionHistory: false,
+    versionHistoryViewMode: 'grid',
+    versionHistoryBaseName: null,
+  };
 
-const INITIAL_VIDEOS: Video[] = [
-  { id: 'v1', projectId: 'p1', name: 'v4_Nike_AirMax.mp4', type: 'video', url: '', version: 4, uploadTime: '2小时前', isCaseFile: false, isMainDelivery: false, size: '2.4 GB', duration: '00:01:30', resolution: '3840x2160', status: 'initial', changeLog: '调整了结尾Logo的入场动画' },
-  { id: 'v2', projectId: 'p1', name: 'v3_Nike_AirMax.mp4', type: 'video', url: '', version: 3, uploadTime: '昨天', isCaseFile: false, isMainDelivery: false, size: '2.4 GB', duration: '00:01:30', resolution: '3840x2160', status: 'annotated', changeLog: '根据客户意见修改了调色' },
-  { id: 'v3', projectId: 'p4', name: 'v12_Porsche_Launch_Master.mov', type: 'video', url: '', version: 12, uploadTime: '2周前', isCaseFile: true, isMainDelivery: true, size: '42 GB', duration: '00:00:60', resolution: '4096x2160', status: 'approved', changeLog: '最终定版', tags: ['三维制作'] },
-  { id: 'v4', projectId: 'p3', name: 'v8_Netflix_Ep1_Lock.mp4', type: 'video', url: '', version: 8, uploadTime: '3天前', isCaseFile: false, isMainDelivery: false, size: '1.8 GB', duration: '00:45:00', resolution: '1920x1080', status: 'initial', changeLog: '粗剪定版' },
-];
+  try {
+    const persisted = localStorage.getItem('app_ui_state');
+    if (persisted) {
+      const parsed = JSON.parse(persisted);
+      // 只恢复UI相关的状态，不恢复数据
+      return {
+        ...defaultState,
+        ...parsed,
+        // 确保不恢复数据状态
+        projects: defaultState.projects,
+        videos: defaultState.videos,
+        deliveries: defaultState.deliveries,
+        tags: defaultState.tags,
+        cart: defaultState.cart,
+        uploadQueue: defaultState.uploadQueue,
+        notifications: defaultState.notifications,
+      };
+    }
+  } catch (error) {
+    logger.warn('Failed to restore UI state from localStorage:', error);
+  }
 
-const INITIAL_DELIVERIES: DeliveryData[] = [
-  { projectId: 'p3', hasCleanFeed: true, hasMusicAuth: false, hasMetadata: true, hasTechReview: false, hasCopyrightCheck: false, hasScript: false, hasCopyrightFiles: false, hasMultiResolution: false }, // Pending
-  { projectId: 'p4', hasCleanFeed: true, hasMusicAuth: true, hasMetadata: true, hasTechReview: true, hasCopyrightCheck: true, hasScript: true, hasCopyrightFiles: true, hasMultiResolution: true, sentDate: '2024-10-25', deliveryTitle: 'Porsche 911 Launch Campaign', deliveryDescription: '最终交付版本，包含所有素材和说明文档。', deliveryPackages: [
-    { id: 'dp1', projectId: 'p4', title: 'Porsche 911 Launch Campaign', description: '最终交付版本，包含所有素材和说明文档。', link: 'https://vioflow.io/delivery/dp1', createdAt: '2024-10-25', downloadCount: 3, isActive: true }
-  ] }, // Delivered
-];
-
-const initialState: AppState = {
-  activeModule: 'dashboard',
-  projects: [],
-  videos: [],
-  deliveries: [],
-  tags: [],
-  cart: [],
-  uploadQueue: [],
-  notifications: [],
-  selectedProjectId: null,
-  selectedVideoId: null,
-  isReviewMode: false,
-  showWorkbench: false,
-  activeDrawer: 'none',
-  searchTerm: '',
-  activeTag: '全部',
-  isRetrievalPanelVisible: true,
-  isTagPanelExpanded: false,
-  selectedGroupTag: null,
-  selectedGroupTags: [],
-  isTagMultiSelectMode: false,
-  browserViewMode: 'grid',
-  browserCardSize: 'medium',
-  reviewViewMode: 'files',
-  deliveryViewMode: 'files',
-  selectedDeliveryFiles: [],
-  showcaseViewMode: 'files',
-  filteredShowcaseVideos: [],
-  showcasePackages: [],
-  recentOpenedProjects: [],
-  showcaseSelection: [],
-  workbenchActionType: null,
-  workbenchCreateMode: null,
-  workbenchEditProjectId: null,
-  pendingProjectGroup: null,
-  shouldTriggerFileSelect: false,
-  quickUploadMode: false,
-  workbenchView: 'none',
-  workbenchContext: {},
-  selectedShareProjects: [],
-  shareMultiSelectMode: false,
-  selectedShareProjectId: null,
-  settingsActiveTab: 'teams',
-  showVersionHistory: false,
-  versionHistoryViewMode: 'grid',
-  versionHistoryBaseName: null,
+  return defaultState;
 };
+
+const initialState = getInitialState();
 
 // --- REDUCER ---
 function appReducer(state: AppState, action: Action): AppState {
@@ -108,7 +118,9 @@ function appReducer(state: AppState, action: Action): AppState {
         showVersionHistory: false,
         versionHistoryBaseName: null,
         workbenchEditProjectId: null,
-        workbenchCreateMode: null
+        workbenchCreateMode: null,
+        // 分享模块默认为检索模式，不允许折叠
+        isRetrievalPanelVisible: action.payload === 'share' ? true : state.isRetrievalPanelVisible
       };
     case 'SELECT_PROJECT':
       return { 
@@ -438,6 +450,10 @@ function appReducer(state: AppState, action: Action): AppState {
       // 在审阅、交付、案例这三个主要业务模块下：
       // - 检索模式（isRetrievalPanelVisible = true）：检索面板显示，主浏览区显示选中项目的视频
       // - 文件模式（isRetrievalPanelVisible = false）：检索面板隐藏，主浏览区切换为资源管理器视图
+      // 分享模块默认为检索模式，不允许切换
+      if (state.activeModule === 'share') {
+        return state; // 分享模块不允许切换，直接返回原状态
+      }
       const newPanelVisible = !state.isRetrievalPanelVisible;
       return { 
         ...state, 
@@ -605,15 +621,56 @@ const formatNotificationTime = (dateStr: string | Date): string => {
 const App: React.FC = () => {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
+  // 持久化关键UI状态 - 使用 useMemo 优化
+  const uiStateToPersist = useMemo(() => ({
+        activeModule: state.activeModule,
+        searchTerm: state.searchTerm,
+        activeTag: state.activeTag,
+        isRetrievalPanelVisible: state.isRetrievalPanelVisible,
+        isTagPanelExpanded: state.isTagPanelExpanded,
+        browserViewMode: state.browserViewMode,
+        browserCardSize: state.browserCardSize,
+        reviewViewMode: state.reviewViewMode,
+        deliveryViewMode: state.deliveryViewMode,
+        showcaseViewMode: state.showcaseViewMode,
+        settingsActiveTab: state.settingsActiveTab,
+        versionHistoryViewMode: state.versionHistoryViewMode,
+        workbenchView: state.workbenchView,
+  }), [
+    state.activeModule,
+    state.searchTerm,
+    state.activeTag,
+    state.isRetrievalPanelVisible,
+    state.isTagPanelExpanded,
+    state.browserViewMode,
+    state.browserCardSize,
+    state.reviewViewMode,
+    state.deliveryViewMode,
+    state.showcaseViewMode,
+    state.settingsActiveTab,
+    state.versionHistoryViewMode,
+    state.workbenchView,
+  ]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('app_ui_state', JSON.stringify(uiStateToPersist));
+    } catch (error) {
+      logger.warn('Failed to persist UI state:', error);
+    }
+  }, [uiStateToPersist]);
+
   // 注意：useApiData 现在在 AppContent 中调用，因为它需要 TeamProvider
   return (
-    <StoreContext.Provider value={{ state, dispatch }}>
-      <ThemeProvider>
-        <TeamProvider>
-          <AppContent state={state} dispatch={dispatch} />
-        </TeamProvider>
-      </ThemeProvider>
-    </StoreContext.Provider>
+    <ErrorBoundary>
+      <StoreContext.Provider value={{ state, dispatch }}>
+        <ThemeProvider>
+          <TeamProvider>
+            <AppContent state={state} dispatch={dispatch} />
+          </TeamProvider>
+        </ThemeProvider>
+      </StoreContext.Provider>
+    </ErrorBoundary>
   );
 };
 
@@ -637,8 +694,8 @@ const AppContent: React.FC<{ state: AppState; dispatch: React.Dispatch<Action> }
     toastManager.close(id);
   }, []);
 
-  // 取消上传函数
-  const cancelUpload = (uploadId: string) => {
+  // 取消上传函数 - 使用 useCallback 优化
+  const cancelUpload = useCallback((uploadId: string) => {
     const abortController = uploadAbortControllers.get(uploadId);
     if (abortController) {
       abortController.abort();
@@ -657,7 +714,7 @@ const AppContent: React.FC<{ state: AppState; dispatch: React.Dispatch<Action> }
         time: '刚刚'
       }
     });
-  };
+  }, [dispatch]);
   const { 
     projects: apiProjects, 
     videos: apiVideos, 
@@ -670,23 +727,27 @@ const AppContent: React.FC<{ state: AppState; dispatch: React.Dispatch<Action> }
     loadAllData 
   } = useApiData();
 
-  // 计算主题类（在顶层，无条件）
-  const getThemeClasses = () => {
-    const themeMap = {
-      dark: { bg: 'bg-zinc-950', text: 'text-zinc-200' },
-        'dark-gray': { bg: 'bg-neutral-900', text: 'text-neutral-200' },
-      'dark-blue': { bg: 'bg-slate-950', text: 'text-slate-200' },
-    };
-    return themeMap[theme] || { bg: 'bg-zinc-950', text: 'text-zinc-200' };
-  };
+  // 处理通知 - 使用 useMemo 优化（在 useEffect 外部）
+  const notificationsToAdd = useMemo(() => {
+    return apiNotifications.map((notification: AppNotification) => ({
+      id: notification.id || Date.now().toString(),
+      type: notification.type || 'info',
+      title: notification.title || '通知',
+      message: notification.message || '',
+      time: notification.created_at || new Date().toLocaleString(),
+    } as AppNotification));
+  }, [apiNotifications]);
 
-  const themeClasses = getThemeClasses();
+  // 更新近期打开的项目 - 使用 useMemo 优化（在 useEffect 外部）
+  const recentProjectIds = useMemo(() => {
+    return apiRecentOpened.map((p: Project) => p.id);
+  }, [apiRecentOpened]);
 
   // 从API加载数据到state
   useEffect(() => {
     // 即使项目列表为空，也要更新 state（允许空数组）
     if (!apiLoading) {
-      console.log('📊 更新应用状态:', {
+      logger.log('📊 更新应用状态:', {
         projects: apiProjects.length,
         videos: apiVideos.length,
         tags: apiTags.length,
@@ -700,61 +761,27 @@ const AppContent: React.FC<{ state: AppState; dispatch: React.Dispatch<Action> }
       dispatch({ type: 'SET_DELIVERIES', payload: apiDeliveries });
       
       // 处理通知
-      if (apiNotifications.length > 0) {
-        apiNotifications.forEach((notification: any) => {
+      if (notificationsToAdd.length > 0) {
+        notificationsToAdd.forEach((notification) => {
           dispatch({
             type: 'ADD_NOTIFICATION',
-            payload: {
-              id: notification.id || Date.now().toString(),
-              type: notification.type || 'info',
-              title: notification.title || '通知',
-              message: notification.message || '',
-              time: notification.created_at || new Date().toLocaleString(),
-            } as AppNotification
+            payload: notification
           });
         });
       }
       
       // 更新近期打开的项目
-      if (apiRecentOpened.length > 0) {
+      if (recentProjectIds.length > 0) {
         dispatch({ 
           type: 'SET_RECENT_OPENED_PROJECTS', 
-          payload: apiRecentOpened.map((p: Project) => p.id) 
+          payload: recentProjectIds
         });
       }
     }
-  }, [apiProjects, apiVideos, apiTags, apiNotifications, apiRecentOpened, apiLoading, dispatch]);
+  }, [apiProjects, apiVideos, apiTags, notificationsToAdd, recentProjectIds, apiLoading, dispatch]);
 
-  // 显示加载状态
-  if (apiLoading && state.projects.length === 0) {
-    return (
-      <div className="bg-zinc-950 min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mx-auto mb-4" />
-          <p className="text-zinc-400">加载数据中...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // 显示错误状态
-  if (apiError && state.projects.length === 0) {
-    return (
-      <div className="bg-zinc-950 min-h-screen flex items-center justify-center">
-        <div className="text-center max-w-md">
-          <p className="text-red-400 mb-4">{apiError}</p>
-          <button
-            onClick={() => loadAllData()}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-          >
-            重试
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const renderTransferContent = () => {
+  // 所有 Hooks 必须在早期返回之前调用
+  const renderTransferContent = useCallback(() => {
     const theme = themeClassesHook; // 使用顶层的 Hook 结果
     return (
       <div className="space-y-4">
@@ -799,9 +826,9 @@ const AppContent: React.FC<{ state: AppState; dispatch: React.Dispatch<Action> }
           )}
       </div>
     );
-  };
+  }, [state.uploadQueue, themeClassesHook, cancelUpload]);
 
-  const renderNotificationsContent = () => {
+  const renderNotificationsContent = useCallback(() => {
     const theme = themeClassesHook; // 使用顶层的 Hook 结果
     return (
       state.notifications.length === 0 ? (
@@ -830,10 +857,39 @@ const AppContent: React.FC<{ state: AppState; dispatch: React.Dispatch<Action> }
         </div>
       )
     );
-  };
+  }, [state.notifications, themeClassesHook, dispatch]);
+
+  // 显示加载状态 - 必须在所有 Hooks 之后
+  if (apiLoading && state.projects.length === 0) {
+    return (
+      <div className="bg-zinc-950 min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mx-auto mb-4" />
+          <p className="text-zinc-400">加载数据中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 显示错误状态 - 必须在所有 Hooks 之后
+  if (apiError && state.projects.length === 0) {
+    return (
+      <div className="bg-zinc-950 min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <p className="text-red-400 mb-4">{apiError}</p>
+          <button
+            onClick={() => loadAllData()}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+          >
+            重试
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className={`${themeClasses.bg} min-h-screen ${themeClasses.text} font-sans selection:bg-indigo-500/30`}>
+    <div className={`${themeClassesHook.bg.primary} min-h-screen ${themeClassesHook.text.primary} font-sans selection:bg-indigo-500/30`}>
           
           <Header 
             onToggleDrawer={(d) => dispatch({ type: 'TOGGLE_DRAWER', payload: d })} 
@@ -845,7 +901,7 @@ const AppContent: React.FC<{ state: AppState; dispatch: React.Dispatch<Action> }
             onChangeModule={(mod) => dispatch({ type: 'SET_MODULE', payload: mod })} 
           />
 
-          {state.activeModule !== 'dashboard' && state.activeModule !== 'share' && <RetrievalPanel />}
+          {state.activeModule !== 'dashboard' && state.activeModule !== 'share' && state.activeModule !== 'trash' && <RetrievalPanel />}
           {state.activeModule === 'share' && <RetrievalPanel />}
 
           {state.activeModule === 'dashboard' ? (
@@ -861,6 +917,10 @@ const AppContent: React.FC<{ state: AppState; dispatch: React.Dispatch<Action> }
           ) : state.activeModule === 'share' ? (
             <>
               <ShareModule />
+            </>
+          ) : state.activeModule === 'trash' ? (
+            <>
+              <TrashPanel />
             </>
           ) : (
             <>

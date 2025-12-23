@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Volume2, Maximize2, X, Tag, Plus } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Play, Pause, Volume2, Maximize2, X, Tag, Plus } from 'lucide-react';
 import { useStore } from '../../App';
 import { Video } from '../../types';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
@@ -19,6 +19,12 @@ export const PreviewPlayer: React.FC<PreviewPlayerProps> = ({ video, onClose }) 
   const [duration] = useState(300); // Mock duration in seconds
   const [selectedTags, setSelectedTags] = useState<string[]>(currentVideo?.tags || []);
   const [newTagInput, setNewTagInput] = useState('');
+  const [showControls, setShowControls] = useState(true);
+  const [volume, setVolume] = useState(100);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [videoOrientation, setVideoOrientation] = useState<'landscape' | 'portrait'>('landscape');
+  const videoAreaRef = useRef<HTMLDivElement>(null);
+  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // 获取系统内既有的标签（从 state.tags 获取，这是从 API 获取的真实标签数据）
   const apiTags = state.tags.map(t => t.name);
@@ -32,12 +38,49 @@ export const PreviewPlayer: React.FC<PreviewPlayerProps> = ({ video, onClose }) 
     }
   }, [currentVideo?.tags]);
 
+  // 检测视频方向（模拟，实际应从视频元数据获取）
+  useEffect(() => {
+    // 这里可以根据实际视频尺寸判断，暂时使用默认横屏
+    setVideoOrientation('landscape');
+  }, [video]);
+
+  // 控制栏自动隐藏逻辑
+  useEffect(() => {
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    
+    if (showControls) {
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false);
+      }, 3000);
+    }
+
+    return () => {
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+      }
+    };
+  }, [showControls, isPlaying]);
+
   const handlePlayPause = () => {
     setIsPlaying(!isPlaying);
+    setShowControls(true);
   };
 
   const handleTimeUpdate = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCurrentTime(Number(e.target.value));
+    setShowControls(true);
+  };
+
+  const handleVideoAreaMouseMove = () => {
+    setShowControls(true);
+  };
+
+  const handleVideoAreaMouseLeave = () => {
+    if (!isPlaying) {
+      setShowControls(true);
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -68,127 +111,153 @@ export const PreviewPlayer: React.FC<PreviewPlayerProps> = ({ video, onClose }) 
 
   const handleSubmitTags = () => {
     dispatch({ type: 'UPDATE_VIDEO_TAGS', payload: { videoId: video.id, tags: selectedTags } });
+    onClose();
+  };
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setVolume(Number(e.target.value));
+  };
+
+  const handleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      videoAreaRef.current?.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullscreen(false);
+    }
   };
 
   const progress = (currentTime / duration) * 100;
 
   return (
-    <div className={`fixed inset-0 top-14 left-[384px] right-0 z-40 ${theme.bg.primary}/95 backdrop-blur-sm flex flex-col overflow-y-auto`}>
-      <div className="w-full max-w-6xl mx-auto px-6 py-6">
-        {/* Player Container - 靠顶部显示 */}
-        <div className={`${theme.bg.secondary} rounded-xl border ${theme.border.primary} shadow-2xl overflow-hidden mb-6`}>
-          {/* Header */}
-          <div className={`px-6 py-4 border-b ${theme.border.primary} flex items-center justify-between ${theme.bg.primary}`}>
-            <div className="flex items-center gap-3">
-              <h3 className={`text-sm font-semibold ${theme.text.secondary}`}>{video.name}</h3>
+    <div className={`fixed inset-0 top-14 left-[384px] right-0 z-40 ${theme.bg.primary}/95 backdrop-blur-sm flex flex-col overflow-hidden`}>
+      <div className={`flex ${videoOrientation === 'landscape' ? 'flex-col' : 'flex-row'} w-full h-full`}>
+        {/* 播放器容器 - 无边框沉浸式设计 */}
+        <div 
+          ref={videoAreaRef}
+          className={`relative bg-black ${videoOrientation === 'landscape' ? 'flex-1' : 'w-2/3'} flex items-center justify-center`}
+          onMouseMove={handleVideoAreaMouseMove}
+          onMouseLeave={handleVideoAreaMouseLeave}
+          onClick={handlePlayPause}
+        >
+          {/* 视频画面 */}
+          <img 
+            src={`https://picsum.photos/seed/${video.id}/1920/1080`} 
+            className="w-full h-full object-contain" 
+            alt="Preview"
+          />
+
+          {/* 顶部悬浮栏 */}
+          <div className={`absolute top-0 left-0 right-0 flex items-center justify-between p-4 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+            {/* 文件名 - 左上角 */}
+            <div className="text-white text-sm font-sans font-medium drop-shadow-lg">
+              {video.name}
             </div>
+            
+            {/* 关闭按钮 - 右上角 */}
             <button
-              onClick={onClose}
-              className={`p-1.5 ${theme.bg.tertiary} rounded-lg ${theme.text.muted} ${theme.text.hover} transition-colors`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="w-8 h-8 bg-black/40 hover:bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center transition-all"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4 text-white" />
             </button>
           </div>
 
-          {/* Video Area */}
-          <div className="relative bg-black aspect-video">
-            <img 
-              src={`https://picsum.photos/seed/${video.id}/1920/1080`} 
-              className="w-full h-full object-cover opacity-80" 
-              alt="Preview"
-            />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <button
-                onClick={handlePlayPause}
-                className="w-20 h-20 bg-white/10 hover:bg-indigo-500/90 backdrop-blur-sm rounded-full flex items-center justify-center transition-all group"
-              >
-                {isPlaying ? (
-                  <Pause className="w-8 h-8 fill-white text-white group-hover:scale-110 transition-transform" />
-                ) : (
-                  <Play className="w-8 h-8 fill-white text-white pl-1 group-hover:scale-110 transition-transform" />
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Controls */}
-          <div className={`px-6 py-4 ${theme.bg.primary} border-t ${theme.border.primary}`}>
-            {/* Progress Bar */}
-            <div className="mb-4">
-              <input
-                type="range"
-                min="0"
-                max={duration}
-                value={currentTime}
-                onChange={handleTimeUpdate}
-                className={`w-full h-1.5 ${theme.bg.tertiary} rounded-full appearance-none cursor-pointer accent-indigo-500`}
-                style={{
-                  background: `linear-gradient(to right, rgb(99, 102, 241) 0%, rgb(99, 102, 241) ${progress}%, rgb(39, 39, 42) ${progress}%, rgb(39, 39, 42) 100%)`
-                }}
-              />
-            </div>
-
-            {/* Control Buttons */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setCurrentTime(Math.max(0, currentTime - 10))}
-                  className={`p-2 ${theme.bg.tertiary} rounded-lg ${theme.text.muted} ${theme.text.hoverPrimary} transition-colors`}
-                >
-                  <SkipBack className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={handlePlayPause}
-                  className={`p-2 ${theme.bg.tertiary} rounded-lg ${theme.text.muted} ${theme.text.hoverPrimary} transition-colors`}
-                >
-                  {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-                </button>
-                <button
-                  onClick={() => setCurrentTime(Math.min(duration, currentTime + 10))}
-                  className={`p-2 ${theme.bg.tertiary} rounded-lg ${theme.text.muted} ${theme.text.hoverPrimary} transition-colors`}
-                >
-                  <SkipForward className="w-5 h-5" />
-                </button>
-                <div className="flex items-center gap-2 ml-4">
-                  <Volume2 className={`w-4 h-4 ${theme.text.muted}`} />
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    defaultValue="100"
-                    className={`w-20 h-1 ${theme.bg.tertiary} rounded-full appearance-none cursor-pointer accent-indigo-500`}
-                  />
-                </div>
-                <span className={`text-xs font-mono ${theme.text.muted} ml-4`}>
-                  {formatTime(currentTime)} / {formatTime(duration)}
-                </span>
+          {/* 底部悬浮控制栏 - 带渐变阴影 */}
+          <div className={`absolute bottom-0 left-0 right-0 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+            {/* 渐变阴影层 */}
+            <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black/80 via-black/40 to-transparent pointer-events-none" />
+            
+            {/* 控制内容 */}
+            <div className="relative px-4 pb-4">
+              {/* 进度条 - 最底部 */}
+              <div className="mb-3">
+                <input
+                  type="range"
+                  min="0"
+                  max={duration}
+                  value={currentTime}
+                  onChange={handleTimeUpdate}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full h-1 bg-white/20 rounded-full appearance-none cursor-pointer"
+                  style={{
+                    background: `linear-gradient(to right, rgb(99, 102, 241) 0%, rgb(99, 102, 241) ${progress}%, rgba(255, 255, 255, 0.2) ${progress}%, rgba(255, 255, 255, 0.2) 100%)`
+                  }}
+                />
               </div>
 
-              <div className="flex items-center gap-2">
-                <button className={`p-2 ${theme.bg.hover} rounded-lg ${theme.text.muted} ${theme.text.hoverPrimary} transition-colors`}>
+              {/* 播放控制 */}
+              <div className="flex items-center justify-between">
+                {/* 左侧：播放/暂停、音量 */}
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePlayPause();
+                    }}
+                    className="w-8 h-8 flex items-center justify-center text-white hover:text-indigo-400 transition-colors"
+                  >
+                    {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                  </button>
+                  
+                  <div className="flex items-center gap-2">
+                    <Volume2 className="w-4 h-4 text-white" />
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={volume}
+                      onChange={handleVolumeChange}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-20 h-1 bg-white/20 rounded-full appearance-none cursor-pointer"
+                      style={{
+                        background: `linear-gradient(to right, rgb(99, 102, 241) 0%, rgb(99, 102, 241) ${volume}%, rgba(255, 255, 255, 0.2) ${volume}%, rgba(255, 255, 255, 0.2) 100%)`
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* 中间：时间码 */}
+                <div className="text-white text-xs font-mono">
+                  {formatTime(currentTime)} / {formatTime(duration)}
+                </div>
+
+                {/* 右侧：全屏 */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleFullscreen();
+                  }}
+                  className="w-8 h-8 flex items-center justify-center text-white hover:text-indigo-400 transition-colors"
+                >
                   <Maximize2 className="w-5 h-5" />
                 </button>
               </div>
             </div>
           </div>
+
         </div>
 
-        {/* 标签区域 - 显示在播放器下方 */}
-        <div className="bg-zinc-900 rounded-xl border border-zinc-800 shadow-xl p-6">
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* 标签列表 */}
-            <div className="flex flex-wrap gap-2 items-center flex-1">
+        {/* 标签管理面板 - 位于视频下方（横屏）或右侧（竖屏） */}
+        <div className={`${theme.bg.secondary} ${videoOrientation === 'landscape' ? 'h-32' : 'w-1/3 h-full'} flex items-center px-6 py-4 border-t ${theme.border.primary}`}>
+          <div className="flex items-center gap-4 w-full">
+            {/* 标签池 - 左侧 */}
+            <div className="flex flex-wrap gap-2 items-center flex-1 overflow-y-auto max-h-full">
               {availableTags.map(tag => (
                 <button
                   key={tag}
                   onClick={() => handleToggleTag(tag)}
-                  className={`px-2.5 py-1 rounded-full text-[10px] border transition-colors ${
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                     selectedTags.includes(tag)
-                      ? 'bg-indigo-500 text-white border-indigo-400'
-                      : `${theme.bg.secondary} ${theme.text.muted} ${theme.border.secondary} ${theme.border.hover}`
+                      ? 'bg-indigo-500 text-white border border-indigo-400'
+                      : `bg-transparent ${theme.text.muted} border ${theme.border.secondary} ${theme.border.hover}`
                   }`}
                 >
-                  {selectedTags.includes(tag) ? '✓ ' : ''}{tag}
+                  {tag}
                 </button>
               ))}
               {/* 已选中的自定义标签（不在 availableTags 中） */}
@@ -196,14 +265,14 @@ export const PreviewPlayer: React.FC<PreviewPlayerProps> = ({ video, onClose }) 
                 <button
                   key={tag}
                   onClick={() => handleToggleTag(tag)}
-                  className="px-2.5 py-1 rounded-full text-[10px] border transition-colors bg-indigo-500 text-white border-indigo-400"
+                  className="px-3 py-1.5 rounded-full text-xs font-medium bg-indigo-500 text-white border border-indigo-400 transition-colors"
                 >
-                  ✓ {tag}
+                  {tag}
                 </button>
               ))}
             </div>
             
-            {/* 添加自定义标签输入框和按钮 */}
+            {/* 操作区 - 右侧 */}
             <div className="flex items-center gap-2 shrink-0">
               <input
                 type="text"
@@ -215,20 +284,20 @@ export const PreviewPlayer: React.FC<PreviewPlayerProps> = ({ video, onClose }) 
                   }
                 }}
                 placeholder="新标签"
-                className={`w-20 px-2.5 py-1 ${theme.bg.primary} border ${theme.border.primary} rounded-full text-[10px] ${theme.text.secondary} focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none placeholder-zinc-600`}
+                className={`w-24 px-3 py-1.5 ${theme.bg.primary} border ${theme.border.primary} rounded-full text-xs ${theme.text.secondary} focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none placeholder:${theme.text.muted.replace('text-', '')}`}
               />
               <button
                 onClick={handleAddCustomTag}
-                className={`px-2.5 py-1 rounded-full text-[10px] border transition-colors ${theme.bg.secondary} ${theme.text.muted} ${theme.border.secondary} ${theme.border.hover} ${theme.text.hover} flex items-center gap-1`}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${theme.bg.secondary} ${theme.text.muted} ${theme.border.secondary} ${theme.border.hover} ${theme.text.hover} flex items-center gap-1.5`}
               >
-                <Plus className="w-3 h-3" />
+                <Plus className="w-3.5 h-3.5" />
                 添加
               </button>
               <button
                 onClick={handleSubmitTags}
-                className="px-2.5 py-1 rounded-full text-[10px] border transition-colors bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-400 flex items-center gap-1.5 shrink-0"
+                className="px-4 py-1.5 rounded-full text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-400 transition-colors flex items-center gap-1.5 shrink-0"
               >
-                <Tag className="w-3 h-3" />
+                <Tag className="w-3.5 h-3.5" />
                 提交标签
               </button>
             </div>

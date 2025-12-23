@@ -278,21 +278,32 @@ export const SharePage: React.FC = () => {
         alert(result.error);
       } else if (result.url) {
         // 构建完整的下载URL
-        const env = import.meta.env as any;
+          // 统一使用 getApiBaseUrl 函数获取 API 地址
         let baseUrl: string;
-        if (env.VITE_API_BASE_URL) {
-          baseUrl = env.VITE_API_BASE_URL.replace('/api', '');
-        } else if (env.PROD) {
-          baseUrl = 'https://api.vioflow.cc';
-        } else {
-          const hostname = window.location.hostname;
-          const serverIp = '192.168.110.112';
-          if (hostname === 'localhost' || hostname === '127.0.0.1') {
-            baseUrl = `http://${serverIp}:3002`;
-          } else if (hostname.match(/^(192\.168\.|172\.|10\.)/)) {
-            baseUrl = `http://${hostname}:3002`;
+          try {
+            const { getApiBaseUrl } = await import('../../api/client');
+            const apiBaseUrl = getApiBaseUrl();
+            // 移除 /api 后缀，因为 result.url 已经包含完整路径
+            baseUrl = apiBaseUrl.replace('/api', '');
+          } catch (error) {
+          console.error('获取 API 地址失败:', error);
+          // 如果获取失败，尝试从环境变量获取
+          const env = import.meta.env as any;
+          if (env.VITE_API_BASE_URL) {
+            baseUrl = env.VITE_API_BASE_URL.replace('/api', '');
           } else {
-            baseUrl = `http://${serverIp}:3002`;
+            // 最后的后备方案：使用当前hostname推断（仅开发环境）
+            if (env.DEV && typeof window !== 'undefined') {
+            const hostname = window.location.hostname;
+              const port = env.VITE_API_PORT || '3002';
+            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+              baseUrl = `http://localhost:${port}`;
+            } else {
+              baseUrl = `http://${hostname}:${port}`;
+              }
+            } else {
+              throw new Error('无法确定 API 地址，请配置 VITE_API_BASE_URL');
+            }
           }
         }
         window.open(`${baseUrl}${result.url}`, '_blank');
@@ -535,7 +546,7 @@ export const SharePage: React.FC = () => {
                 <video
                   ref={videoRef}
                   src={videoUrl}
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-contain cursor-pointer"
                   onTimeUpdate={handleTimeUpdate}
                   onLoadedMetadata={() => {
                     if (videoRef.current) {
@@ -545,23 +556,22 @@ export const SharePage: React.FC = () => {
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
                   onEnded={() => setIsPlaying(false)}
+                  onClick={handlePlayPause}
                 />
 
-                {/* Play/Pause Overlay - 只在暂停时或鼠标悬停时显示 */}
-                <div 
-                  className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${isPlaying ? 'opacity-0 hover:opacity-100' : 'opacity-100'}`}
-                  onClick={handlePlayPause}
-                >
-                  <button
-                    className="w-16 h-16 sm:w-20 sm:h-20 bg-black/40 hover:bg-indigo-500/90 backdrop-blur-sm rounded-full flex items-center justify-center transition-all group"
+                {/* 播放按钮覆盖层 - 只在暂停时显示 */}
+                {!isPlaying && (
+                  <div 
+                    className="absolute inset-0 flex items-center justify-center cursor-pointer"
+                    onClick={handlePlayPause}
                   >
-                    {isPlaying ? (
-                      <Pause className="w-6 h-6 sm:w-8 sm:h-8 fill-white text-white group-hover:scale-110 transition-transform" />
-                    ) : (
+                    <button
+                      className="w-16 h-16 sm:w-20 sm:h-20 bg-black/40 hover:bg-indigo-500/90 backdrop-blur-sm rounded-full flex items-center justify-center transition-all group"
+                    >
                       <Play className="w-6 h-6 sm:w-8 sm:h-8 fill-white text-white pl-1 group-hover:scale-110 transition-transform" />
-                    )}
-                  </button>
-                </div>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Video Controls */}

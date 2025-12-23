@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, Inject, forwardRef, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Project, ProjectStatus } from './entities/project.entity';
 import { ProjectMember, MemberRole } from './entities/project-member.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
@@ -9,6 +9,8 @@ import { TeamsService } from '../teams/teams.service';
 import { VideosService } from '../videos/videos.service';
 import { TeamRole } from '../teams/entities/team-member.entity';
 import { AuditLog } from '../audit/entities/audit-log.entity';
+import { Delivery } from '../deliveries/entities/delivery.entity';
+import { ShareLink } from '../shares/entities/share-link.entity';
 
 @Injectable()
 export class ProjectsService {
@@ -19,9 +21,14 @@ export class ProjectsService {
     private memberRepository: Repository<ProjectMember>,
     @InjectRepository(AuditLog)
     private auditLogRepository: Repository<AuditLog>,
+    @InjectRepository(Delivery)
+    private deliveryRepository: Repository<Delivery>,
+    @InjectRepository(ShareLink)
+    private shareLinkRepository: Repository<ShareLink>,
     @Inject(forwardRef(() => TeamsService))
     private teamsService: TeamsService,
     private videosService: VideosService,
+    private dataSource: DataSource,
   ) {}
 
   /**
@@ -80,36 +87,53 @@ export class ProjectsService {
       }
     }
 
-    const project = this.projectRepository.create({
-      ...createProjectDto,
-      team_id: finalTeamId,
-      created_date: new Date(),
-      last_activity_at: new Date(),
-      last_opened_at: new Date(),
-    });
-    const savedProject = await this.projectRepository.save(project);
+    // 使用事务确保数据一致性
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    // 添加创建者为owner
-    const owner = this.memberRepository.create({
-      project_id: savedProject.id,
-      user_id: userId,
-      role: MemberRole.OWNER,
-    });
-    await this.memberRepository.save(owner);
-
-    // 记录审计日志
-    if (finalTeamId) {
-      await this.auditLogRepository.save({
+    try {
+      const project = queryRunner.manager.create(Project, {
+        ...createProjectDto,
         team_id: finalTeamId,
-        user_id: userId,
-        action: 'create',
-        resource_type: 'project',
-        resource_id: savedProject.id,
-        new_value: { name: savedProject.name, client: savedProject.client },
+        created_date: new Date(),
+        last_activity_at: new Date(),
+        last_opened_at: new Date(),
       });
-    }
+      const savedProject = await queryRunner.manager.save(Project, project);
 
-    return savedProject;
+      // 添加创建者为owner
+      const owner = queryRunner.manager.create(ProjectMember, {
+        project_id: savedProject.id,
+        user_id: userId,
+        role: MemberRole.OWNER,
+      });
+      await queryRunner.manager.save(ProjectMember, owner);
+
+      // 记录审计日志
+      if (finalTeamId) {
+        await queryRunner.manager.save(AuditLog, {
+          team_id: finalTeamId,
+          user_id: userId,
+          action: 'create',
+          resource_type: 'project',
+          resource_id: savedProject.id,
+          new_value: { name: savedProject.name, client: savedProject.client },
+        });
+      }
+
+      // 提交事务
+      await queryRunner.commitTransaction();
+      return savedProject;
+    } catch (error: any) {
+      // 回滚事务
+      await queryRunner.rollbackTransaction();
+      console.error('[ProjectsService] 创建项目失败:', error);
+      throw error;
+    } finally {
+      // 释放查询运行器
+      await queryRunner.release();
+    }
   }
 
   async findAll(filters?: {
@@ -118,7 +142,10 @@ export class ProjectsService {
     month?: string;
     teamId?: string;
     groupId?: string;
-  }): Promise<Project[]> {
+    page?: number;
+    limit?: number;
+    search?: string; // 搜索关键词
+  }): Promise<{ data: Project[]; total: number; page: number; limit: number }> {
     const query = this.projectRepository.createQueryBuilder('project');
 
     // 强制要求 teamId（多租户模式）
@@ -128,7 +155,7 @@ export class ProjectsService {
     } else {
       // 如果没有提供 teamId，返回空数组（多租户模式下必须提供 teamId）
       console.log('[ProjectsService] ⚠️ 没有提供 teamId，返回空数组');
-      return [];
+      return { data: [], total: 0, page: 1, limit: 50 };
     }
 
     if (filters?.status) {
@@ -147,9 +174,34 @@ export class ProjectsService {
       });
     }
 
+    // 搜索功能：在名称、客户、负责人中搜索
+    if (filters?.search) {
+      query.andWhere(
+        '(project.name ILIKE :search OR project.client ILIKE :search OR project.lead ILIKE :search)',
+        { search: `%${filters.search}%` }
+      );
+    }
+
+    // 获取总数
+    const total = await query.getCount();
+
+    // 分页
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 50;
+    const skip = (page - 1) * limit;
+    
+    query.skip(skip).take(limit);
+    query.orderBy('project.created_date', 'DESC');
+
     const results = await query.getMany();
-    console.log(`[ProjectsService] 找到 ${results.length} 个项目`);
-    return results;
+    console.log(`[ProjectsService] 找到 ${results.length} 个项目 (总数: ${total}, 页码: ${page}, 每页: ${limit})`);
+    
+    return {
+      data: results,
+      total,
+      page,
+      limit,
+    };
   }
 
   async findOne(id: string): Promise<Project> {
@@ -287,28 +339,83 @@ export class ProjectsService {
    * 删除项目
    */
   async remove(id: string, userId: string): Promise<void> {
-    const { project } = await this.checkProjectPermission(
-      id,
-      userId,
-      [TeamRole.SUPER_ADMIN, TeamRole.ADMIN], // 只有管理员可以删除项目
-    );
+    // 使用事务确保数据一致性
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    // 删除该项目下的所有视频及其存储文件
-    await this.videosService.deleteByProject(id);
+    try {
+      console.log(`[ProjectsService] 开始删除项目: ${id}, 用户: ${userId}`);
+      
+      const { project } = await this.checkProjectPermission(
+        id,
+        userId,
+        [TeamRole.SUPER_ADMIN, TeamRole.ADMIN], // 只有管理员可以删除项目
+      );
 
-    // 记录审计日志
-    if (project.team_id) {
-      await this.auditLogRepository.save({
-        team_id: project.team_id,
-        user_id: userId,
-        action: 'delete',
-        resource_type: 'project',
-        resource_id: id,
-        old_value: { name: project.name, client: project.client },
+      // 1. 软删除该项目下的所有视频（放入回收站）
+      console.log(`[ProjectsService] 软删除项目下的所有视频...`);
+      const deletedVideoCount = await this.videosService.deleteByProject(id);
+      console.log(`[ProjectsService] 已软删除 ${deletedVideoCount} 个视频`);
+
+      // 2. 删除项目成员
+      console.log(`[ProjectsService] 删除项目成员...`);
+      const deletedMembers = await queryRunner.manager.delete(ProjectMember, { project_id: id });
+      console.log(`[ProjectsService] 已删除 ${deletedMembers.affected || 0} 个项目成员`);
+
+      // 3. 删除关联的分享链接
+      console.log(`[ProjectsService] 删除关联的分享链接...`);
+      const deletedShareLinks = await queryRunner.manager.delete(ShareLink, { project_id: id });
+      console.log(`[ProjectsService] 已删除 ${deletedShareLinks.affected || 0} 个分享链接`);
+
+      // 4. 删除交付记录（Delivery）
+      console.log(`[ProjectsService] 删除交付记录...`);
+      const deletedDeliveries = await queryRunner.manager.delete(Delivery, { project_id: id });
+      console.log(`[ProjectsService] 已删除 ${deletedDeliveries.affected || 0} 个交付记录`);
+
+      // 5. 记录审计日志
+      if (project.team_id) {
+        await queryRunner.manager.save(AuditLog, {
+          team_id: project.team_id,
+          user_id: userId,
+          action: 'delete',
+          resource_type: 'project',
+          resource_id: id,
+          old_value: { name: project.name, client: project.client },
+        });
+        console.log(`[ProjectsService] 审计日志已记录`);
+      }
+
+      // 6. 删除项目记录
+      console.log(`[ProjectsService] 删除项目记录...`);
+      await queryRunner.manager.remove(Project, project);
+      console.log(`[ProjectsService] 项目 ${id} 已成功删除`);
+
+      // 提交事务
+      await queryRunner.commitTransaction();
+    } catch (error: any) {
+      // 回滚事务
+      await queryRunner.rollbackTransaction();
+      
+      console.error(`[ProjectsService] 删除项目失败: ${id}`, {
+        message: error?.message,
+        stack: error?.stack,
+        code: error?.code,
+        detail: error?.detail,
+        constraint: error?.constraint,
       });
+      
+      // 如果是数据库约束错误，提供更友好的错误信息
+      if (error?.code === '23503') {
+        throw new InternalServerErrorException('无法删除项目：存在关联数据，请先删除相关数据');
+      }
+      
+      // 重新抛出错误
+      throw error;
+    } finally {
+      // 释放查询运行器
+      await queryRunner.release();
     }
-
-    await this.projectRepository.remove(project);
   }
 
   async getMembers(projectId: string, userId: string): Promise<ProjectMember[]> {

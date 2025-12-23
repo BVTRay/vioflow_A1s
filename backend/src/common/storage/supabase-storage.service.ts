@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { ConfigService } from '@nestjs/config';
+import { IStorageService } from './storage.interface';
 
 @Injectable()
-export class SupabaseStorageService {
+export class SupabaseStorageService implements IStorageService {
   private supabase: SupabaseClient;
   private bucketName: string;
 
@@ -91,6 +92,34 @@ export class SupabaseStorageService {
 
     if (error) {
       throw new Error(`Failed to delete file: ${error.message}`);
+    }
+  }
+
+  async downloadFile(path: string): Promise<Buffer | null> {
+    if (!this.supabase) {
+      throw new Error('Supabase is not configured');
+    }
+
+    try {
+      const { data, error } = await this.supabase.storage
+        .from(this.bucketName)
+        .download(path);
+
+      if (error) {
+        console.error('[SupabaseStorageService] 下载失败:', error);
+        return null;
+      }
+
+      if (!data) {
+        return null;
+      }
+
+      // 将Blob转换为Buffer
+      const arrayBuffer = await data.arrayBuffer();
+      return Buffer.from(arrayBuffer);
+    } catch (error: any) {
+      console.error('[SupabaseStorageService] 下载异常:', error);
+      return null;
     }
   }
 

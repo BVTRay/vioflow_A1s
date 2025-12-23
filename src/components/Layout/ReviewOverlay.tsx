@@ -484,7 +484,7 @@ export const ReviewOverlay: React.FC<ReviewOverlayProps> = ({ isOpen, onClose })
                     <video
                       ref={videoRef}
                       src={videoUrl}
-                      className="w-full h-full object-contain"
+                      className="w-full h-full object-contain cursor-pointer"
                       onTimeUpdate={handleTimeUpdate}
                       onLoadedMetadata={() => {
                         if (videoRef.current) {
@@ -501,20 +501,21 @@ export const ReviewOverlay: React.FC<ReviewOverlayProps> = ({ isOpen, onClose })
                           loadVideoUrl();
                         }
                       }}
+                      onClick={handlePlayPause}
                     />
-                    {/* Play/Pause Overlay */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <button
+                    {/* 播放按钮覆盖层 - 只在暂停时显示 */}
+                    {!isPlaying && (
+                      <div 
+                        className="absolute inset-0 flex items-center justify-center cursor-pointer pointer-events-auto"
                         onClick={handlePlayPause}
-                        className="pointer-events-auto w-20 h-20 bg-white/10 hover:bg-indigo-500/90 backdrop-blur-sm rounded-full flex items-center justify-center transition-all group"
                       >
-                        {isPlaying ? (
-                          <Pause className="w-8 h-8 fill-white text-white group-hover:scale-110 transition-transform" />
-                        ) : (
+                        <button
+                          className="w-20 h-20 bg-white/10 hover:bg-indigo-500/90 backdrop-blur-sm rounded-full flex items-center justify-center transition-all group"
+                        >
                           <Play className="w-8 h-8 fill-white text-white pl-1 group-hover:scale-110 transition-transform" />
-                        )}
-                      </button>
-                    </div>
+                        </button>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">

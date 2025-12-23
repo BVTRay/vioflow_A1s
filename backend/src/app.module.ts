@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { DatabaseModule } from './database/database.module';
 import { StorageModule } from './common/storage/storage.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -23,6 +25,7 @@ import { ArchivingModule } from './modules/archiving/archiving.module';
 import { TrackingModule } from './modules/tracking/tracking.module';
 import { SearchModule } from './modules/search/search.module';
 import { DevAdminModule } from './modules/admin/dev-admin.module';
+import { QueueModule } from './modules/queue/queue.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -32,6 +35,12 @@ import { AppController } from './app.controller';
       envFilePath: '.env',
     }),
     ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000, // 1分钟
+        limit: 100, // 100次请求
+      },
+    ]),
     DatabaseModule,
     StorageModule,
     AuthModule,
@@ -54,8 +63,15 @@ import { AppController } from './app.controller';
     TrackingModule,
     SearchModule,
     DevAdminModule,
+    QueueModule,
   ],
   controllers: [AppController],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}
 

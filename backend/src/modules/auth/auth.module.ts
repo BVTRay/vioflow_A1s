@@ -17,12 +17,21 @@ import { UsersModule } from '../users/users.module';
     TypeOrmModule.forFeature([User]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get('JWT_SECRET', 'your-secret-key'),
-        signOptions: {
-          expiresIn: configService.get('JWT_EXPIRES_IN', '7d'),
-        },
-      }),
+      useFactory: (configService: ConfigService) => {
+        const jwtSecret = configService.get<string>('JWT_SECRET');
+        if (!jwtSecret) {
+          throw new Error('JWT_SECRET environment variable is required');
+        }
+        
+        return {
+          secret: jwtSecret,
+          signOptions: {
+            expiresIn: configService.get('JWT_EXPIRES_IN', '7d'),
+            issuer: configService.get('JWT_ISSUER', 'vioflow-api'),
+            audience: configService.get('JWT_AUDIENCE', 'vioflow-client'),
+          },
+        };
+      },
       inject: [ConfigService],
     }),
   ],

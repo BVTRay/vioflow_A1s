@@ -1,4 +1,4 @@
-import apiClient from './client';
+import apiClient, { getApiBaseUrl } from './client';
 
 export interface Annotation {
   id: string;
@@ -58,25 +58,8 @@ export const annotationsApi = {
 
   // 通过分享token获取批注（公开接口）
   getByShareToken: async (token: string): Promise<Annotation[]> => {
-    // 动态获取 API 地址
-    const env = (import.meta as any).env;
-    let apiBaseUrl: string;
-    if (env.VITE_API_BASE_URL) {
-      apiBaseUrl = env.VITE_API_BASE_URL;
-    } else if (env.PROD) {
-      apiBaseUrl = env.VITE_API_BASE_URL || 'https://api.vioflow.cc/api';
-    } else {
-      const hostname = window.location.hostname;
-      const port = '3002';
-      const serverIp = '192.168.110.112';
-      if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        apiBaseUrl = `http://${serverIp}:${port}/api`;
-      } else if (hostname.match(/^(192\.168\.|172\.|10\.)/)) {
-        apiBaseUrl = `http://${hostname}:${port}/api`;
-      } else {
-        apiBaseUrl = `http://${serverIp}:${port}/api`;
-      }
-    }
+    // 统一使用 getApiBaseUrl 函数获取 API 地址
+    const apiBaseUrl = getApiBaseUrl();
     const response = await fetch(`${apiBaseUrl}/shares/${token}/annotations`, {
       method: 'GET',
       headers: {
@@ -91,25 +74,8 @@ export const annotationsApi = {
     token: string,
     data: { timecode: string; content: string; clientName?: string },
   ): Promise<Annotation | { error: string }> => {
-    // 动态获取 API 地址
-    const env = (import.meta as any).env;
-    let apiBaseUrl: string;
-    if (env.VITE_API_BASE_URL) {
-      apiBaseUrl = env.VITE_API_BASE_URL;
-    } else if (env.PROD) {
-      apiBaseUrl = env.VITE_API_BASE_URL || 'https://api.vioflow.cc/api';
-    } else {
-      const hostname = window.location.hostname;
-      const port = '3002';
-      const serverIp = '192.168.110.112';
-      if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        apiBaseUrl = `http://${serverIp}:${port}/api`;
-      } else if (hostname.match(/^(192\.168\.|172\.|10\.)/)) {
-        apiBaseUrl = `http://${hostname}:${port}/api`;
-      } else {
-        apiBaseUrl = `http://${serverIp}:${port}/api`;
-      }
-    }
+    // 统一使用 getApiBaseUrl 函数获取 API 地址
+    const apiBaseUrl = getApiBaseUrl();
     
     // 构建请求头，如果有登录 token 则传递
     const headers: Record<string, string> = {
@@ -117,7 +83,7 @@ export const annotationsApi = {
     };
     
     // 从 localStorage 获取登录 token
-    const authToken = localStorage.getItem('token') || localStorage.getItem('access_token');
+    const authToken = localStorage.getItem('auth_token') || localStorage.getItem('token') || localStorage.getItem('access_token');
     if (authToken) {
       headers['Authorization'] = `Bearer ${authToken}`;
     }

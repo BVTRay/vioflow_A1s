@@ -19,14 +19,28 @@ export interface UpdateProjectRequest {
 }
 
 export const projectsApi = {
-  getAll: async (filters?: { status?: string; group?: string; month?: string; teamId?: string }): Promise<Project[]> => {
+  getAll: async (filters?: { 
+    status?: string; 
+    group?: string; 
+    month?: string; 
+    teamId?: string;
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<Project[] | { data: Project[]; total: number; page: number; limit: number }> => {
     // 如果没有提供 teamId，从 apiClient 获取当前团队 ID
     const currentTeamId = filters?.teamId || apiClient.getTeamId();
     const params = currentTeamId ? { ...filters, teamId: currentTeamId } : filters;
     console.log('📡 请求项目列表:', { filters, currentTeamId, params });
     const result = await apiClient.get('/projects', { params });
+    
+    // 兼容新旧格式：如果返回的是分页格式，提取data；否则直接返回数组
+    if (result && typeof result === 'object' && 'data' in result) {
+      console.log('📥 收到项目列表（分页）:', result.data?.length || 0, '个项目，总数:', result.total);
+      return result;
+    }
     console.log('📥 收到项目列表:', result?.length || 0, '个项目');
-    return result;
+    return result || [];
   },
 
   getActive: async (limit?: number, teamId?: string): Promise<Project[]> => {

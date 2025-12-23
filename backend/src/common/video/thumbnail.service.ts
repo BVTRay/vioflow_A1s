@@ -1,16 +1,19 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import * as ffmpeg from 'fluent-ffmpeg';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { SupabaseStorageService } from '../storage/supabase-storage.service';
+import { IStorageService } from '../storage/storage.interface';
 
 @Injectable()
 export class ThumbnailService {
   private readonly logger = new Logger(ThumbnailService.name);
   private readonly tempDir = path.join(os.tmpdir(), 'video-thumbnails');
 
-  constructor(private readonly storageService: SupabaseStorageService) {
+  constructor(
+    @Inject('IStorageService')
+    private readonly storageService: IStorageService,
+  ) {
     // 确保临时目录存在
     if (!fs.existsSync(this.tempDir)) {
       fs.mkdirSync(this.tempDir, { recursive: true });

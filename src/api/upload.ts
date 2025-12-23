@@ -1,5 +1,5 @@
-import axios from 'axios';
-import apiClient from './client';
+import apiClient, { getApiBaseUrl } from './client';
+import { AxiosRequestConfig } from 'axios';
 
 export interface UploadVideoResponse {
   id: string;
@@ -20,34 +20,6 @@ export interface UploadVideoResponse {
   aspectRatio?: 'landscape' | 'portrait';
   thumbnailUrl?: string;
 }
-
-const getApiBaseUrl = () => {
-  if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL;
-  }
-  if (import.meta.env.PROD) {
-    return import.meta.env.VITE_API_BASE_URL || 'https://api.vioflow.cc/api';
-  }
-  // 开发环境：根据当前访问的域名动态调整 API 地址
-  const hostname = window.location.hostname;
-  const port = '3002';
-  
-  // 默认使用服务器 IP 地址
-  const serverIp = '192.168.110.112';
-  
-  // 如果是 localhost 或 127.0.0.1，使用服务器 IP
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return `http://${serverIp}:${port}/api`;
-  }
-  
-  // 如果是内网 IP（192.168.x.x 或 172.x.x.x），使用相同的 IP
-  if (hostname.match(/^(192\.168\.|172\.|10\.)/)) {
-    return `http://${hostname}:${port}/api`;
-  }
-  
-  // 默认使用服务器 IP
-  return `http://${serverIp}:${port}/api`;
-};
 
 export const uploadApi = {
   uploadVideo: async (
@@ -70,25 +42,46 @@ export const uploadApi = {
       formData.append('changeLog', changeLog);
     }
 
-    const token = apiClient.getToken();
-    const teamId = apiClient.getTeamId();
+    try {
+      // 使用 apiClient.request 方法，这样可以自动处理 token 和 teamId，同时支持上传进度
+      const config: AxiosRequestConfig = {
+        method: 'POST',
+        url: '/upload/video',
+        data: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 600000, // 10分钟超时（用于500MB文件上传）
+        signal,
+        onUploadProgress: (progressEvent) => {
+          if (onProgress && progressEvent.total) {
+            const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            onProgress(progress);
+          }
+        },
+      };
 
-    const response = await axios.post(`${getApiBaseUrl()}/upload/video`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        ...(token && { Authorization: `Bearer ${token}` }),
-        ...(teamId && { 'X-Team-Id': teamId }),
-      },
-      signal,
-      onUploadProgress: (progressEvent) => {
-        if (onProgress && progressEvent.total) {
-          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          onProgress(progress);
-        }
-      },
-    });
-
-    return response.data;
+      const response = await apiClient.request<UploadVideoResponse>(config);
+      return response;
+    } catch (error: any) {
+      // 详细记录错误信息
+      const errorInfo = {
+        message: error?.message,
+        response: error?.response?.data,
+        status: error?.response?.status,
+        statusText: error?.response?.statusText,
+        stack: error?.stack,
+      };
+      console.error('[uploadApi] 上传失败:', errorInfo);
+      console.error('[uploadApi] 完整错误对象:', error);
+      
+      // 提取错误消息用于调试
+      const errorMessage = error?.response?.data?.message || error?.message || '上传失败';
+      console.error('[uploadApi] 提取的错误消息:', errorMessage);
+      
+      // 重新抛出错误，让调用者处理
+      throw error;
+    }
   },
 };
 

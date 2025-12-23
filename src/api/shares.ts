@@ -1,4 +1,4 @@
-import apiClient from './client';
+import apiClient, { getApiBaseUrl } from './client';
 
 export interface ShareLink {
   id: string;
@@ -56,24 +56,8 @@ export const sharesApi = {
 
   getByToken: async (token: string): Promise<ShareLinkDetail> => {
     // 分享链接不需要认证，使用公共请求
-    const env = import.meta.env as any;
-    let apiBaseUrl: string;
-    if (env.VITE_API_BASE_URL) {
-      apiBaseUrl = env.VITE_API_BASE_URL;
-    } else if (env.PROD) {
-      apiBaseUrl = env.VITE_API_BASE_URL || 'https://api.vioflow.cc/api';
-    } else {
-      const hostname = window.location.hostname;
-      const port = '3002';
-      const serverIp = '192.168.110.112';
-      if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        apiBaseUrl = `http://${serverIp}:${port}/api`;
-      } else if (hostname.match(/^(192\.168\.|172\.|10\.)/)) {
-        apiBaseUrl = `http://${hostname}:${port}/api`;
-      } else {
-        apiBaseUrl = `http://${serverIp}:${port}/api`;
-      }
-    }
+    // 统一使用 getApiBaseUrl 函数获取 API 地址
+    const apiBaseUrl = getApiBaseUrl();
     const response = await fetch(`${apiBaseUrl}/shares/${token}`, {
       method: 'GET',
       headers: {
@@ -93,24 +77,8 @@ export const sharesApi = {
 
   verifyPassword: async (token: string, password: string): Promise<any> => {
     // 密码验证不需要认证，使用公共请求
-    const env = import.meta.env as any;
-    let apiBaseUrl: string;
-    if (env.VITE_API_BASE_URL) {
-      apiBaseUrl = env.VITE_API_BASE_URL;
-    } else if (env.PROD) {
-      apiBaseUrl = env.VITE_API_BASE_URL || 'https://api.vioflow.cc/api';
-    } else {
-      const hostname = window.location.hostname;
-      const port = '3002';
-      const serverIp = '192.168.110.112';
-      if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        apiBaseUrl = `http://${serverIp}:${port}/api`;
-      } else if (hostname.match(/^(192\.168\.|172\.|10\.)/)) {
-        apiBaseUrl = `http://${hostname}:${port}/api`;
-      } else {
-        apiBaseUrl = `http://${serverIp}:${port}/api`;
-      }
-    }
+    // 统一使用 getApiBaseUrl 函数获取 API 地址
+    const apiBaseUrl = getApiBaseUrl();
     const response = await fetch(`${apiBaseUrl}/shares/${token}/verify-password`, {
       method: 'POST',
       headers: {
@@ -123,24 +91,8 @@ export const sharesApi = {
 
   // 公开接口：通过分享token导出PDF
   exportPdf: async (token: string): Promise<{ url: string; filename: string; error?: string }> => {
-    const env = import.meta.env as any;
-    let apiBaseUrl: string;
-    if (env.VITE_API_BASE_URL) {
-      apiBaseUrl = env.VITE_API_BASE_URL;
-    } else if (env.PROD) {
-      apiBaseUrl = env.VITE_API_BASE_URL || 'https://api.vioflow.cc/api';
-    } else {
-      const hostname = window.location.hostname;
-      const port = '3002';
-      const serverIp = '192.168.110.112';
-      if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        apiBaseUrl = `http://${serverIp}:${port}/api`;
-      } else if (hostname.match(/^(192\.168\.|172\.|10\.)/)) {
-        apiBaseUrl = `http://${hostname}:${port}/api`;
-      } else {
-        apiBaseUrl = `http://${serverIp}:${port}/api`;
-      }
-    }
+    // 统一使用 getApiBaseUrl 函数获取 API 地址
+    const apiBaseUrl = getApiBaseUrl();
     const response = await fetch(`${apiBaseUrl}/shares/${token}/export-pdf`, {
       method: 'GET',
       headers: {

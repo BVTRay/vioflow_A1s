@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, FileVideo } from 'lucide-react';
 import { devAdminApi, DevAdminUser, UpdateUserDto, CreateUserDto } from '../../api/dev-admin';
 import apiClient from '../../api/client';
 import { isDevMode } from '../../utils/devMode';
@@ -163,6 +163,27 @@ export const DevAdminPanel: React.FC = () => {
           </button>
           <div className="h-4 w-px bg-gray-300"></div>
           <h1 className="text-xl font-medium text-gray-900">纷呈开发者后台</h1>
+        </div>
+      </div>
+
+      {/* 导航标签 */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex gap-1">
+            <button
+              onClick={() => navigate('/admin/users')}
+              className="px-4 py-3 text-sm font-medium text-gray-900 border-b-2 border-indigo-600"
+            >
+              用户管理
+            </button>
+            <button
+              onClick={() => navigate('/admin/videos')}
+              className="px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-900 flex items-center gap-2"
+            >
+              <FileVideo className="w-4 h-4" />
+              视频管理
+            </button>
+          </div>
         </div>
       </div>
       

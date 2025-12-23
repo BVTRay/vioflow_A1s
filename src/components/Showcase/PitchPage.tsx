@@ -293,7 +293,7 @@ export const PitchPage: React.FC = () => {
                   <video
                     ref={videoRef}
                     src={currentVideo.url}
-                    className="w-full h-full object-contain"
+                    className="w-full h-full object-contain cursor-pointer"
                     onTimeUpdate={handleTimeUpdate}
                     onLoadedMetadata={() => {
                       if (videoRef.current) {
@@ -303,24 +303,23 @@ export const PitchPage: React.FC = () => {
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
                     onEnded={() => setIsPlaying(false)}
+                    onClick={handlePlayPause}
                     playsInline
                   />
 
-                  {/* 播放/暂停按钮覆盖层 */}
-                  <div 
-                    className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${isPlaying ? 'opacity-0 hover:opacity-100' : 'opacity-100'}`}
-                    onClick={handlePlayPause}
-                  >
-                    <button
-                      className="w-16 h-16 sm:w-20 sm:h-20 bg-black/40 hover:bg-fuchsia-500/90 backdrop-blur-sm rounded-full flex items-center justify-center transition-all group"
+                  {/* 播放按钮覆盖层 - 只在暂停时显示 */}
+                  {!isPlaying && (
+                    <div 
+                      className="absolute inset-0 flex items-center justify-center cursor-pointer"
+                      onClick={handlePlayPause}
                     >
-                      {isPlaying ? (
-                        <Pause className="w-6 h-6 sm:w-8 sm:h-8 fill-white text-white group-hover:scale-110 transition-transform" />
-                      ) : (
+                      <button
+                        className="w-16 h-16 sm:w-20 sm:h-20 bg-black/40 hover:bg-fuchsia-500/90 backdrop-blur-sm rounded-full flex items-center justify-center transition-all group"
+                      >
                         <Play className="w-6 h-6 sm:w-8 sm:h-8 fill-white text-white pl-1 group-hover:scale-110 transition-transform" />
-                      )}
-                    </button>
-                  </div>
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </div>

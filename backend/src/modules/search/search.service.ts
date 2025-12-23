@@ -11,23 +11,34 @@ export class SearchService {
     private showcaseService: ShowcaseService,
   ) {}
 
-  async globalSearch(query: string) {
-    const [projects, videos, packages] = await Promise.all([
-      this.projectsService.findAll().then(projects =>
-        projects.filter(p => p.name.toLowerCase().includes(query.toLowerCase()))
-      ),
-      this.videosService.findAll().then(videos =>
-        videos.filter(v => v.name.toLowerCase().includes(query.toLowerCase()))
-      ),
+  async globalSearch(query: string, teamId?: string, limit: number = 20) {
+    // 使用数据库侧搜索，而不是在前端过滤
+    const [projectsResult, videosResult, packages] = await Promise.all([
+      this.projectsService.findAll({
+        teamId,
+        search: query,
+        limit,
+      }),
+      this.videosService.findAll({
+        teamId,
+        search: query,
+        limit,
+      }),
+      // Showcase服务暂时保持原样，后续可以优化
       this.showcaseService.findAll().then(packages =>
-        packages.filter(p => p.name.toLowerCase().includes(query.toLowerCase()))
+        packages.filter(p => p.name.toLowerCase().includes(query.toLowerCase())).slice(0, limit)
       ),
     ]);
 
     return {
-      projects,
-      videos,
+      projects: projectsResult.data || [],
+      videos: videosResult.data || [],
       packages,
+      total: {
+        projects: projectsResult.total || 0,
+        videos: videosResult.total || 0,
+        packages: packages.length,
+      },
     };
   }
 }

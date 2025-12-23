@@ -10,7 +10,11 @@ import {
   UploadedFile,
   ParseFilePipe,
   MaxFileSizeValidator,
+  BadRequestException,
+  InternalServerErrorException,
+  HttpException,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UploadsService } from './uploads.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -36,17 +40,27 @@ export class UploadsController {
     return this.uploadsService.testSupabaseConnection();
   }
 
+  @Get('health')
+  async healthCheck() {
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      service: 'upload',
+    };
+  }
+
+  @Throttle({ default: { limit: 10, ttl: 60000 } }) // 上传接口：1分钟内最多10次
   @Post('video')
   @UseInterceptors(FileInterceptor('file'))
   async uploadVideo(
     @UploadedFile(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 * 1024 }), // 10GB
+          new MaxFileSizeValidator({ maxSize: 500 * 1024 * 1024 }), // 500MB
         ],
-        exceptionFactory: (error) => {
+        exceptionFactory: (error: any) => {
           console.error('[UploadsController] 文件验证失败:', error);
-          return error;
+          return new BadRequestException(`文件验证失败: ${error?.message || error || '未知错误'}`);
         },
       }),
     )
@@ -64,11 +78,11 @@ export class UploadsController {
       });
 
       if (!file) {
-        throw new Error('文件不能为空');
+        throw new BadRequestException('文件不能为空');
       }
 
       if (!req.user?.id) {
-        throw new Error('用户未认证');
+        throw new BadRequestException('用户未认证');
       }
 
       // 从 body 中获取参数（multipart/form-data 格式）
@@ -79,11 +93,11 @@ export class UploadsController {
       const changeLog = body.changeLog;
 
       if (!projectId || !name || !version || !baseName) {
-        throw new Error(`缺少必要参数: projectId=${projectId}, name=${name}, version=${version}, baseName=${baseName}`);
+        throw new BadRequestException(`缺少必要参数: projectId=${projectId}, name=${name}, version=${version}, baseName=${baseName}`);
       }
 
       if (isNaN(version)) {
-        throw new Error(`版本号无效: ${body.version}`);
+        throw new BadRequestException(`版本号无效: ${body.version}`);
       }
 
       console.log('[UploadsController] 调用上传服务...');
@@ -99,9 +113,23 @@ export class UploadsController {
 
       console.log('[UploadsController] 上传成功:', result.id);
       return result;
-    } catch (error) {
-      console.error('[UploadsController] 上传异常:', error);
-      throw error;
+    } catch (error: any) {
+      console.error('[UploadsController] 上传异常:', {
+        message: error?.message,
+        stack: error?.stack,
+        code: error?.code,
+        response: error?.response,
+      });
+      
+      // 如果已经是 HttpException，直接抛出
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      // 否则转换为 InternalServerErrorException
+      throw new InternalServerErrorException(
+        error?.message || '上传失败，请稍后重试'
+      );
     }
   }
 }
