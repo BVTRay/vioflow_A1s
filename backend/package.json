@@ -38,7 +38,8 @@
     "diagnose-cloud": "ts-node -r tsconfig-paths/register src/database/diagnose-cloud.ts",
     "update-password": "ts-node -r tsconfig-paths/register src/database/seeds/update-password.ts",
     "db:helper": "ts-node -r tsconfig-paths/register src/database/supabase-helper.ts",
-    "migrate-to-r2": "ts-node -r tsconfig-paths/register src/database/migrate-videos-to-r2.ts"
+    "migrate-to-r2": "ts-node -r tsconfig-paths/register src/database/migrate-videos-to-r2.ts",
+    "regenerate-thumbnails": "ts-node -r tsconfig-paths/register regenerate-thumbnails.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.490.0",
@@ -57,6 +58,7 @@
     "@nestjs/websockets": "^10.3.0",
     "@supabase/supabase-js": "^2.39.0",
     "@types/multer": "^1.4.11",
+    "@types/qrcode": "^1.5.6",
     "axios": "^1.6.2",
     "bcrypt": "^5.1.1",
     "bull": "^4.16.5",
@@ -71,6 +73,7 @@
     "passport-local": "^1.0.0",
     "pdfkit": "^0.14.0",
     "pg": "^8.11.3",
+    "qrcode": "^1.5.4",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.1",
     "socket.io": "^4.7.2",

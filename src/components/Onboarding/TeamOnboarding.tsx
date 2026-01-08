@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { Shield, UserPlus, ArrowRight, Loader2, Check } from 'lucide-react';
 import { teamsApi } from '../../api/teams';
-import { useTeam } from '../../contexts/TeamContext';
 import { useAuth } from '../../hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 
 export const TeamOnboarding: React.FC = () => {
   const { user } = useAuth();
-  const { refreshTeams } = useTeam();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'create' | 'join'>('create');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -35,14 +35,11 @@ export const TeamOnboarding: React.FC = () => {
         name: teamName.trim(),
         description: teamDescription.trim() || undefined,
       });
-
-      // 刷新团队列表
-      await refreshTeams();
       
       setSuccess(true);
       setTimeout(() => {
-        // 刷新页面以进入主应用
-        window.location.href = '/';
+        // 导航到主应用（会自动加载团队数据）
+        navigate('/', { replace: true });
       }, 1500);
     } catch (err: any) {
       console.error('Failed to create team:', err);
@@ -77,14 +74,11 @@ export const TeamOnboarding: React.FC = () => {
 
     try {
       await teamsApi.joinByCode({ code });
-
-      // 刷新团队列表
-      await refreshTeams();
       
       setSuccess(true);
       setTimeout(() => {
-        // 刷新页面以进入主应用
-        window.location.href = '/';
+        // 导航到主应用（会自动加载团队数据）
+        navigate('/', { replace: true });
       }, 1500);
     } catch (err: any) {
       console.error('Failed to join team:', err);

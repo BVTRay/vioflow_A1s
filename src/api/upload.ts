@@ -62,6 +62,10 @@ export const uploadApi = {
       };
 
       const response = await apiClient.request<UploadVideoResponse>(config);
+      // 上传完成，进度设置为 100%（如果回调存在）
+      if (onProgress) {
+        onProgress(100);
+      }
       return response;
     } catch (error: any) {
       // 详细记录错误信息

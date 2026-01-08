@@ -26,6 +26,7 @@ export interface Video {
   thumbnailUrl?: string; // 预览图URL
   version: number;
   uploadTime: string;
+  uploaderId?: string; // 上传者ID
   isCaseFile: boolean; // Marked for Showcase
   isMainDelivery: boolean; // Marked as main delivery file (H.264 for showcase)
   isReference?: boolean; // 是否为引用文件, 案例模块使用

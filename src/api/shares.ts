@@ -38,7 +38,9 @@ export interface ShareLinkDetail extends ShareLink {
 export const sharesApi = {
   getAll: async (teamId?: string): Promise<ShareLink[]> => {
     const params = teamId ? { teamId } : {};
-    return apiClient.get('/shares', { params });
+    const response = await apiClient.get('/shares', { params });
+    // 处理分页响应格式：可能是 { data: ShareLink[], total, page, limit } 或直接是数组
+    return Array.isArray(response) ? response : (response?.data || []);
   },
 
   create: async (data: {

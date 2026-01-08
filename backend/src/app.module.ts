@@ -26,6 +26,8 @@ import { TrackingModule } from './modules/tracking/tracking.module';
 import { SearchModule } from './modules/search/search.module';
 import { DevAdminModule } from './modules/admin/dev-admin.module';
 import { QueueModule } from './modules/queue/queue.module';
+import { StorageServeModule } from './modules/storage-serve/storage-serve.module';
+import { SystemResourcesModule } from './modules/system-resources/system-resources.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -38,7 +40,7 @@ import { AppController } from './app.controller';
     ThrottlerModule.forRoot([
       {
         ttl: 60000, // 1分钟
-        limit: 100, // 100次请求
+        limit: 200, // 200次请求 (从100提高到200)
       },
     ]),
     DatabaseModule,
@@ -64,6 +66,8 @@ import { AppController } from './app.controller';
     SearchModule,
     DevAdminModule,
     QueueModule,
+    StorageServeModule,
+    SystemResourcesModule,
   ],
   controllers: [AppController],
   providers: [

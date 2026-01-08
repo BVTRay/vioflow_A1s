@@ -59,7 +59,7 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
       let selectedTeam: Team | null = null;
       
       // 1. 检查是否已有当前团队且还在列表中
-      const prevTeam = currentTeamRef.current || currentTeam;
+      const prevTeam = currentTeamRef.current;
       if (prevTeam) {
         const stillExists = userTeams.find(t => t.id === prevTeam.id);
         if (stillExists) {
@@ -95,13 +95,19 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
         console.log('✅ 使用第一个团队作为默认:', selectedTeam.name);
       }
 
-      // 设置当前团队
+      // 设置当前团队（只在团队真正变化时才更新）
       if (selectedTeam) {
-        console.log('✅ 最终设置当前团队:', selectedTeam.name, selectedTeam.id);
-        localStorage.setItem('current_team_id', selectedTeam.id);
-        apiClient.setTeamId(selectedTeam.id);
-        currentTeamRef.current = selectedTeam;
-        setCurrentTeam(selectedTeam);
+        // 检查团队是否真的变化了，避免不必要的状态更新
+        const currentTeamId = currentTeamRef.current?.id;
+        if (currentTeamId !== selectedTeam.id) {
+          console.log('✅ 最终设置当前团队:', selectedTeam.name, selectedTeam.id);
+          localStorage.setItem('current_team_id', selectedTeam.id);
+          apiClient.setTeamId(selectedTeam.id);
+          currentTeamRef.current = selectedTeam;
+          setCurrentTeam(selectedTeam);
+        } else {
+          console.log('✅ 团队未变化，跳过更新');
+        }
       } else {
         console.log('⚠️ 没有可用的团队');
         currentTeamRef.current = null;
@@ -114,7 +120,7 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user?.team_id]);
 
   // 切换团队
   const switchTeam = useCallback(async (teamId: string) => {
@@ -140,24 +146,6 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
   useEffect(() => {
     loadTeams();
   }, [loadTeams]);
-
-  // 当用户信息变化时，更新当前团队
-  useEffect(() => {
-    if (user?.team_id && teams.length > 0) {
-      setCurrentTeam(prevTeam => {
-        if (prevTeam?.id === user.team_id) {
-          return prevTeam;
-        }
-        const userTeam = teams.find(t => t.id === user.team_id);
-        if (userTeam) {
-          localStorage.setItem('current_team_id', userTeam.id);
-          apiClient.setTeamId(userTeam.id);
-          return userTeam;
-        }
-        return prevTeam;
-      });
-    }
-  }, [user?.team_id, teams]);
 
   return (
     <TeamContext.Provider

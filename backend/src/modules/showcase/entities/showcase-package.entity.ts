@@ -38,6 +38,12 @@ export class ShowcasePackage {
   @Column({ length: 100, nullable: true })
   client_name: string;
 
+  @Column({ type: 'text', nullable: true })
+  welcome_message: string;
+
+  @Column({ type: 'text', nullable: true })
+  contact_info: string;
+
   @Column('uuid', { nullable: true })
   share_link_id: string;
 

@@ -13,18 +13,25 @@ export class TransformInterceptor implements NestInterceptor {
     return next.handle().pipe(
       map((data) => {
         // 转换项目数据
+        const visited = new WeakSet();
         if (Array.isArray(data)) {
-          return data.map(item => this.transformItem(item));
+          return data.map(item => this.transformItem(item, visited));
         }
-        return this.transformItem(data);
+        return this.transformItem(data, visited);
       }),
     );
   }
 
-  private transformItem(item: any): any {
+  private transformItem(item: any, visited: WeakSet<object> = new WeakSet()): any {
     if (!item || typeof item !== 'object') {
       return item;
     }
+
+    // 防止循环引用导致的无限递归
+    if (visited.has(item)) {
+      return undefined;
+    }
+    visited.add(item);
 
     const transformed: any = {};
 
@@ -35,9 +42,12 @@ export class TransformInterceptor implements NestInterceptor {
       if (value instanceof Date) {
         transformed[camelKey] = value.toISOString();
       } else if (Array.isArray(value)) {
-        transformed[camelKey] = value.map(v => this.transformItem(v));
+        transformed[camelKey] = value.map(v => this.transformItem(v, visited)).filter(v => v !== undefined);
       } else if (value && typeof value === 'object' && !(value instanceof Date)) {
-        transformed[camelKey] = this.transformItem(value);
+        const transformedValue = this.transformItem(value, visited);
+        if (transformedValue !== undefined) {
+          transformed[camelKey] = transformedValue;
+        }
       } else {
         transformed[camelKey] = value;
       }

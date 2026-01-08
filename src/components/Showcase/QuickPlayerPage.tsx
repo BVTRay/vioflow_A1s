@@ -1,39 +1,26 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Pause, Loader2, Lock, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
+import { Loader2, Lock, AlertCircle } from 'lucide-react';
 import { showcaseApi } from '../../api/showcase';
-import { videosApi } from '../../api/videos';
+import { QuickPlayerTemplate, QuickPlayerVideo } from './QuickPlayerTemplate';
 
 interface QuickPlayerPageData {
   id: string;
   title: string;
   mode: 'quick_player';
-  videos: Array<{
-    id: string;
-    name: string;
-    url: string;
-    thumbnailUrl?: string;
-    duration?: string;
-  }>;
+  videos: QuickPlayerVideo[];
   hasPassword: boolean;
   expiredAt?: string;
 }
 
 export const QuickPlayerPage: React.FC = () => {
   const { linkId } = useParams<{ linkId: string }>();
-  const navigate = useNavigate();
   const [data, setData] = useState<QuickPlayerPageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [isPasswordVerified, setIsPasswordVerified] = useState(false);
-  
-  const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (!linkId) {
@@ -94,51 +81,6 @@ export const QuickPlayerPage: React.FC = () => {
     } catch (err: any) {
       const errorMessage = err.response?.data?.error || err.response?.data?.message || err.message || '密码错误';
       setPasswordError(typeof errorMessage === 'string' ? errorMessage : '密码错误');
-    }
-  };
-
-  const handlePlayPause = () => {
-    if (!videoRef.current) return;
-    if (isPlaying) {
-      videoRef.current.pause();
-    } else {
-      videoRef.current.play();
-    }
-    setIsPlaying(!isPlaying);
-  };
-
-  const handleTimeUpdate = () => {
-    if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime);
-      setDuration(videoRef.current.duration || 0);
-    }
-  };
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (videoRef.current) {
-      const newTime = Number(e.target.value);
-      videoRef.current.currentTime = newTime;
-      setCurrentTime(newTime);
-    }
-  };
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const handleNextVideo = () => {
-    if (data && currentVideoIndex < data.videos.length - 1) {
-      setCurrentVideoIndex(currentVideoIndex + 1);
-      setIsPlaying(false);
-    }
-  };
-
-  const handlePrevVideo = () => {
-    if (currentVideoIndex > 0) {
-      setCurrentVideoIndex(currentVideoIndex - 1);
-      setIsPlaying(false);
     }
   };
 
@@ -231,122 +173,9 @@ export const QuickPlayerPage: React.FC = () => {
     );
   }
 
-  const currentVideo = data.videos[currentVideoIndex];
-
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* 纯净播放器 - 全屏显示 */}
-      <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-full h-full relative">
-          {currentVideo && (
-            <>
-              <video
-                ref={videoRef}
-                src={currentVideo.url}
-                className="w-full h-full object-contain"
-                onTimeUpdate={handleTimeUpdate}
-                onLoadedMetadata={() => {
-                  if (videoRef.current) {
-                    setDuration(videoRef.current.duration);
-                  }
-                }}
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
-                onEnded={() => {
-                  setIsPlaying(false);
-                  // 自动播放下一个视频
-                  if (currentVideoIndex < data.videos.length - 1) {
-                    setTimeout(() => {
-                      handleNextVideo();
-                      if (videoRef.current) {
-                        videoRef.current.play();
-                      }
-                    }, 1000);
-                  }
-                }}
-                onClick={handlePlayPause}
-                playsInline
-                controls={false}
-              />
-
-              {/* 播放按钮覆盖层 - 只在暂停时显示 */}
-              {!isPlaying && (
-                <div 
-                  className="absolute inset-0 flex items-center justify-center cursor-pointer"
-                  onClick={handlePlayPause}
-                >
-                  <button
-                    className="w-20 h-20 sm:w-24 sm:h-24 bg-black/40 hover:bg-violet-500/90 backdrop-blur-sm rounded-full flex items-center justify-center transition-all group"
-                  >
-                    <Play className="w-10 h-10 sm:w-12 sm:h-12 fill-white text-white pl-1 group-hover:scale-110 transition-transform" />
-                  </button>
-                </div>
-              )}
-
-              {/* 底部控制栏 - 仅在悬停或交互时显示 */}
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 sm:p-6 opacity-0 hover:opacity-100 transition-opacity group">
-                {/* 进度条 */}
-                <div className="mb-4">
-                  <input
-                    type="range"
-                    min="0"
-                    max={duration || 0}
-                    value={currentTime}
-                    onChange={handleSeek}
-                    className="w-full h-1.5 bg-zinc-700/50 rounded-lg appearance-none cursor-pointer accent-violet-500"
-                    style={{
-                      background: `linear-gradient(to right, #8b5cf6 0%, #8b5cf6 ${duration ? (currentTime / duration) * 100 : 0}%, rgba(63, 63, 70, 0.5) ${duration ? (currentTime / duration) * 100 : 0}%, rgba(63, 63, 70, 0.5) 100%)`,
-                    }}
-                  />
-                </div>
-
-                {/* 控制按钮和时间 */}
-                <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-4">
-                    <button
-                      onClick={handlePlayPause}
-                      className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                    >
-                      {isPlaying ? (
-                        <Pause className="w-5 h-5" />
-                      ) : (
-                        <Play className="w-5 h-5" />
-                      )}
-                    </button>
-                    <span className="text-zinc-300">
-                      {formatTime(currentTime)} / {formatTime(duration)}
-                    </span>
-                  </div>
-
-                  {/* 视频切换按钮（如果有多个视频） */}
-                  {data.videos.length > 1 && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handlePrevVideo}
-                        disabled={currentVideoIndex === 0}
-                        className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        上一个
-                      </button>
-                      <span className="text-zinc-400 text-xs">
-                        {currentVideoIndex + 1} / {data.videos.length}
-                      </span>
-                      <button
-                        onClick={handleNextVideo}
-                        disabled={currentVideoIndex === data.videos.length - 1}
-                        className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        下一个
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+    <div className="min-h-screen bg-black">
+      <QuickPlayerTemplate videos={data.videos} />
     </div>
   );
 };
-

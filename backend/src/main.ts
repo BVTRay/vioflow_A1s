@@ -79,8 +79,8 @@ async function bootstrap() {
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: isProduction 
-      ? ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Team-Id']
-      : ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Team-Id', 'X-Dev-Mode'],
+      ? ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Team-Id', 'X-Dev-Mode', 'x-dev-mode']
+      : ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Team-Id', 'X-Dev-Mode', 'x-dev-mode'],
     exposedHeaders: ['Content-Length', 'Content-Type'],
   });
 

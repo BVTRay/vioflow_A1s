@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { LoginPage } from './components/Auth/LoginPage';
+import { PhoneLoginPage } from './components/Auth/PhoneLoginPage';
 import { SharePage } from './components/Share/SharePage';
 import { TeamOnboarding } from './components/Onboarding/TeamOnboarding';
 import { DevAdminPanel } from './components/Admin/DevAdminPanel';
 import { DevVideoPanel } from './components/Admin/DevVideoPanel';
-import { TestSupabase } from './pages/TestSupabase';
+import { QuickPlayerPage } from './components/Showcase/QuickPlayerPage';
+import { PitchPage } from './components/Showcase/PitchPage';
 import App from './App';
 import apiClient from './api/client';
 import { teamsApi } from './api/teams';
@@ -176,18 +177,12 @@ export const AppWithRouter: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login" element={<PhoneLoginPage />} />
         <Route path="/share/:token" element={<SharePage />} />
         <Route path="/s/:shortCode" element={<SharePage />} />
+        <Route path="/play/:linkId" element={<QuickPlayerPage />} />
+        <Route path="/pitch/:linkId" element={<PitchPage />} />
         <Route path="/onboarding" element={<TeamOnboarding />} />
-        <Route
-          path="/test-supabase"
-          element={
-            <ProtectedRoute>
-              <TestSupabase />
-            </ProtectedRoute>
-          }
-        />
         <Route
           path="/admin/users"
           element={

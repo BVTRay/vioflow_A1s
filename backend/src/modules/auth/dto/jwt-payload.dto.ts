@@ -1,10 +1,16 @@
-import { IsString, IsUUID } from 'class-validator';
+import { IsString, IsUUID, IsOptional } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class JwtPayloadDto {
+  @IsOptional()
   @IsString()
   @Type(() => String)
-  email: string;
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  @Type(() => String)
+  phone?: string;
 
   @IsUUID()
   @Type(() => String)
@@ -14,5 +20,18 @@ export class JwtPayloadDto {
   @Type(() => String)
   role: string;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

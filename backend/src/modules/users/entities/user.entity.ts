@@ -50,6 +50,15 @@ export class User {
   @Column({ length: 20, nullable: true })
   phone: string;
 
+  @Column({ length: 100, nullable: true })
+  wechat_openid: string;
+
+  @Column({ length: 100, nullable: true })
+  wechat_unionid: string;
+
+  @Column({ length: 200, nullable: true })
+  wechat_session_key: string;
+
   @Column({ default: true })
   is_active: boolean;
 

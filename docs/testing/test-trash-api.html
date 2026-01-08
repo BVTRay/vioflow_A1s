@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>回收站API测试</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #fff; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #4CAF50; }
+        .section { background: #2a2a2a; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .info { color: #2196F3; }
+        pre { background: #1a1a1a; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        button { background: #4CAF50; color: white; border: none; padding: 10px 20px; 
+                 border-radius: 3px; cursor: pointer; margin: 5px; }
+        button:hover { background: #45a049; }
+        input { background: #1a1a1a; color: #fff; border: 1px solid #444; 
+                padding: 8px; border-radius: 3px; width: 400px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗑️ 回收站API测试工具</h1>
+        
+        <div class="section">
+            <h3>1. 登录获取Token</h3>
+            <input type="email" id="email" placeholder="邮箱" value="ray@vioflow.com">
+            <input type="password" id="password" placeholder="密码" value="ray">
+            <button onclick="login()">登录</button>
+            <div id="loginResult"></div>
+        </div>
+
+        <div class="section">
+            <h3>2. 获取团队信息</h3>
+            <button onclick="getTeams()">获取团队列表</button>
+            <div id="teamsResult"></div>
+        </div>
+
+        <div class="section">
+            <h3>3. 获取回收站视频</h3>
+            <input type="text" id="teamId" placeholder="团队ID" value="15b4a45f-a0a6-4577-a01f-b37152cfbcf8">
+            <button onclick="getDeletedVideos()">获取已删除视频</button>
+            <div id="videosResult"></div>
+        </div>
+
+        <div class="section">
+            <h3>4. 调试信息</h3>
+            <div id="debugInfo"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3002';
+        let token = localStorage.getItem('test_token') || '';
+        let currentTeamId = '15b4a45f-a0a6-4577-a01f-b37152cfbcf8';
+
+        function log(elementId, message, type = 'info') {
+            const el = document.getElementById(elementId);
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            el.innerHTML += `<div class="${className}">${message}</div>`;
+        }
+
+        function clearLog(elementId) {
+            document.getElementById(elementId).innerHTML = '';
+        }
+
+        async function login() {
+            clearLog('loginResult');
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                log('loginResult', '🔐 正在登录...', 'info');
+                const response = await fetch(`${API_BASE}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: email, password })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`登录失败: ${response.status} ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                token = data.access_token || data.accessToken;
+                localStorage.setItem('test_token', token);
+                
+                log('loginResult', '✅ 登录成功!', 'success');
+                log('loginResult', `Token: ${token.substring(0, 50)}...`, 'info');
+                log('loginResult', `用户: ${data.user?.name || data.user?.email}`, 'info');
+                
+                log('debugInfo', `✅ Token已保存: ${token.substring(0, 30)}...`, 'success');
+            } catch (error) {
+                log('loginResult', `❌ 错误: ${error.message}`, 'error');
+                console.error('Login error:', error);
+            }
+        }
+
+        async function getTeams() {
+            clearLog('teamsResult');
+            if (!token) {
+                log('teamsResult', '❌ 请先登录获取Token', 'error');
+                return;
+            }
+
+            try {
+                log('teamsResult', '📡 正在获取团队列表...', 'info');
+                const response = await fetch(`${API_BASE}/api/teams`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`请求失败: ${response.status} ${response.statusText}`);
+                }
+
+                const teams = await response.json();
+                log('teamsResult', `✅ 找到 ${teams.length} 个团队:`, 'success');
+                teams.forEach(team => {
+                    log('teamsResult', `<pre>ID: ${team.id}\n名称: ${team.name}</pre>`, 'info');
+                    currentTeamId = team.id; // 使用第一个团队ID
+                });
+                
+                document.getElementById('teamId').value = currentTeamId;
+            } catch (error) {
+                log('teamsResult', `❌ 错误: ${error.message}`, 'error');
+                console.error('Get teams error:', error);
+            }
+        }
+
+        async function getDeletedVideos() {
+            clearLog('videosResult');
+            if (!token) {
+                log('videosResult', '❌ 请先登录获取Token', 'error');
+                return;
+            }
+
+            const teamId = document.getElementById('teamId').value;
+            if (!teamId) {
+                log('videosResult', '❌ 请输入团队ID', 'error');
+                return;
+            }
+
+            try {
+                log('videosResult', `📡 正在获取团队 ${teamId} 的回收站视频...`, 'info');
+                log('debugInfo', `📡 请求URL: ${API_BASE}/api/videos/trash/list?teamId=${teamId}`, 'info');
+                log('debugInfo', `📡 请求头: x-team-id: ${teamId}`, 'info');
+                
+                const response = await fetch(`${API_BASE}/api/videos/trash/list?teamId=${teamId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'x-team-id': teamId,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`请求失败: ${response.status} ${response.statusText}\n${errorText}`);
+                }
+
+                const videos = await response.json();
+                log('videosResult', `✅ 找到 ${videos.length} 个已删除的视频:`, 'success');
+                
+                if (videos.length === 0) {
+                    log('videosResult', '📭 回收站为空', 'info');
+                } else {
+                    videos.forEach((video, index) => {
+                        const deletedAt = new Date(video.deleted_at);
+                        const now = new Date();
+                        const daysAgo = Math.floor((now - deletedAt) / (1000 * 60 * 60 * 24));
+                        
+                        log('videosResult', `<pre>${index + 1}. ${video.name}
+   ID: ${video.id}
+   项目ID: ${video.project_id || '未知'}
+   删除时间: ${deletedAt.toLocaleString('zh-CN')} (${daysAgo}天前)
+   文件大小: ${(video.size / 1024 / 1024).toFixed(2)} MB</pre>`, 'info');
+                    });
+                    
+                    log('debugInfo', `✅ 成功获取${videos.length}个已删除视频`, 'success');
+                    log('debugInfo', `<pre>${JSON.stringify(videos[0], null, 2)}</pre>`, 'info');
+                }
+            } catch (error) {
+                log('videosResult', `❌ 错误: ${error.message}`, 'error');
+                log('debugInfo', `❌ 获取回收站失败: ${error.message}`, 'error');
+                console.error('Get deleted videos error:', error);
+            }
+        }
+
+        // 页面加载时显示token状态
+        window.onload = function() {
+            if (token) {
+                log('debugInfo', `✅ 已保存Token: ${token.substring(0, 30)}...`, 'success');
+                log('debugInfo', '💡 可以直接测试获取团队和回收站', 'info');
+            } else {
+                log('debugInfo', '⚠️ 未登录,请先登录获取Token', 'info');
+            }
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+<!--pages/scan/index.wxml-->
+<view class="container">
+  <view class="loading-container">
+    <text class="loading-text">正在处理扫码...</text>
+  </view>
+</view>
+
+
+
+
+
+

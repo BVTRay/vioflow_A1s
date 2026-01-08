@@ -1,0 +1,162 @@
+/* pages/login/index.wxss */
+.container {
+  min-height: 100vh;
+  padding: 80rpx 40rpx;
+  background: linear-gradient(180deg, #18181b 0%, #27272a 100%);
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 80rpx;
+}
+
+.title {
+  display: block;
+  font-size: 48rpx;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 16rpx;
+}
+
+.subtitle {
+  display: block;
+  font-size: 28rpx;
+  color: #a1a1aa;
+}
+
+.login-section {
+  margin-bottom: 48rpx;
+}
+
+.section-title {
+  font-size: 32rpx;
+  font-weight: 500;
+  color: #ffffff;
+  margin-bottom: 32rpx;
+}
+
+.input-group {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24rpx;
+  gap: 16rpx;
+}
+
+.input {
+  flex: 1;
+  height: 88rpx;
+  padding: 0 24rpx;
+  background-color: #27272a;
+  border: 1rpx solid #3f3f46;
+  border-radius: 8rpx;
+  color: #ffffff;
+  font-size: 32rpx;
+}
+
+.input:focus {
+  border-color: #3b82f6;
+}
+
+.input-placeholder {
+  color: #71717a;
+}
+
+.input-code {
+  flex: 1;
+}
+
+.btn-code {
+  width: 200rpx;
+  height: 88rpx;
+  line-height: 88rpx;
+  padding: 0;
+  background-color: #27272a;
+  border: 1rpx solid #3f3f46;
+  border-radius: 8rpx;
+  color: #3b82f6;
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+.btn-code:active {
+  background-color: #3f3f46;
+}
+
+.btn-code-disabled {
+  color: #71717a;
+  opacity: 0.5;
+}
+
+.btn {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  text-align: center;
+  border-radius: 8rpx;
+  font-size: 32rpx;
+  font-weight: 500;
+  border: none;
+  margin-top: 32rpx;
+}
+
+.btn-primary {
+  background-color: #3b82f6;
+  color: #ffffff;
+}
+
+.btn-primary:active {
+  background-color: #2563eb;
+}
+
+.btn-secondary {
+  background-color: #27272a;
+  color: #ffffff;
+  border: 1rpx solid #3f3f46;
+}
+
+.btn-secondary:active {
+  background-color: #3f3f46;
+}
+
+.btn-disabled {
+  opacity: 0.5;
+}
+
+.wechat-login-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+}
+
+.wechat-icon {
+  font-size: 36rpx;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 48rpx 0;
+  position: relative;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1rpx;
+  background-color: #3f3f46;
+}
+
+.divider-text {
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  color: #71717a;
+}
+
+
+
+
+
+

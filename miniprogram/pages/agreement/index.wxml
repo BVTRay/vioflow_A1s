@@ -1,0 +1,57 @@
+<!--pages/agreement/index.wxml-->
+<view class="container">
+  <view class="header">
+    <text class="title">欢迎使用 Vioflow</text>
+    <text class="subtitle">请阅读并同意以下协议</text>
+  </view>
+
+  <view class="agreement-content">
+    <view class="agreement-item">
+      <text class="agreement-title">用户协议</text>
+      <text class="agreement-text">
+        欢迎使用 Vioflow 服务。在使用本服务前，请仔细阅读本用户协议。使用本服务即表示您同意遵守本协议的所有条款。
+      </text>
+    </view>
+
+    <view class="agreement-item">
+      <text class="agreement-title">隐私政策</text>
+      <text class="agreement-text">
+        我们非常重视您的隐私。本隐私政策说明了我们如何收集、使用和保护您的个人信息。我们会严格按照法律法规要求处理您的个人信息。
+      </text>
+    </view>
+  </view>
+
+  <view class="checkbox-group">
+    <checkbox-group bindchange="onAgreeChange">
+      <label class="checkbox-label">
+        <checkbox value="agree" checked="{{agreed}}" />
+        <text class="checkbox-text">我已阅读并同意</text>
+        <text class="link-text" bindtap="openAgreement">《用户协议》</text>
+        <text class="checkbox-text">和</text>
+        <text class="link-text" bindtap="openPrivacy">《隐私政策》</text>
+      </label>
+    </checkbox-group>
+  </view>
+
+  <view class="button-group">
+    <button
+      class="btn btn-primary {{!agreed || loading ? 'btn-disabled' : ''}}"
+      open-type="getPhoneNumber"
+      bindgetphonenumber="quickLoginWithPhone"
+      disabled="{{!agreed || loading}}"
+    >
+      {{loading ? '登录中...' : '微信手机号快捷登录'}}
+    </button>
+
+    <text class="tip-text">点击后将获取您的微信手机号，或选择下方手动输入</text>
+
+    <button
+      class="btn btn-secondary {{!agreed || loading ? 'btn-disabled' : ''}}"
+      bindtap="goToPhoneLogin"
+      disabled="{{!agreed || loading}}"
+    >
+      手动输入手机号登录
+    </button>
+  </view>
+</view>
+

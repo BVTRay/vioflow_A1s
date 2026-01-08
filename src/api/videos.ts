@@ -61,17 +61,28 @@ export const videosApi = {
   },
 
   delete: async (id: string, deleteAllVersions: boolean = false): Promise<void> => {
+    const teamId = apiClient.getTeamId();
     await apiClient.delete(`/videos/${id}`, {
-      params: { deleteAllVersions: deleteAllVersions ? 'true' : 'false' },
+      params: { 
+        deleteAllVersions: deleteAllVersions ? 'true' : 'false',
+        teamId: teamId || undefined
+      },
     });
   },
 
   // 回收站相关 API
   getDeletedVideos: async (teamId?: string): Promise<Video[]> => {
     const currentTeamId = teamId || apiClient.getTeamId();
-    return apiClient.get('/videos/trash/list', {
-      params: currentTeamId ? { teamId: currentTeamId } : {},
+    console.log('📌 videosApi.getDeletedVideos 调用:', { teamId, currentTeamId });
+    if (!currentTeamId) {
+      console.error('❌ videosApi.getDeletedVideos: 没有 teamId');
+      throw new Error('没有团队ID,无法获取回收站视频');
+    }
+    const result = await apiClient.get('/videos/trash/list', {
+      params: { teamId: currentTeamId },
     });
+    console.log('✅ videosApi.getDeletedVideos 返回:', result);
+    return result;
   },
 
   restoreVideo: async (id: string): Promise<Video> => {

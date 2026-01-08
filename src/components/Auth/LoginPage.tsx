@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Terminal } from 'lucide-react';
+import { Terminal, QrCode } from 'lucide-react';
 import { authApi } from '../../api/auth';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
+import { WechatQrCodeLogin } from './WechatQrCodeLogin';
 
 export const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('jeff@bugong.com');
@@ -10,6 +11,7 @@ export const LoginPage: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [loginMode, setLoginMode] = useState<'password' | 'qrcode'>('password'); // 登录模式
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -224,6 +226,35 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
 
+          {/* 登录模式切换 */}
+          <div className="flex gap-2 mb-6 p-1 bg-white/5 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setLoginMode('password')}
+              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
+                loginMode === 'password'
+                  ? 'bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-lg'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              账号密码
+            </button>
+            <button
+              type="button"
+              onClick={() => setLoginMode('qrcode')}
+              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                loginMode === 'qrcode'
+                  ? 'bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-lg'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <QrCode className="w-4 h-4" />
+              扫码登录
+            </button>
+          </div>
+
+          {/* 密码登录表单 */}
+          {loginMode === 'password' && (
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             {/* 错误提示 */}
             {error && (
@@ -329,6 +360,24 @@ export const LoginPage: React.FC = () => {
           <div className="mt-8 text-center animate-fade-in-up" style={{ animationDelay: '0.7s', animationFillMode: 'forwards' }}>
             <p className="text-sm text-neutral-500">还没有账号？ <a href="#" className="font-semibold text-white hover:text-cyan-400 transition-colors">免费试用</a></p>
           </div>
+          </form>
+          )}
+
+          {/* 扫码登录 */}
+          {loginMode === 'qrcode' && (
+            <div className="mt-4 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
+              <WechatQrCodeLogin
+                onSuccess={() => {
+                  setTimeout(() => {
+                    window.location.href = '/';
+                  }, 1000);
+                }}
+                onError={(error) => {
+                  setError(error);
+                }}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

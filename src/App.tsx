@@ -724,7 +724,8 @@ const AppContent: React.FC<{ state: AppState; dispatch: React.Dispatch<Action> }
     recentOpenedProjects: apiRecentOpened,
     loading: apiLoading,
     error: apiError,
-    loadAllData 
+    loadAllData,
+    loadDeliveriesForProjects
   } = useApiData();
 
   // 处理通知 - 使用 useMemo 优化（在 useEffect 外部）
@@ -778,7 +779,36 @@ const AppContent: React.FC<{ state: AppState; dispatch: React.Dispatch<Action> }
         });
       }
     }
-  }, [apiProjects, apiVideos, apiTags, notificationsToAdd, recentProjectIds, apiLoading, dispatch]);
+  }, [apiProjects, apiVideos, apiTags, apiDeliveries, apiNotifications, notificationsToAdd, recentProjectIds, apiLoading, dispatch]);
+
+  // 选择项目时按需加载交付数据（单项目懒加载）
+  useEffect(() => {
+    if (state.selectedProjectId) {
+      loadDeliveriesForProjects([state.selectedProjectId]);
+    }
+  }, [state.selectedProjectId, loadDeliveriesForProjects]);
+
+  // 打开交付操作台时兜底加载交付数据（处理已选项目重复点击的场景）
+  useEffect(() => {
+    const effectiveModule =
+      state.activeModule === 'dashboard'
+        ? state.workbenchActionType || 'review'
+        : state.activeModule;
+
+    if (
+      state.showWorkbench &&
+      effectiveModule === 'delivery' &&
+      state.selectedProjectId
+    ) {
+      loadDeliveriesForProjects([state.selectedProjectId]);
+    }
+  }, [
+    state.showWorkbench,
+    state.activeModule,
+    state.workbenchActionType,
+    state.selectedProjectId,
+    loadDeliveriesForProjects,
+  ]);
 
   // 所有 Hooks 必须在早期返回之前调用
   const renderTransferContent = useCallback(() => {
@@ -806,7 +836,11 @@ const AppContent: React.FC<{ state: AppState; dispatch: React.Dispatch<Action> }
                               <div className={`flex justify-between items-center text-[10px] ${theme.text.muted} mt-1`}>
                                   <div className="flex items-center gap-2">
                                       <span>{item.progress}%</span>
-                                      <span>{item.progress < 100 ? '正在上传...' : '处理中...'}</span>
+                                      <span>
+                                        {item.progress < 100 
+                                          ? '正在上传...' 
+                                          : '正在处理（生成缩略图、保存记录）...'}
+                                      </span>
                                   </div>
                                   {item.status === 'uploading' && (
                                       <button

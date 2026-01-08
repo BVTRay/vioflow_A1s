@@ -11,15 +11,21 @@ import {
   Query,
   Headers,
   BadRequestException,
+  Inject,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { VideosService } from './videos.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BatchTagDto } from './dto/batch-tag.dto';
+import { QueueService } from '../queue/queue.service';
 
 @Controller('api/videos')
 @UseGuards(JwtAuthGuard)
 export class VideosController {
-  constructor(private readonly videosService: VideosService) {}
+  constructor(
+    private readonly videosService: VideosService,
+    private readonly queueService: QueueService,
+  ) {}
 
   @Get('admin/all')
   findAllForAdmin(
@@ -73,6 +79,7 @@ export class VideosController {
 
   // 回收站相关接口 - 必须在所有 :id 路由之前定义，避免路由冲突
   @Get('trash/list')
+  @Throttle({ default: { limit: 10, ttl: 60000 } }) // 回收站接口：1分钟内最多10次
   async getDeletedVideos(
     @Headers('x-team-id') teamId?: string,
     @Query('teamId') queryTeamId?: string,
@@ -97,8 +104,20 @@ export class VideosController {
   }
 
   @Delete('trash/:id/permanent')
-  async permanentlyDeleteVideo(@Param('id') id: string) {
-    await this.videosService.permanentlyDeleteVersion(id);
+  async permanentlyDeleteVideo(
+    @Param('id') id: string,
+    @Request() req,
+    @Headers('x-team-id') teamId?: string,
+    @Query('teamId') queryTeamId?: string,
+  ) {
+    const userId = req.user?.id;
+    const finalTeamId = queryTeamId || teamId;
+    
+    if (!finalTeamId) {
+      throw new BadRequestException('需要提供 teamId');
+    }
+    
+    await this.videosService.permanentlyDeleteVersion(id, finalTeamId, userId);
     return { message: '视频已彻底删除' };
   }
 
@@ -158,23 +177,61 @@ export class VideosController {
     return this.videosService.getPlaybackUrl(id, useSignedUrl).then(url => ({ url }));
   }
 
+  @Post(':id/regenerate-thumbnail')
+  async regenerateThumbnail(
+    @Param('id') id: string,
+    @Body() body: { timestamp?: number },
+  ) {
+    try {
+      const video = await this.videosService.findOne(id);
+      if (!video.storage_key) {
+        throw new BadRequestException('视频没有存储Key，无法生成缩略图');
+      }
+      
+      // 添加缩略图生成任务到队列
+      await this.queueService.addThumbnailJob({
+        videoId: id,
+        videoKey: video.storage_key,
+        timestamp: body.timestamp, // 可选：指定提取时间点
+      });
+      
+      return { 
+        message: '缩略图重新生成任务已添加到队列',
+        timestamp: body.timestamp || '自动选择',
+      };
+    } catch (error: any) {
+      console.error('[VideosController] 重新生成缩略图失败:', error);
+      throw error;
+    }
+  }
+
   @Delete(':id')
   async deleteVideo(
     @Param('id') id: string,
+    @Request() req,
     @Query('deleteAllVersions') deleteAllVersions?: string,
+    @Headers('x-team-id') teamId?: string,
+    @Query('teamId') queryTeamId?: string,
   ) {
     try {
       console.log('[VideosController] 收到删除请求:', { id, deleteAllVersions });
+      const userId = req.user?.id;
+      const finalTeamId = queryTeamId || teamId;
+      
+      if (!finalTeamId) {
+        throw new BadRequestException('需要提供 teamId');
+      }
+      
       const video = await this.videosService.findOne(id);
       const shouldDeleteAll = deleteAllVersions === 'true';
       
       if (shouldDeleteAll) {
-        // 软删除所有版本
-        await this.videosService.deleteAllVersions(video.project_id, video.base_name);
+        // 软删除所有版本（带权限验证）
+        await this.videosService.deleteAllVersions(video.project_id, video.base_name, userId, finalTeamId);
         return { message: '所有版本已删除' };
       } else {
-        // 只软删除当前版本
-        await this.videosService.deleteVersion(id);
+        // 只软删除当前版本（带权限验证）
+        await this.videosService.deleteVersion(id, userId, finalTeamId);
         return { message: '视频版本已删除' };
       }
     } catch (error: any) {

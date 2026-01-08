@@ -1,9 +1,11 @@
-import { Injectable, NotFoundException, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, ForbiddenException, BadRequestException, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, LessThan, IsNull, Repository } from 'typeorm';
 import { Video, VideoStatus, VideoType, StorageTier, AspectRatio } from './entities/video.entity';
 import { VideoTag } from './entities/video-tag.entity';
 import { IStorageService } from '../../common/storage/storage.interface';
+import { TeamsService } from '../teams/teams.service';
+import { TeamRole } from '../teams/entities/team-member.entity';
 
 @Injectable()
 export class VideosService {
@@ -14,6 +16,8 @@ export class VideosService {
     private videoTagRepository: Repository<VideoTag>,
     @Inject('IStorageService')
     private storageService: IStorageService,
+    @Inject(forwardRef(() => TeamsService))
+    private teamsService: TeamsService,
   ) {}
 
   async findAll(filters?: {
@@ -384,9 +388,9 @@ export class VideosService {
   /**
    * 软删除单个视频版本
    */
-  async deleteVersion(videoId: string): Promise<void> {
+  async deleteVersion(videoId: string, userId?: string, teamId?: string): Promise<void> {
     try {
-      console.log(`[VideosService] 开始软删除视频: ${videoId}`);
+      console.log(`[VideosService] 开始软删除视频: ${videoId}, 用户: ${userId}, 团队: ${teamId}`);
       
       // 先检查视频是否存在且未删除
       const video = await this.findOne(videoId);
@@ -399,6 +403,19 @@ export class VideosService {
       if (video.deleted_at) {
         console.log(`[VideosService] 视频 ${videoId} 已经被删除`);
         return; // 已经删除，直接返回
+      }
+      
+      // 权限检查：普通用户只能删除自己上传的视频，管理员可以删除所有视频
+      if (userId && teamId) {
+        const userRole = await this.teamsService.getUserRole(teamId, userId);
+        console.log(`[VideosService] 用户角色: ${userRole}, 上传者: ${video.uploader_id}`);
+        
+        // 如果不是管理员，检查是否是上传者
+        if (userRole !== TeamRole.ADMIN && userRole !== TeamRole.SUPER_ADMIN) {
+          if (video.uploader_id !== userId) {
+            throw new ForbiddenException('只能删除自己上传的视频');
+          }
+        }
       }
       
       // 使用 QueryBuilder 的 update 方法进行软删除，更可靠
@@ -428,38 +445,84 @@ export class VideosService {
   /**
    * 彻底删除单个视频版本（从回收站删除）
    */
-  async permanentlyDeleteVersion(videoId: string): Promise<void> {
-    const video = await this.findOne(videoId, true); // 包括已删除的
+  async permanentlyDeleteVersion(videoId: string, teamId: string, userId: string): Promise<void> {
+    console.log(`[VideosService] 开始彻底删除视频: ${videoId}, 用户: ${userId}, 团队: ${teamId}`);
     
-    // 删除存储中的文件
+    // 权限检查：只有管理员和超级管理员可以彻底删除
+    const userRole = await this.teamsService.getUserRole(teamId, userId);
+    console.log(`[VideosService] 用户角色: ${userRole}`);
+    
+    if (userRole !== TeamRole.ADMIN && userRole !== TeamRole.SUPER_ADMIN) {
+      throw new ForbiddenException('只有管理员和超级管理员可以彻底删除视频');
+    }
+    
+    const video = await this.findOne(videoId, true); // 包括已删除的
+    console.log(`[VideosService] 找到视频:`, {
+      id: video.id,
+      name: video.name,
+      storage_key: video.storage_key,
+      thumbnail_url: video.thumbnail_url,
+    });
+    
+    // 检查视频是否已经在回收站
+    if (!video.deleted_at) {
+      throw new BadRequestException('视频未在回收站中，无法彻底删除');
+    }
+    
+    // 删除存储中的视频文件
     if (video.storage_key) {
       try {
+        console.log(`[VideosService] 删除视频文件: ${video.storage_key}`);
         await this.storageService.deleteFile(video.storage_key);
+        console.log(`[VideosService] 视频文件删除成功`);
       } catch (error) {
-        console.warn(`Failed to delete storage file for video ${videoId}:`, error);
+        console.error(`[VideosService] 删除视频文件失败:`, error);
+        // 继续执行，不中断删除流程
       }
+    } else {
+      console.warn(`[VideosService] 视频没有 storage_key`);
     }
 
     // 删除缩略图（如果存在）
     if (video.thumbnail_url) {
       try {
-        const urlParts = video.thumbnail_url.split('/');
-        const thumbnailKey = urlParts[urlParts.length - 1];
-        if (thumbnailKey && thumbnailKey !== video.thumbnail_url) {
-          await this.storageService.deleteFile(thumbnailKey);
+        // 从 thumbnail_url 提取 storage_key
+        // 示例: http://192.168.110.112:3002/storage/xxx/thumbnail.jpg -> xxx/thumbnail.jpg
+        let thumbnailKey = video.thumbnail_url;
+        
+        // 如果是完整URL，提取路径部分
+        if (thumbnailKey.includes('/storage/')) {
+          thumbnailKey = thumbnailKey.split('/storage/')[1];
         }
+        
+        console.log(`[VideosService] 删除缩略图: ${thumbnailKey}`);
+        await this.storageService.deleteFile(thumbnailKey);
+        console.log(`[VideosService] 缩略图删除成功`);
       } catch (error) {
-        console.warn(`Failed to delete thumbnail for video ${videoId}:`, error);
+        console.error(`[VideosService] 删除缩略图失败:`, error);
+        // 继续执行，不中断删除流程
       }
+    } else {
+      console.log(`[VideosService] 视频没有缩略图`);
     }
 
     // 删除标签关联
-    await this.videoTagRepository.delete({ video_id: videoId });
+    try {
+      console.log(`[VideosService] 删除标签关联`);
+      await this.videoTagRepository.delete({ video_id: videoId });
+    } catch (error) {
+      console.error(`[VideosService] 删除标签关联失败:`, error);
+    }
 
     // 删除数据库记录
-    await this.videoRepository.remove(video);
-    
-    console.log(`[VideosService] 视频 ${videoId} 已彻底删除`);
+    try {
+      console.log(`[VideosService] 删除数据库记录`);
+      await this.videoRepository.remove(video);
+      console.log(`[VideosService] 视频 ${videoId} 已彻底删除`);
+    } catch (error) {
+      console.error(`[VideosService] 删除数据库记录失败:`, error);
+      throw error;
+    }
   }
 
   /**
@@ -499,9 +562,38 @@ export class VideosService {
   /**
    * 软删除视频的所有版本（根据base_name）
    */
-  async deleteAllVersions(projectId: string, baseName: string): Promise<void> {
+  async deleteAllVersions(projectId: string, baseName: string, userId?: string, teamId?: string): Promise<void> {
     try {
-      console.log(`[VideosService] 开始软删除所有版本: projectId=${projectId}, baseName=${baseName}`);
+      console.log(`[VideosService] 开始软删除所有版本: projectId=${projectId}, baseName=${baseName}, 用户: ${userId}, 团队: ${teamId}`);
+      
+      // 权限检查：普通用户只能删除自己上传的视频，管理员可以删除所有视频
+      if (userId && teamId) {
+        const userRole = await this.teamsService.getUserRole(teamId, userId);
+        console.log(`[VideosService] 用户角色: ${userRole}`);
+        
+        // 如果不是管理员，需要检查所有版本是否都是该用户上传的
+        if (userRole !== TeamRole.ADMIN && userRole !== TeamRole.SUPER_ADMIN) {
+          // 查询该基础名称的所有未删除视频
+          const videos = await this.videoRepository.find({
+            where: {
+              project_id: projectId,
+              base_name: baseName,
+              deleted_at: null,
+            },
+          });
+          
+          // 检查是否所有版本都是该用户上传的
+          const allOwnedByUser = videos.every(v => v.uploader_id === userId);
+          if (!allOwnedByUser) {
+            throw new ForbiddenException('只能删除自己上传的视频');
+          }
+          
+          if (videos.length === 0) {
+            console.log(`[VideosService] 没有找到未删除的视频版本`);
+            return;
+          }
+        }
+      }
       
       // 使用 update 方法批量软删除，更可靠
       const result = await this.videoRepository

@@ -21,3 +21,20 @@ Object.defineProperty(window, 'location', {
 });
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

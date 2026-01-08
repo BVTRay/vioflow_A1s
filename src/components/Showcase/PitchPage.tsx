@@ -376,12 +376,12 @@ export const PitchPage: React.FC = () => {
         {data.videos.length > 1 && (
           <div className="mb-8 sm:mb-12">
             <h2 className="text-xl sm:text-2xl font-semibold text-zinc-100 mb-4 sm:mb-6">视频列表</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
               {data.videos.map((video, index) => (
                 <div
                   key={video.id}
                   onClick={() => handleVideoSelect(index)}
-                  className={`bg-zinc-900 rounded-xl border overflow-hidden cursor-pointer transition-all ${
+                  className={`bg-zinc-900 rounded-xl border overflow-hidden cursor-pointer transition-all active:scale-[0.98] ${
                     index === currentVideoIndex
                       ? 'border-fuchsia-500 ring-2 ring-fuchsia-500/20'
                       : 'border-zinc-800 hover:border-zinc-700'
@@ -401,16 +401,16 @@ export const PitchPage: React.FC = () => {
                     )}
                     {index === currentVideoIndex && (
                       <div className="absolute inset-0 bg-fuchsia-500/20 flex items-center justify-center">
-                        <div className="bg-fuchsia-500 text-white px-3 py-1 rounded-full text-xs font-medium">
+                        <div className="bg-fuchsia-500 text-white px-3 py-1 rounded-full text-xs font-medium shadow-lg">
                           正在播放
                         </div>
                       </div>
                     )}
-                    <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                    <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded backdrop-blur-sm">
                       {video.duration || '--:--'}
                     </div>
                   </div>
-                  <div className="p-4">
+                  <div className="p-3 sm:p-4">
                     <h3 className="text-sm font-medium text-zinc-200 mb-1 truncate">{video.name}</h3>
                     {video.description && (
                       <p className="text-xs text-zinc-500 line-clamp-2">{video.description}</p>

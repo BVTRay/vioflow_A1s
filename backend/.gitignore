@@ -38,8 +38,18 @@ lerna-debug.log*
 .env
 .env.local
 .env.*.local
+*.backup*
 
 # Uploads
 /uploads
 /temp
+
+# Database exports (DANGEROUS - contains sensitive data)
+database_export_*
+*.sql.gz
+*.dump
+
+# Logs
+*.log
+logs/
 

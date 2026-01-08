@@ -542,7 +542,7 @@ export const SharePage: React.FC = () => {
           {/* Video Player */}
           {videoUrl ? (
             <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden shadow-2xl">
-              <div className="relative bg-black aspect-video">
+              <div className="relative bg-black aspect-video group/player">
                 <video
                   ref={videoRef}
                   src={videoUrl}
@@ -557,16 +557,17 @@ export const SharePage: React.FC = () => {
                   onPause={() => setIsPlaying(false)}
                   onEnded={() => setIsPlaying(false)}
                   onClick={handlePlayPause}
+                  playsInline
                 />
 
                 {/* 播放按钮覆盖层 - 只在暂停时显示 */}
                 {!isPlaying && (
                   <div 
-                    className="absolute inset-0 flex items-center justify-center cursor-pointer"
+                    className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black/20"
                     onClick={handlePlayPause}
                   >
                     <button
-                      className="w-16 h-16 sm:w-20 sm:h-20 bg-black/40 hover:bg-indigo-500/90 backdrop-blur-sm rounded-full flex items-center justify-center transition-all group"
+                      className="w-14 h-14 sm:w-20 sm:h-20 bg-black/40 hover:bg-indigo-500/90 backdrop-blur-sm rounded-full flex items-center justify-center transition-all group active:scale-95"
                     >
                       <Play className="w-6 h-6 sm:w-8 sm:h-8 fill-white text-white pl-1 group-hover:scale-110 transition-transform" />
                     </button>
@@ -575,11 +576,11 @@ export const SharePage: React.FC = () => {
               </div>
 
               {/* Video Controls */}
-              <div className="px-4 sm:px-6 py-4 bg-zinc-950 border-t border-zinc-800">
-                <div className="flex items-center gap-4">
+              <div className="px-3 sm:px-6 py-3 sm:py-4 bg-zinc-950 border-t border-zinc-800">
+                <div className="flex items-center gap-2 sm:gap-4">
                   <button
                     onClick={handlePlayPause}
-                    className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
+                    className="p-2 hover:bg-zinc-800 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                   >
                     {isPlaying ? (
                       <Pause className="w-5 h-5 text-zinc-300" />
@@ -588,26 +589,26 @@ export const SharePage: React.FC = () => {
                     )}
                   </button>
 
-                  <div className="flex-1 flex items-center gap-3">
-                    <span className="text-xs text-zinc-500 min-w-[40px]">
+                  <div className="flex-1 flex items-center gap-2 sm:gap-3">
+                    <span className="text-xs text-zinc-500 min-w-[35px] sm:min-w-[40px] text-right">
                       {formatTime(currentTime)}
                     </span>
                     {/* 进度条容器 - 带批注标记 */}
-                    <div className="flex-1 relative group">
+                    <div className="flex-1 relative group h-8 flex items-center">
                       <input
                         type="range"
                         min="0"
                         max={duration || 0}
                         value={currentTime}
                         onChange={handleSeek}
-                        className="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-indigo-500 relative z-10"
+                        className="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-indigo-500 relative z-10 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                         style={{
                           background: `linear-gradient(to right, #6366f1 0%, #6366f1 ${duration ? (currentTime / duration) * 100 : 0}%, #3f3f46 ${duration ? (currentTime / duration) * 100 : 0}%, #3f3f46 100%)`,
                         }}
                       />
-                      {/* 批注时间点标记 - 关键帧样式 */}
+                      {/* 批注时间点标记 */}
                       {duration > 0 && annotations.map((annotation) => {
-                        // API 返回 camelCase (clientName)，但也兼容 snake_case (client_name)
+                        // ... 代码保持不变 ...
                         const rawAnnotation = annotation as any;
                         const displayName = annotation.user?.name || rawAnnotation.clientName || annotation.client_name || '访客';
                         const userType = rawAnnotation.userType || annotation.userType || (annotation.user?.name ? 'personal_user' : 'guest');
@@ -624,49 +625,28 @@ export const SharePage: React.FC = () => {
                         return (
                           <div
                             key={annotation.id}
-                            className="absolute top-1/2 -translate-y-1/2 z-20 cursor-pointer group/marker"
-                            style={{ left: `${position}%` }}
+                            className="absolute top-1/2 -translate-y-1/2 z-20 cursor-pointer group/marker w-3 h-8 flex items-center justify-center"
+                            style={{ left: `${position}%`, marginLeft: '-6px' }}
                             onClick={(e) => {
                               e.stopPropagation();
                               if (videoRef.current) {
                                 videoRef.current.currentTime = timeInSeconds;
                               }
                             }}
-                            title={`${annotatorName}: ${annotation.content.substring(0, 50)}${annotation.content.length > 50 ? '...' : ''}`}
                           >
-                            {/* 关键帧标记 - 菱形样式 */}
                             <div 
-                              className="w-4 h-4 -ml-2 rotate-45 shadow-lg transition-all duration-200 group-hover/marker:scale-125 border-2"
+                              className="w-2.5 h-2.5 rotate-45 shadow-lg transition-all duration-200 group-hover/marker:scale-150 border-[1.5px]"
                               style={{ 
                                 backgroundColor: color,
-                                borderColor: 'rgba(255,255,255,0.8)',
-                                boxShadow: `0 0 8px ${color}, 0 2px 4px rgba(0,0,0,0.3)`,
+                                borderColor: 'rgba(255,255,255,0.9)',
+                                boxShadow: `0 0 4px ${color}`,
                               }}
                             />
-                            {/* 底部小三角指示器 */}
-                            <div 
-                              className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[4px] border-r-[4px] border-t-[6px] border-l-transparent border-r-transparent opacity-80"
-                              style={{ borderTopColor: color }}
-                            />
-                            {/* 悬停提示 */}
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 hidden group-hover/marker:block z-30 pointer-events-none">
-                              <div 
-                                className="px-3 py-1.5 rounded-lg text-xs text-white whitespace-nowrap max-w-[220px] truncate shadow-xl"
-                                style={{ backgroundColor: color }}
-                              >
-                                <span className="font-semibold">{annotatorName}</span>
-                                <span className="opacity-80 ml-1.5 font-mono">({annotation.timecode})</span>
-                              </div>
-                              <div 
-                                className="w-2.5 h-2.5 rotate-45 mx-auto -mt-1.5"
-                                style={{ backgroundColor: color }}
-                              />
-                            </div>
                           </div>
                         );
                       })}
                     </div>
-                    <span className="text-xs text-zinc-500 min-w-[40px]">
+                    <span className="text-xs text-zinc-500 min-w-[35px] sm:min-w-[40px]">
                       {formatTime(duration)}
                     </span>
                   </div>
@@ -715,8 +695,8 @@ export const SharePage: React.FC = () => {
 
         {/* 批注侧边栏（仅审阅模式） */}
         {isReviewMode && showAnnotations && (
-          <aside className="w-full lg:w-80 bg-zinc-900 rounded-xl border border-zinc-800 flex flex-col shrink-0 h-[60vh] lg:h-[calc(100vh-200px)]">
-            <div className="h-14 border-b border-zinc-800 flex items-center px-4 justify-between bg-zinc-950 rounded-t-xl">
+          <aside className="w-full lg:w-80 bg-zinc-900 rounded-xl border border-zinc-800 flex flex-col shrink-0 h-[500px] lg:h-[calc(100vh-200px)]">
+            <div className="h-12 sm:h-14 border-b border-zinc-800 flex items-center px-4 justify-between bg-zinc-950 rounded-t-xl">
               <span className="font-semibold text-sm text-zinc-200">批注 ({annotations.length})</span>
               <div className="flex items-center gap-2">
                 <button
@@ -740,7 +720,7 @@ export const SharePage: React.FC = () => {
               </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 custom-scrollbar">
               {annotations.length === 0 ? (
                 <div className="text-center text-zinc-500 text-sm py-8">
                   <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />

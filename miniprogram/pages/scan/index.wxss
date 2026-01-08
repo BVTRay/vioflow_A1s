@@ -1,0 +1,23 @@
+/* pages/scan/index.wxss */
+.container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #18181b;
+}
+
+.loading-container {
+  text-align: center;
+}
+
+.loading-text {
+  font-size: 32rpx;
+  color: #a1a1aa;
+}
+
+
+
+
+
+

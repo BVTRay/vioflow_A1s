@@ -1,0 +1,33 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main  # 或者是 master，看你的主分支叫什么
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.KEY }}
+          script: |
+            # 1. 进入你的项目目录 (请修改为你服务器上的实际路径)
+            cd /www/wwwroot/vioflow 
+            
+            # 2. 拉取最新代码
+            git pull origin main
+            
+            # 3. 安装依赖 (如果有变动)
+            npm install
+            
+            # 4. 重新构建 (NestJS 需要构建)
+            npm run build
+            
+            # 5. 启动或重载服务 (新写法，稳如老狗)
+            # 这句话的意思是：如果服务已经在跑，就重载它；如果没跑，就按配置文件启动它
+            pm2 startOrReload ecosystem.config.js

@@ -9,6 +9,8 @@ import { showcaseApi } from '../../api/showcase';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
 import { useTeam } from '../../contexts/TeamContext';
 import { toastManager } from '../../hooks/useToast';
+import { ConfirmModal } from '../UI/ConfirmModal';
+import { useAuth } from '../../hooks/useAuth';
 
 // 组图标组件 - 简约的多个文件夹叠加设计，细腻简约风格
 const GroupIcon: React.FC<{ size?: number; className?: string }> = ({ size = 24, className = '' }) => {
@@ -100,6 +102,7 @@ export const MainBrowser: React.FC = () => {
   const { state, dispatch } = useStore();
   const theme = useThemeClasses();
   const { currentTeam } = useTeam();
+  const { user } = useAuth();
   const { activeModule, showWorkbench, projects, selectedProjectId, selectedVideoId, videos, cart, searchTerm, browserViewMode, browserCardSize, reviewViewMode, deliveryViewMode, showcaseViewMode, deliveries, selectedDeliveryFiles, isRetrievalPanelVisible, selectedGroupTag, selectedGroupTags, isTagMultiSelectMode, tags } = state;
   const project = projects.find(p => p.id === selectedProjectId);
   const selectedVideo = videos.find(v => v.id === selectedVideoId);
@@ -108,6 +111,17 @@ export const MainBrowser: React.FC = () => {
   const [selectedItems, setSelectedItems] = React.useState<Set<string>>(new Set()); // 选中的文件/项目ID
   const [lastClickTime, setLastClickTime] = React.useState<{id: string, time: number} | null>(null); // 用于双击检测
   const [expandedItems, setExpandedItems] = React.useState<Set<string>>(new Set()); // 展开的组/项目ID（列表模式）
+  
+  // 删除确认弹窗状态
+  const [deleteConfirmState, setDeleteConfirmState] = useState<{
+    isOpen: boolean;
+    video: Video | null;
+    isDeleting: boolean;
+  }>({
+    isOpen: false,
+    video: null,
+    isDeleting: false,
+  });
   
   // 响应式：检测窗口宽度，决定是否显示按钮文字
   const [windowWidth, setWindowWidth] = React.useState(typeof window !== 'undefined' ? window.innerWidth : 1920);
@@ -497,43 +511,69 @@ export const MainBrowser: React.FC = () => {
       });
   };
 
-  // 处理删除视频
-  const handleDeleteVideo = async (video: Video) => {
-      if (!confirm(`确定要删除视频 "${video.name}" 吗？此操作不可恢复。`)) {
+  // 处理删除视频 - 显示确认弹窗
+  const handleDeleteVideo = (video: Video) => {
+      // 检查权限：普通用户只能删除自己上传的视频
+      const isAdmin = user?.role === 'admin' || user?.role === 'DEV_SUPER_ADMIN';
+      const isOwner = video.uploaderId === user?.id;
+      
+      if (!isAdmin && !isOwner) {
+          toastManager.error('只能删除自己上传的视频');
           return;
       }
       
+      // 打开确认弹窗
+      setDeleteConfirmState({
+          isOpen: true,
+          video,
+          isDeleting: false,
+      });
+  };
+  
+  // 确认删除视频的所有版本
+  const handleConfirmDelete = async () => {
+      const video = deleteConfirmState.video;
+      if (!video) return;
+      
+      setDeleteConfirmState(prev => ({ ...prev, isDeleting: true }));
+      
       try {
           const { videosApi } = await import('../../api/videos');
-          await videosApi.delete(video.id, false);
+          // 删除该视频的所有版本
+          await videosApi.delete(video.id, true);
           
-          // 从state中移除视频（通过过滤）
-          const updatedVideos = videos.filter(v => v.id !== video.id);
+          // 从state中移除该视频的所有版本
+          const updatedVideos = videos.filter(v => 
+              !(v.projectId === video.projectId && v.baseName === video.baseName)
+          );
           dispatch({
               type: 'SET_VIDEOS',
               payload: updatedVideos
           });
           
-          // 如果删除的是当前选中的视频，清除选中状态
-          if (selectedVideoId === video.id) {
+          // 如果删除的视频包含当前选中的视频，清除选中状态
+          const deletedVideoIds = videos
+              .filter(v => v.projectId === video.projectId && v.baseName === video.baseName)
+              .map(v => v.id);
+          if (selectedVideoId && deletedVideoIds.includes(selectedVideoId)) {
               dispatch({ type: 'SELECT_VIDEO', payload: null });
           }
           
-          // 发送成功通知
-          dispatch({
-              type: 'ADD_NOTIFICATION',
-              payload: {
-                  id: Date.now().toString(),
-                  type: 'success',
-                  title: '删除成功',
-                  message: `视频 "${video.name}" 已删除`,
-                  time: '刚刚'
-              }
+          // 关闭弹窗
+          setDeleteConfirmState({
+              isOpen: false,
+              video: null,
+              isDeleting: false,
           });
+          
+          // 发送成功通知
+          toastManager.success(`视频 "${video.baseName || video.name}" 的所有版本已删除`);
       } catch (error: any) {
           console.error('删除视频失败:', error);
           const errorMessage = error?.response?.data?.message || error?.message || '删除失败，请重试';
-          alert(errorMessage);
+          toastManager.error(errorMessage);
+          
+          setDeleteConfirmState(prev => ({ ...prev, isDeleting: false }));
       }
   };
 
@@ -2226,6 +2266,39 @@ export const MainBrowser: React.FC = () => {
           />
         ) : null;
       })()}
+      
+      {/* 删除确认弹窗 */}
+      <ConfirmModal
+        isOpen={deleteConfirmState.isOpen}
+        onClose={() => setDeleteConfirmState({ isOpen: false, video: null, isDeleting: false })}
+        onConfirm={handleConfirmDelete}
+        title="确认删除视频"
+        confirmText="删除所有版本"
+        cancelText="取消"
+        variant="danger"
+        loading={deleteConfirmState.isDeleting}
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-4">
+            <div className="flex-shrink-0 text-red-400">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div className="flex-1">
+              <p className={`text-sm ${theme.text.secondary} leading-relaxed mb-3`}>
+                确定要删除视频 <span className="text-zinc-200 font-medium">"{deleteConfirmState.video?.baseName || deleteConfirmState.video?.name}"</span> 的所有版本吗？
+              </p>
+              <p className={`text-sm ${theme.text.muted} leading-relaxed`}>
+                此操作将删除该视频的所有版本，删除后可在回收站中恢复。
+              </p>
+              {!user || (user.role !== 'admin' && user.role !== 'DEV_SUPER_ADMIN') ? (
+                <p className={`text-xs ${theme.text.muted} mt-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded`}>
+                  提示：普通用户只能删除自己上传的视频
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </ConfirmModal>
     </main>
   );
 
@@ -2574,17 +2647,28 @@ const VideoCard: React.FC<{
       {/* Thumbnail - 保持 1:1 正方形比例 */}
       <div className={`relative w-full aspect-square bg-zinc-800 overflow-hidden shrink-0`}>
         <div onClick={(e) => { e.stopPropagation(); onThumbnailClick(); }} className="w-full h-full relative group/thumb">
-             <img 
-                src={video.thumbnailUrl || `https://picsum.photos/seed/${video.id}/400/225`} 
-                alt="Thumbnail" 
-                className="w-full h-full object-cover opacity-80 group-hover/thumb:opacity-100 transition-opacity"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  if (!target.src.includes('picsum.photos')) {
-                    target.src = `https://picsum.photos/seed/${video.id}/400/225`;
-                  }
-                }}
-            />
+             {video.thumbnailUrl ? (
+                <img 
+                  src={video.thumbnailUrl} 
+                  alt="Thumbnail" 
+                  className="w-full h-full object-cover opacity-80 group-hover/thumb:opacity-100 transition-opacity"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const placeholder = target.nextElementSibling as HTMLElement;
+                    if (placeholder) placeholder.style.display = 'flex';
+                  }}
+                />
+              ) : null}
+              <div 
+                className={`w-full h-full flex items-center justify-center bg-zinc-900 ${video.thumbnailUrl ? 'hidden' : 'flex'}`}
+                style={{ display: video.thumbnailUrl ? 'none' : 'flex' }}
+              >
+                <div className="flex flex-col items-center gap-2 text-zinc-600">
+                  <Play className="w-12 h-12" />
+                  <span className="text-xs">生成中...</span>
+                </div>
+              </div>
             <div className="absolute inset-0 bg-black/20 group-hover/thumb:bg-black/40 transition-colors flex items-center justify-center">
                 <div 
                     style={{ width: '15cqi', height: '15cqi', maxWidth: '40px', maxHeight: '40px', minWidth: '24px', minHeight: '24px' }}

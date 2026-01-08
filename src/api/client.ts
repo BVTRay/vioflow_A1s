@@ -63,8 +63,8 @@ class ApiClient {
       logger.error('例如: VITE_API_BASE_URL=https://你的railway域名.railway.app/api');
     } else if (API_BASE_URL.includes('supabase.co')) {
       logger.error('❌ 错误的 API 地址配置:', API_BASE_URL);
-      logger.error('API 地址不应指向 Supabase，应该指向 Railway 后端');
-      logger.error('请检查 Vercel 环境变量中的 VITE_API_BASE_URL');
+      logger.error('API 地址不应指向 Supabase，应该指向本地后端');
+      logger.error('请检查环境变量中的 VITE_API_BASE_URL');
     } else if (import.meta.env.PROD && API_BASE_URL === 'https://api.vioflow.cc/api') {
       logger.warnImportant('⚠️ 使用默认 API 地址，可能不正确');
       logger.warnImportant('建议在 Vercel 环境变量中设置 VITE_API_BASE_URL');

@@ -20,6 +20,16 @@
     "paths": {
       "@/*": ["src/*"]
     }
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "scripts",
+    "scripts/**",
+    "**/*.spec.ts",
+    "test",
+    "scripts/archive",
+    "scripts/archive/**"
+  ]
 }
 

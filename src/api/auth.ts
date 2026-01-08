@@ -107,5 +107,37 @@ export const authApi = {
       throw new Error(error.response?.data?.message || error.message || '注册失败，请稍后再试');
     }
   },
+
+  // 手机号登录相关
+  sendSms: async (phone: string) => {
+    return apiClient.post('/auth/send-sms', { phone });
+  },
+
+  phoneLogin: async (phone: string, code: string): Promise<LoginResponse> => {
+    const response = await apiClient.post<any>('/auth/phone-login', { phone, code });
+    const token = response.access_token || response.accessToken;
+    if (!token) {
+      throw new Error('登录失败：未收到认证令牌');
+    }
+    apiClient.setToken(token);
+    return {
+      ...response,
+      accessToken: token,
+      access_token: token,
+      user: {
+        ...response.user,
+        avatarUrl: response.user?.avatar_url || response.user?.avatarUrl,
+      },
+    };
+  },
+
+  // 微信扫码登录相关
+  generateWechatQrCode: async () => {
+    return apiClient.post<{ scanId: string; qrCode: string }>('/auth/wechat-qrcode');
+  },
+
+  checkWechatQrCodeStatus: async (scanId: string) => {
+    return apiClient.get<{ status: 'pending' | 'scanned' | 'confirmed' | 'expired'; access_token?: string; token?: string; user?: any; needBind?: boolean }>(`/auth/wechat-qrcode/${scanId}`);
+  },
 };
 

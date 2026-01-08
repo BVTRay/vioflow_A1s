@@ -1,0 +1,39 @@
+<!--pages/home/index.wxml-->
+<view class="container">
+  <!-- 用户信息卡片 -->
+  <view class="user-card" wx:if="{{!loading && user}}">
+    <view class="user-avatar">
+      <image
+        wx:if="{{user.avatar_url}}"
+        src="{{user.avatar_url}}"
+        mode="aspectFill"
+      />
+      <text wx:else class="avatar-placeholder">{{user.name ? user.name.charAt(0) : 'U'}}</text>
+    </view>
+    <view class="user-info">
+      <text class="user-name">{{user.name || '用户'}}</text>
+      <text class="user-phone" wx:if="{{user.phone}}">{{user.phone}}</text>
+      <text class="user-email" wx:if="{{user.email}}">{{user.email}}</text>
+    </view>
+  </view>
+
+  <!-- 加载中 -->
+  <view class="loading" wx:if="{{loading}}">
+    <text>加载中...</text>
+  </view>
+
+  <!-- 功能列表 -->
+  <view class="menu-list" wx:if="{{!loading && user}}">
+    <view class="menu-item" bindtap="logout">
+      <text class="menu-icon">🚪</text>
+      <text class="menu-text">退出登录</text>
+      <text class="menu-arrow">›</text>
+    </view>
+  </view>
+</view>
+
+
+
+
+
+

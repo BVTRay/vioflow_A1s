@@ -1,0 +1,21 @@
+{
+  "pages": [
+    "pages/login/index",
+    "pages/scan/index",
+    "pages/confirm-login/index",
+    "pages/agreement/index",
+    "pages/phone-login/index",
+    "pages/home/index"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#18181b",
+    "navigationBarTitleText": "Vioflow",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#18181b"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}
+

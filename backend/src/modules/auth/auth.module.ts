@@ -9,6 +9,9 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 import { User } from '../users/entities/user.entity';
 import { UsersModule } from '../users/users.module';
+import { SmsService } from './services/sms.service';
+import { WechatService } from './services/wechat.service';
+import { QrCodeScanService } from './services/qrcode-scan.service';
 
 @Module({
   imports: [
@@ -36,7 +39,7 @@ import { UsersModule } from '../users/users.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, LocalStrategy],
+  providers: [AuthService, JwtStrategy, LocalStrategy, SmsService, WechatService, QrCodeScanService],
   exports: [AuthService],
 })
 export class AuthModule {}

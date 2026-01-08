@@ -8,8 +8,12 @@ import { projectsApi } from '../../api/projects';
 import { tagsApi } from '../../api/tags';
 import { usersApi } from '../../api/users';
 import { showcaseApi } from '../../api/showcase';
+import { deliveriesApi } from '../../api/deliveries';
+import { videosApi } from '../../api/videos';
+import apiClient from '../../api/client';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
 import { toastManager } from '../../hooks/useToast';
+import { Modal } from '../UI/Modal';
 
 interface WorkbenchProps {
   visible: boolean;
@@ -28,6 +32,24 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
   const delivery = deliveries.find(d => d.projectId === selectedProjectId);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  
+  // 添加超时处理：如果等待 delivery 数据超过 10 秒，显示错误
+  const [deliveryLoadTimeout, setDeliveryLoadTimeout] = useState(false);
+  useEffect(() => {
+    if (selectedProjectId && activeModule === 'delivery' && !delivery) {
+      const timer = setTimeout(() => {
+        setDeliveryLoadTimeout(true);
+        toastManager.error('加载交付数据超时，请刷新页面重试', { duration: 5000 });
+      }, 10000); // 10 秒超时
+      
+      return () => {
+        clearTimeout(timer);
+        setDeliveryLoadTimeout(false);
+      };
+    } else {
+      setDeliveryLoadTimeout(false);
+    }
+  }, [selectedProjectId, activeModule, delivery]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -99,6 +121,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
   const [isGeneratingPackage, setIsGeneratingPackage] = useState(false);
   const [generatedPackageLink, setGeneratedPackageLink] = useState<string | null>(null);
   const [isLinkCopied, setIsLinkCopied] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
   
   // 获取预设分组（从 localStorage）
   const getPresetGroups = (): string[] => {
@@ -342,7 +365,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
       });
 
       // 3. Toast 提示正在上传
-      toastManager.info(`正在上传 "${finalName}"，请稍候...`, { duration: 4000 });
+      toastManager.info(`正在上传 "${finalName}"...`, { duration: 4000 });
 
       try {
           // 导入上传API
@@ -396,6 +419,34 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
 
           // 6. Toast 提示上传成功
           toastManager.success(`"${finalName}" 上传成功！`);
+
+          // 如果没有缩略图，启动轮询检查更新
+          if (!uploadedVideo.thumbnailUrl) {
+              const pollThumbnail = async (attempts = 0) => {
+                  // 最多轮询30次（约60秒）
+                  if (attempts > 30) return;
+
+                  try {
+                      const freshVideo = await videosApi.getById(uploadedVideo.id);
+                      if (freshVideo.thumbnailUrl) {
+                          dispatch({
+                              type: 'UPDATE_VIDEO',
+                              payload: freshVideo
+                          });
+                      } else {
+                          // 继续轮询
+                          setTimeout(() => pollThumbnail(attempts + 1), 2000);
+                      }
+                  } catch (e) {
+                      console.error('[Workbench] 轮询视频状态失败:', e);
+                      // 出错也继续尝试
+                      setTimeout(() => pollThumbnail(attempts + 1), 2000);
+                  }
+              };
+              
+              // 延迟2秒开始首次轮询
+              setTimeout(() => pollThumbnail(), 2000);
+          }
 
           // 7. 发送成功通知（保留用于通知中心）
           dispatch({
@@ -2163,6 +2214,46 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
 
   // --- DELIVERY MODULE LOGIC ---
   const renderDeliveryWorkbench = () => {
+    // 如果有 selectedProjectId 但还没加载到 project 或 delivery，显示加载状态
+    if (selectedProjectId && (!project || !delivery)) {
+      // 如果超时，显示错误信息
+      if (deliveryLoadTimeout) {
+        return (
+          <div className="flex-1 flex flex-col h-full">
+            <div className="px-5 py-4 border-b border-zinc-800 bg-zinc-900 flex justify-end">
+              <button onClick={handleClose}><X className="w-4 h-4 text-zinc-500 hover:text-zinc-200" /></button>
+            </div>
+            <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 gap-4">
+              <AlertCircle className="w-12 h-12 text-red-500" />
+              <div className="text-center">
+                <p className="text-lg font-medium text-red-400 mb-2">加载交付数据超时</p>
+                <p className="text-sm text-zinc-400 mb-4">请检查网络连接或刷新页面重试</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
+                >
+                  刷新页面
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+      
+      // 正常加载状态
+      return (
+        <div className="flex-1 flex flex-col h-full">
+          <div className="px-5 py-4 border-b border-zinc-800 bg-zinc-900 flex justify-end">
+            <button onClick={handleClose}><X className="w-4 h-4 text-zinc-500 hover:text-zinc-200" /></button>
+          </div>
+          <div className="flex-1 flex items-center justify-center text-zinc-500">
+            <Loader2 className="w-6 h-6 animate-spin" />
+          </div>
+        </div>
+      );
+    }
+    
+    // 只有在没有选择项目时才显示空状态
     if (!project || !delivery) return <EmptyWorkbench message="请选择一个待交付项目" onClose={handleClose} />;
     
     // 如果项目已交付，显示对外交付界面
@@ -2395,19 +2486,37 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
             </div>
 
             <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 backdrop-blur-sm space-y-2">
-                 <button 
-                    disabled={!isReady}
-                    onClick={() => {
-                        if (window.confirm("确认完成交付？这将锁定当前交付内容的状态并更新项目状态。")) {
-                            dispatch({ type: 'COMPLETE_DELIVERY', payload: project.id });
-                        }
-                    }}
-                    className={`w-full font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all
-                        ${isReady 
-                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/20' 
-                            : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                        }`}
-                 >
+                <button 
+                   disabled={!isReady}
+                   onClick={async () => {
+                       if (window.confirm("确认完成交付？这将锁定当前交付内容的状态并更新项目状态。")) {
+                           try {
+                               // 调用后端 API 完成交付
+                               await deliveriesApi.complete(project.id);
+                               // 重新加载视频列表以获取更新后的 isCaseFile 状态
+                               const updatedVideos = await videosApi.getAll({ teamId: apiClient.getTeamId() });
+                               const videoList = Array.isArray(updatedVideos) ? updatedVideos : updatedVideos.data;
+                               // 更新前端状态
+                               dispatch({ type: 'COMPLETE_DELIVERY', payload: project.id });
+                               // 更新视频列表
+                               videoList.forEach(video => {
+                                   dispatch({ type: 'UPDATE_VIDEO', payload: video });
+                               });
+                               toastManager.success('交付已完成，主交付文件已自动标记为案例文件');
+                           } catch (error: any) {
+                               console.error('完成交付失败:', error);
+                               const serverMsg = error?.response?.data?.message;
+                               const friendly = Array.isArray(serverMsg) ? serverMsg.join('; ') : serverMsg;
+                               toastManager.error(friendly || error.message || '完成交付失败，请检查必填项后重试');
+                           }
+                       }
+                   }}
+                   className={`w-full font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all
+                       ${isReady 
+                           ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/20' 
+                           : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                       }`}
+                >
                     <FileCheck className="w-4 h-4" />
                     <span>完成交付</span>
                  </button>
@@ -2850,15 +2959,16 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                             <label className="block text-xs font-bold text-zinc-500 uppercase">案例包预览</label>
                             <button
                               onClick={() => {
-                                // 打开预览窗口
-                                const baseUrl = window.location.origin;
-                                const previewUrl = generatedPackageLink || (showcaseConfig.mode === 'quick_player' 
-                                  ? `${baseUrl}/play/preview`
-                                  : `${baseUrl}/pitch/preview`);
-                                window.open(previewUrl, '_blank', 'width=1200,height=800');
+                                // 打开预览弹窗
+                                setShowPreviewModal(true);
                               }}
-                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs transition-colors flex items-center gap-1.5"
-                              title="在新窗口预览案例包"
+                              disabled={cart.length === 0}
+                              className={`px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-1.5 ${
+                                cart.length > 0
+                                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                                  : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                              }`}
+                              title={cart.length > 0 ? "预览案例包效果" : "请先选择视频"}
                             >
                               <Eye className="w-3.5 h-3.5" />
                               <span>预览</span>
@@ -3269,11 +3379,17 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                                         
                                         {/* 缩略图 */}
                                         <div className="w-16 h-10 bg-zinc-800 rounded overflow-hidden shrink-0 relative group/thumb">
-                                             <img 
-                                               src={item.thumbnailUrl || `https://picsum.photos/seed/${item.id}/160/100`} 
-                                               className="w-full h-full object-cover" 
-                                               alt={item.name}
-                                             />
+                                             {item.thumbnailUrl ? (
+                                               <img 
+                                                 src={item.thumbnailUrl} 
+                                                 className="w-full h-full object-cover" 
+                                                 alt={item.name}
+                                               />
+                                             ) : (
+                                               <div className="w-full h-full flex items-center justify-center bg-zinc-900">
+                                                 <Play className="w-4 h-4 text-zinc-600" />
+                                               </div>
+                                             )}
                                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity">
                                                <Play className="w-4 h-4 text-white" />
                                              </div>
@@ -3383,21 +3499,35 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
                   )}
                 </div>
             ) : showcaseConfig.showGenerateForm ? (
-                <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 backdrop-blur-sm flex justify-end gap-3">
+                <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 backdrop-blur-sm flex justify-between items-center">
                   <button 
-                    onClick={handleBackToVideoList}
-                    className="px-4 py-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
+                    onClick={() => setShowPreviewModal(true)}
+                    disabled={cart.length === 0}
+                    className={`px-4 py-2 text-sm rounded-lg transition-all flex items-center gap-2 ${
+                      cart.length > 0
+                        ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
+                        : 'bg-zinc-900 text-zinc-600 cursor-not-allowed'
+                    }`}
                   >
-                    取消
+                    <Eye className="w-4 h-4" />
+                    <span>预览</span>
                   </button>
-                  <button 
-                    onClick={handleOpenConfigPage}
-                    disabled={showcaseConfig.mode === 'pitch_page' && !showcaseConfig.clientName.trim()}
-                    className="px-5 py-2 text-sm bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-600 text-white font-medium rounded-lg transition-all flex items-center gap-2"
-                  >
-                    <Link2 className="w-4 h-4" />
-                    <span>配置链接</span>
-                  </button>
+                  <div className="flex gap-3">
+                    <button 
+                      onClick={handleBackToVideoList}
+                      className="px-4 py-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
+                    >
+                      取消
+                    </button>
+                    <button 
+                      onClick={handleOpenConfigPage}
+                      disabled={showcaseConfig.mode === 'pitch_page' && !showcaseConfig.clientName.trim()}
+                      className="px-5 py-2 text-sm bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-600 text-white font-medium rounded-lg transition-all flex items-center gap-2"
+                    >
+                      <Link2 className="w-4 h-4" />
+                      <span>配置链接</span>
+                    </button>
+                  </div>
                 </div>
             ) : (
                 <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 backdrop-blur-sm">
@@ -3820,13 +3950,180 @@ export const Workbench: React.FC<WorkbenchProps> = ({ visible }) => {
   // 在dashboard模块时，根据workbenchActionType决定显示什么内容
   const effectiveModule = activeModule === 'dashboard' ? (workbenchActionType || 'review') : activeModule;
 
+  // 渲染预览弹窗
+  const renderPreviewModal = () => {
+    if (!showPreviewModal || cart.length === 0) return null;
+
+    const cartItems = videos.filter(v => cart.includes(v.id));
+    const previewVideos = cart.map(id => cartItems.find(v => v.id === id)).filter(Boolean) as typeof cartItems;
+    const isQuickPlayer = showcaseConfig.mode === 'quick_player';
+
+    return (
+      <Modal
+        isOpen={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        title="案例包预览"
+        maxWidth="full"
+      >
+        <div className="min-h-[600px]">
+          {isQuickPlayer ? (
+            // 快速播放器预览
+            <div className="bg-black rounded-lg overflow-hidden">
+              <div className="aspect-video bg-zinc-950 flex items-center justify-center relative">
+                {previewVideos.length > 0 && previewVideos[0].storage_url ? (
+                  <video
+                    src={previewVideos[0].storage_url}
+                    className="w-full h-full object-contain"
+                    controls
+                    autoPlay
+                  />
+                ) : (
+                  <div className="text-center text-zinc-500">
+                    <Play className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                    <p className="text-sm">视频预览</p>
+                  </div>
+                )}
+              </div>
+              <div className="p-4 bg-zinc-900 border-t border-zinc-800">
+                <div className="text-sm text-zinc-300 mb-2">
+                  {showcaseConfig.packageTitle || '未命名案例包'}
+                </div>
+                {previewVideos.length > 1 && (
+                  <div className="text-xs text-zinc-500">
+                    共 {previewVideos.length} 个视频，将自动连续播放
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            // 提案微站预览
+            <div className="bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 min-h-[600px]">
+              {/* Header */}
+              <header className="border-b border-zinc-800/50 bg-zinc-900/50 backdrop-blur-sm">
+                <div className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 bg-gradient-to-br from-fuchsia-500 to-violet-500 rounded-lg flex items-center justify-center">
+                      <Globe className="w-6 h-6 text-white" />
+                    </div>
+                    <span className="text-xl font-semibold text-zinc-100">Vioflow</span>
+                  </div>
+                </div>
+              </header>
+
+              {/* Main Content */}
+              <main className="px-6 py-8">
+                {/* 欢迎语区域 */}
+                <div className="mb-8 text-center">
+                  {showcaseConfig.clientName && (
+                    <div className="mb-4">
+                      <span className="text-zinc-400 text-sm">To: </span>
+                      <span className="text-fuchsia-400 font-semibold text-lg">{showcaseConfig.clientName}</span>
+                    </div>
+                  )}
+                  <h1 className="text-3xl font-bold text-zinc-100 mb-4">
+                    {showcaseConfig.packageTitle || '未命名案例包'}
+                  </h1>
+                  {showcaseConfig.welcomeMessage && (
+                    <p className="text-zinc-400 text-sm max-w-3xl mx-auto leading-relaxed">
+                      {showcaseConfig.welcomeMessage}
+                    </p>
+                  )}
+                </div>
+
+                {/* 视频播放器区域 */}
+                <div className="mb-8">
+                  <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden shadow-2xl">
+                    <div className="relative bg-black aspect-video">
+                      {previewVideos.length > 0 && previewVideos[0].storage_url ? (
+                        <video
+                          src={previewVideos[0].storage_url}
+                          className="w-full h-full object-contain"
+                          controls
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Play className="w-16 h-16 text-zinc-600" />
+                        </div>
+                      )}
+                    </div>
+                    {previewVideos.length > 0 && (
+                      <div className="px-6 py-4 bg-zinc-950 border-t border-zinc-800">
+                        <h3 className="text-lg font-semibold text-zinc-100 mb-2">{previewVideos[0].name}</h3>
+                        {showcaseConfig.itemDescriptions[previewVideos[0].id] && (
+                          <p className="text-sm text-zinc-400">{showcaseConfig.itemDescriptions[previewVideos[0].id]}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 视频列表 */}
+                {previewVideos.length > 1 && (
+                  <div className="mb-8">
+                    <h2 className="text-xl font-semibold text-zinc-100 mb-4">视频列表</h2>
+                    <div className="grid grid-cols-3 gap-4">
+                      {previewVideos.map((video, index) => (
+                        <div
+                          key={video.id}
+                          className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden"
+                        >
+                          <div className="relative aspect-video bg-zinc-950">
+                            {video.thumbnail_url ? (
+                              <img
+                                src={video.thumbnail_url}
+                                alt={video.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Play className="w-12 h-12 text-zinc-600" />
+                              </div>
+                            )}
+                            {index === 0 && (
+                              <div className="absolute inset-0 bg-fuchsia-500/20 flex items-center justify-center">
+                                <div className="bg-fuchsia-500 text-white px-3 py-1 rounded-full text-xs font-medium">
+                                  正在播放
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          <div className="p-4">
+                            <h3 className="text-sm font-medium text-zinc-200 mb-1 truncate">{video.name}</h3>
+                            {showcaseConfig.itemDescriptions[video.id] && (
+                              <p className="text-xs text-zinc-500 line-clamp-2">{showcaseConfig.itemDescriptions[video.id]}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 联系方式 */}
+                {showcaseConfig.contactInfo && (
+                  <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 text-center">
+                    <h2 className="text-lg font-semibold text-zinc-100 mb-4">联系方式</h2>
+                    <p className="text-zinc-400 text-sm">{showcaseConfig.contactInfo}</p>
+                  </div>
+                )}
+              </main>
+            </div>
+          )}
+        </div>
+      </Modal>
+    );
+  };
+
   return (
-    <aside className={`fixed top-[70px] bottom-[45px] right-[15px] w-[360px] ${theme.bg.secondary} rounded-xl border ${theme.border.primary} z-30 shadow-2xl shadow-black/50 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out ${visible ? 'translate-x-0' : 'translate-x-[400px]'}`}>
-        {effectiveModule === 'review' && renderReviewWorkbench()}
-        {effectiveModule === 'delivery' && renderDeliveryWorkbench()}
-        {effectiveModule === 'showcase' && renderShowcaseWorkbench()}
-        {effectiveModule === 'settings' && renderSettingsWorkbench()}
-    </aside>
+    <>
+      <aside className={`fixed top-[70px] bottom-[45px] right-[15px] w-[360px] ${theme.bg.secondary} rounded-xl border ${theme.border.primary} z-30 shadow-2xl shadow-black/50 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out ${visible ? 'translate-x-0' : 'translate-x-[400px]'}`}>
+          {effectiveModule === 'review' && renderReviewWorkbench()}
+          {effectiveModule === 'delivery' && renderDeliveryWorkbench()}
+          {effectiveModule === 'showcase' && renderShowcaseWorkbench()}
+          {effectiveModule === 'settings' && renderSettingsWorkbench()}
+      </aside>
+      {effectiveModule === 'showcase' && renderPreviewModal()}
+    </>
   );
 };
 

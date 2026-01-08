@@ -1,0 +1,36 @@
+<!-- pages/confirm-login/index.wxml -->
+<view class="container">
+  <view class="content">
+    <!-- Logo 或图标 -->
+    <view class="logo">
+      <text class="logo-emoji">✅</text>
+    </view>
+
+    <!-- 标题 -->
+    <view class="title">确认授权登录</view>
+    
+    <!-- 提示信息 -->
+    <view class="tips">
+      <text>检测到您已经是 VioFlow 用户</text>
+      <text>点击确认即可完成登录</text>
+    </view>
+
+    <!-- 按钮区域 -->
+    <view class="button-group">
+      <button class="confirm-btn" bindtap="confirmLogin" disabled="{{loading}}">
+        确认授权登录
+      </button>
+      
+      <button class="cancel-btn" bindtap="cancelLogin" disabled="{{loading}}">
+        取消
+      </button>
+    </view>
+  </view>
+
+  <!-- 安全提示 -->
+  <view class="security-tips">
+    <text class="security-icon">🔒</text>
+    <text class="security-text">您的信息安全，由微信保护</text>
+  </view>
+</view>
+

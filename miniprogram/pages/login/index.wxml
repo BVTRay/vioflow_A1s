@@ -1,0 +1,75 @@
+<!--pages/login/index.wxml-->
+<view class="container">
+  <view class="login-header">
+    <text class="title">欢迎使用 Vioflow</text>
+    <text class="subtitle">请选择登录方式</text>
+  </view>
+
+  <!-- 手机号登录 -->
+  <view class="login-section">
+    <view class="section-title">手机号登录</view>
+    
+    <view class="input-group">
+      <input
+        class="input"
+        type="number"
+        placeholder="请输入手机号"
+        placeholder-class="input-placeholder"
+        value="{{phone}}"
+        bindinput="onPhoneInput"
+        maxlength="11"
+      />
+    </view>
+
+    <view class="input-group">
+      <input
+        class="input input-code"
+        type="number"
+        placeholder="请输入验证码"
+        placeholder-class="input-placeholder"
+        value="{{code}}"
+        bindinput="onCodeInput"
+        maxlength="6"
+      />
+      <button
+        class="btn-code {{countdown > 0 || sending ? 'btn-code-disabled' : ''}}"
+        bindtap="sendCode"
+        disabled="{{countdown > 0 || sending}}"
+      >
+        {{countdown > 0 ? countdown + 's' : sending ? '发送中...' : '获取验证码'}}
+      </button>
+    </view>
+
+    <button
+      class="btn btn-primary {{loading ? 'btn-disabled' : ''}}"
+      bindtap="phoneLogin"
+      disabled="{{loading}}"
+    >
+      {{loading ? '登录中...' : '登录'}}
+    </button>
+  </view>
+
+  <!-- 分隔线 -->
+  <view class="divider">
+    <text class="divider-text">或</text>
+  </view>
+
+  <!-- 微信登录 -->
+  <view class="login-section">
+    <view class="section-title">微信一键登录</view>
+    <button
+      class="btn btn-secondary wechat-login-btn {{loading ? 'btn-disabled' : ''}}"
+      bindtap="wechatLogin"
+      disabled="{{loading}}"
+    >
+      <text class="wechat-icon">🔐</text>
+      <text>{{loading ? '登录中...' : '微信登录'}}</text>
+    </button>
+  </view>
+</view>
+
+
+
+
+
+

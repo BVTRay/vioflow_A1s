@@ -626,8 +626,12 @@ export const RetrievalPanel: React.FC = () => {
                <button 
                   onClick={(e) => {
                     e.stopPropagation();
+                    // 确保先选择项目，然后在下一个 tick 打开操作台
                     dispatch({ type: 'SELECT_PROJECT', payload: project.id });
-                    dispatch({ type: 'TOGGLE_WORKBENCH', payload: true });
+                    // 使用 setTimeout 确保状态更新完成后再打开操作台
+                    setTimeout(() => {
+                      dispatch({ type: 'TOGGLE_WORKBENCH', payload: true });
+                    }, 0);
                   }}
                   className="p-1.5 bg-indigo-600 hover:bg-indigo-500 rounded text-white shadow-sm shadow-indigo-900/30 transition-all hover:scale-105"
                   title="发起交付"
@@ -1087,15 +1091,17 @@ export const RetrievalPanel: React.FC = () => {
                                   >
                                       {/* 预览画面 */}
                                       <div className="w-16 h-10 bg-zinc-800 rounded overflow-hidden shrink-0 relative">
-                                        <img 
-                                          src={v.thumbnailUrl || `https://picsum.photos/seed/${v.id}/160/100`} 
-                                          alt={v.name}
-                                          className="w-full h-full object-cover"
-                                          onError={(e) => {
-                                            const target = e.target as HTMLImageElement;
-                                            target.src = `https://picsum.photos/seed/${v.id}/160/100`;
-                                          }}
-                                        />
+                                        {v.thumbnailUrl ? (
+                                          <img 
+                                            src={v.thumbnailUrl} 
+                                            alt={v.name}
+                                            className="w-full h-full object-cover"
+                                          />
+                                        ) : (
+                                          <div className="w-full h-full flex items-center justify-center bg-zinc-900">
+                                            <Play className="w-4 h-4 text-zinc-600" />
+                                          </div>
+                                        )}
                                         <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                           <PlayCircle className="w-4 h-4 text-white" />
                                         </div>

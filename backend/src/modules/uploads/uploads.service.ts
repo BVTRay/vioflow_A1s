@@ -181,10 +181,18 @@ export class UploadsService {
         throw new BadRequestException(`不支持的文件扩展名: ${fileExtensionFromOriginal}`);
       }
 
+      // 获取项目信息（用于配额检查和存储路径构建）
+      const project = await this.projectsService.findOne(projectId);
+      if (!project) {
+        throw new BadRequestException('项目不存在');
+      }
+      if (!project.team_id) {
+        throw new BadRequestException('项目没有关联团队');
+      }
+
       // 检查存储配额（基于团队）
       try {
-        const project = await this.projectsService.findOne(projectId);
-        if (project && project.team_id) {
+        if (project.team_id) {
           const storageUsage = await this.storageStatsService.getUsage(project.team_id, userId);
           // 从环境变量读取存储配额限制，默认值根据存储类型设置
           // R2 通常有更大的存储空间，默认 1TB；Supabase 默认 100GB
@@ -233,17 +241,17 @@ export class UploadsService {
       }
 
       // 1. 上传文件到存储服务
-      // 生成一个安全的文件名：使用时间戳 + 随机字符串 + 扩展名
-      const timestamp = Date.now();
       // 使用已验证的文件扩展名，如果没有则从name获取，最后回退到mp4
       const fileExtension = fileExtensionFromOriginal || name.split('.').pop() || 'mp4';
-      // 生成一个唯一的文件名（只包含 ASCII 字符）
-      const randomStr = Math.random().toString(36).substring(2, 10);
-      const safeFileName = `${timestamp}-${randomStr}.${fileExtension}`;
-      // 存储路径：videos/{projectId}/{filename}
-      const storagePath = `videos/${projectId}/${safeFileName}`;
+      
+      // 生成视频 UUID（用于存储路径）
+      const { v4: uuidv4 } = require('uuid');
+      const videoUuid = uuidv4();
+      
+      // 按照设计方案构建存储路径：teams/{team_uuid}/projects/{project_uuid}/{video_uuid}/source.{ext}
+      const storagePath = `teams/${project.team_id}/projects/${projectId}/${videoUuid}/source.${fileExtension}`;
 
-      console.log(`[UploadsService] 上传到 Supabase: ${storagePath} (原始文件名: ${name})`);
+      console.log(`[UploadsService] 上传到存储: ${storagePath} (原始文件名: ${name})`);
 
       let url: string;
       let key: string;

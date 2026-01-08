@@ -21,11 +21,14 @@ export const ShareModule: React.FC = () => {
     setLoading(true);
     const teamId = currentTeam?.id;
     sharesApi.getAll(teamId)
-      .then((links) => {
+      .then((response) => {
+        // 处理分页响应格式：可能是 { data: ShareLink[], total, page, limit } 或直接是数组
+        const links = Array.isArray(response) ? response : (response?.data || []);
         setAllShareLinks(links);
       })
       .catch((error) => {
         console.error('Failed to load share links:', error);
+        setAllShareLinks([]); // 确保始终是数组
       })
       .finally(() => {
         setLoading(false);
@@ -43,6 +46,10 @@ export const ShareModule: React.FC = () => {
 
   // 根据选中的项目和类别筛选分享链接
   const getFilteredLinks = () => {
+    // 确保 allShareLinks 是数组
+    if (!Array.isArray(allShareLinks)) {
+      return [];
+    }
     let filtered = allShareLinks;
 
     // 按类别筛选
@@ -87,11 +94,14 @@ export const ShareModule: React.FC = () => {
 
   const filteredLinks = getFilteredLinks();
 
+  // 确保 filteredLinks 是数组
+  const safeFilteredLinks = Array.isArray(filteredLinks) ? filteredLinks : [];
+
   // 按类别分组
   const groupedLinks = {
-    review: filteredLinks.filter(link => link.type === 'video_review' || link.type === 'video_share'),
-    delivery: filteredLinks.filter(link => link.type === 'delivery_package'),
-    showcase: filteredLinks.filter(link => link.type === 'showcase_package' || link.type === 'showcase'),
+    review: safeFilteredLinks.filter(link => link.type === 'video_review' || link.type === 'video_share'),
+    delivery: safeFilteredLinks.filter(link => link.type === 'delivery_package'),
+    showcase: safeFilteredLinks.filter(link => link.type === 'showcase_package' || link.type === 'showcase'),
   };
 
   const getShareUrl = (link: ShareLink) => {
@@ -237,12 +247,12 @@ export const ShareModule: React.FC = () => {
             <h1 className={`text-2xl font-semibold ${theme.text.secondary} mb-1`}>分享管理</h1>
             <p className={`text-sm ${theme.text.muted}`}>
               {shareMultiSelectMode && selectedShareProjects.length > 0 
-                ? `已选中 ${selectedShareProjects.length} 个项目，共 ${filteredLinks.length} 个分享链接`
+                ? `已选中 ${selectedShareProjects.length} 个项目，共 ${safeFilteredLinks.length} 个分享链接`
                 : !shareMultiSelectMode && selectedShareProjectId
-                ? `已选择 1 个项目，共 ${filteredLinks.length} 个分享链接`
+                ? `已选择 1 个项目，共 ${safeFilteredLinks.length} 个分享链接`
                 : searchTerm.trim() && filteredProjectsBySearch.length > 0
-                ? `搜索到 ${filteredProjectsBySearch.length} 个项目，共 ${filteredLinks.length} 个分享链接`
-                : `共 ${allShareLinks.length} 个分享链接`}
+                ? `搜索到 ${filteredProjectsBySearch.length} 个项目，共 ${safeFilteredLinks.length} 个分享链接`
+                : `共 ${Array.isArray(allShareLinks) ? allShareLinks.length : 0} 个分享链接`}
             </p>
           </div>
           
@@ -299,7 +309,7 @@ export const ShareModule: React.FC = () => {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
             <p className={`mt-4 text-sm ${theme.text.muted}`}>加载中...</p>
           </div>
-        ) : filteredLinks.length === 0 ? (
+        ) : safeFilteredLinks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Share2 className={`w-12 h-12 mb-4 opacity-20 ${theme.text.muted}`} />
             <p className={`text-sm ${theme.text.muted}`}>
@@ -355,7 +365,7 @@ export const ShareModule: React.FC = () => {
               </>
             ) : (
               <div className="space-y-4">
-                {filteredLinks.map(link => renderLinkCard(link))}
+                {safeFilteredLinks.map(link => renderLinkCard(link))}
               </div>
             )}
           </div>
