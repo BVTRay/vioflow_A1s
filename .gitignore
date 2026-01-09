@@ -64,9 +64,18 @@ backend/.env
 backend/.env.*
 backend/*.log
 
-# Frontend specific
-.vite/
-*.local
+# Frontend specific (apps/web)
+apps/web/dist/
+apps/web/node_modules/
+apps/web/.env
+apps/web/.env.*
+apps/web/.vite/
+apps/web/*.local
+
+# Miniprogram specific
+apps/miniprogram/node_modules/
+apps/miniprogram/.env
+apps/miniprogram/.env.*
 
 # Database
 *.sqlite
@@ -76,4 +85,28 @@ backend/*.log
 *.pid
 *.seed
 *.pid.lock
+
+# Documentation
+# 忽略所有文档，但保留核心README文件
+
+# 忽略docs目录下的详细文档（保留索引文件）
+docs/**/*.md
+!docs/README.md
+!docs/INDEX.md
+
+# 忽略根目录的临时文档（保留主README）
+FINAL_CLEANUP_REPORT.md
+IMPLEMENTATION_SUMMARY.md
+LOGIN_IMPLEMENTATION_GUIDE.md
+MINIPROGRAM_IMPLEMENTATION_SUMMARY.md
+MINIPROGRAM_TESTING_GUIDE.md
+ROOT_CLEANUP_SUMMARY.md
+
+# 忽略backend目录的文档（保留README）
+backend/*.md
+!backend/README.md
+
+# 忽略miniprogram目录的文档（保留README）
+apps/miniprogram/*.md
+!apps/miniprogram/README.md
 
